@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run *)",
+      "Bash(uv add *)",
+      "Bash(uv sync*)",
+      "Bash(pytest *)",
+      "Bash(ruff *)",
+      "Bash(docker compose *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git status*)",
+      "Bash(git branch*)",
+      "Bash(git checkout*)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Edit(.env)",
+      "Edit(.env.*)"
+    ]
+  }
+}

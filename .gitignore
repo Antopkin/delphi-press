@@ -11,7 +11,10 @@ dist/
 .ruff_cache/
 .pytest_cache/
 .mypy_cache/
-.claude/
+# .claude/ — коммитим settings, rules, skills; игнорим локальное
+.claude/settings.local.json
+.claude/agent-memory/
+.claude/worktrees/
 node_modules/
 data/
 *.log
