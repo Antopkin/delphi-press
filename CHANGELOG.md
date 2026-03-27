@@ -53,11 +53,17 @@
 | Frontend | Jinja2 + Pico.css + Vanilla JS | React, Vue | Нет build step, SSE нативно |
 | Package manager | uv | pip, poetry | 10-50x быстрее, lockfile |
 
+**Домен**
+- Домен: `antopkin.ru` (reg.ru, до 27.03.2027)
+- Поддомен: `delphi.antopkin.ru` → A-запись на 158.160.89.45
+- DNS: ns1.reg.ru, ns2.reg.ru
+- `antopkin.com` — в redemption на Njalla (истёк 22.01.2026, освободится ~12-17.04.2026)
+
 ### Что осталось до деплоя
 
-- [ ] Купить домен
-- [ ] Зарезервировать статический IP
-- [ ] Настроить DNS A-запись
+- [x] Купить домен
+- [x] Настроить DNS A-запись
+- [ ] Зарезервировать статический IP (перед продакшном)
 - [ ] Установить Docker на сервер
 - [ ] Написать код (начать с `src/schemas/`)
 - [ ] Получить SSL-сертификат
