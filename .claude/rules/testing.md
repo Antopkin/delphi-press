@@ -10,6 +10,6 @@ paths:
 - Тесты пишутся на поведение (public interface), не на реализацию.
 - Один тест проверяет одно поведение.
 - Именование: `test_<module>_<behavior>`, например `test_news_scout_returns_signals`.
-- Fixture scope: `session` для mock_llm, `function` для PipelineContext.
+- Fixture scope: `function` для mock_llm и PipelineContext (каждый тест — чистое состояние).
 - Приоритет: контрактные (Pydantic) > unit (агенты + mock) > integration (реальный LLM).
 - Запуск: `uv run pytest tests/ -v`. Подмодуль: `uv run pytest tests/test_agents/ -v`.

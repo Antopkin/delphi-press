@@ -26,6 +26,18 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent
 
 ## Workflow
 
+### Шаг 0: Bootstrap (только первая сессия)
+Если `pyproject.toml` не существует:
+1. Создай `pyproject.toml`:
+   - `[project]`: name="delphi-press", python=">=3.12"
+   - Зависимости: fastapi, uvicorn[standard], pydantic[dotenv], pydantic-settings, httpx, aiosqlite, sqlalchemy[asyncio], arq, sse-starlette, feedparser, openai, jinja2
+   - Dev-зависимости: pytest, pytest-asyncio, ruff, httpx (для TestClient)
+2. `uv sync` — установить зависимости
+3. Создай директории: `src/__init__.py`, `tests/__init__.py`, `tests/conftest.py`
+4. В `tests/conftest.py` — базовые fixtures: `mock_llm`, `pipeline_context`
+5. Проверь: `uv run pytest tests/ -v` — должен пройти (0 тестов, 0 ошибок)
+6. Продолжай к Шагу 1
+
 ### Шаг 1: Чтение контекста
 1. Прочитай GLOSSARY.md — доменные термины
 2. Прочитай спеку модуля из docs/ (по таблице выше)
