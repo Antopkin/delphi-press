@@ -46,6 +46,13 @@ DEFAULT_ASSIGNMENTS: dict[str, ModelAssignment] = {
         temperature=0.4,
         json_mode=True,
     ),
+    "event_assessment": ModelAssignment(
+        task="event_assessment",
+        primary_model="anthropic/claude-sonnet-4",
+        fallback_models=["openai/gpt-4o"],
+        temperature=0.4,
+        json_mode=True,
+    ),
     "event_clustering": ModelAssignment(
         task="event_clustering",
         primary_model="openai/gpt-4o-mini",

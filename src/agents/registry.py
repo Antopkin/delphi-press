@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -55,6 +56,23 @@ class AgentRegistry:
         agent = agent_class(llm_client=self._llm_client)
         self.register(agent)
 
+    def register_factory(
+        self,
+        name: str,
+        factory: Callable[[ModelRouter], BaseAgent],
+    ) -> None:
+        """Создать агента через фабричную функцию и зарегистрировать.
+
+        Фабрика получает llm_client и возвращает готовый инстанс.
+        Используется для агентов с дополнительными зависимостями (collectors и др.).
+        """
+        agent = factory(self._llm_client)
+        if agent.name != name:
+            logger.warning(
+                "Factory name '%s' != agent.name '%s', using agent.name", name, agent.name
+            )
+        self.register(agent)
+
     def get(self, name: str) -> BaseAgent | None:
         """Получить агента по имени. Возвращает None если не найден."""
         agent = self._agents.get(name)
@@ -86,10 +104,17 @@ class AgentRegistry:
         return name in self._agents
 
 
-def build_default_registry(llm_client: ModelRouter) -> AgentRegistry:
+def build_default_registry(
+    llm_client: ModelRouter,
+    *,
+    collector_deps: dict | None = None,
+) -> AgentRegistry:
     """Создать реестр со всеми 17 агентами пайплайна.
 
-    Stub: будет заполнен по мере реализации модулей агентов.
+    Args:
+        llm_client: ModelRouter для всех агентов.
+        collector_deps: Зависимости для коллекторов (rss_fetcher, web_search и др.).
+            Если None — коллекторы не регистрируются.
 
     Агенты для регистрации (17):
     - Collectors: NewsScout, EventCalendar, OutletHistorian
@@ -99,4 +124,33 @@ def build_default_registry(llm_client: ModelRouter) -> AgentRegistry:
     - Generators: FramingAgent, StyleReplicatorAgent, QualityGateAgent
     """
     registry = AgentRegistry(llm_client)
+
+    if collector_deps is not None:
+        from src.agents.collectors.event_calendar import EventCalendar
+        from src.agents.collectors.news_scout import NewsScout
+        from src.agents.collectors.outlet_historian import OutletHistorian
+
+        registry.register(
+            NewsScout(
+                llm_client,
+                rss_fetcher=collector_deps["rss_fetcher"],
+                web_search=collector_deps["web_search"],
+                outlet_catalog=collector_deps["outlet_catalog"],
+            )
+        )
+        registry.register(
+            EventCalendar(
+                llm_client,
+                web_search=collector_deps["web_search"],
+            )
+        )
+        registry.register(
+            OutletHistorian(
+                llm_client,
+                scraper=collector_deps["scraper"],
+                outlet_catalog=collector_deps["outlet_catalog"],
+                profile_cache=collector_deps["profile_cache"],
+            )
+        )
+
     return registry
