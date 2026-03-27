@@ -59,11 +59,51 @@
 - DNS: ns1.reg.ru, ns2.reg.ru
 - `antopkin.com` — в redemption на Njalla (истёк 22.01.2026, освободится ~12-17.04.2026)
 
+### Аудит и фиксы (27.03.2026, вечер)
+
+**Найденные и исправленные проблемы:**
+- `/implement-module` — добавлен Шаг 0: Bootstrap (pyproject.toml, uv sync, conftest)
+- `agents-llm.md` — определён LLMClient Protocol + LLMResponse с полными сигнатурами
+- `settings.json` — добавлены git push, docker build/run permissions
+- `testing.md` — fixture scope mock_llm изменён на `function` (предотвращение интерференции тестов)
+- `GLOSSARY.md` — уточнена анонимизация медиатора (Expert A-E)
+
+**Установленные скиллы (Matt Pocock):**
+- `/triage-issue` — структурированный баг-триаж
+- `/ubiquitous-language` — авто-генерация доменного глоссария из кода
+- `/request-refactor-plan` — план рефакторинга с granular коммитами
+
+**Обновлённый план: 12 сессий** (Delphi разбита на 2: персоны+медиатор, judge+калибровка)
+
+**Исследованные, но отложенные:**
+- wshobson/agents (85 агентов) — нет совместимого installer'а
+- Trail of Bits skills (40+ плагинов) — нет совместимого installer'а
+- agent-observability — установить после сессии 2 (LLM-слой)
+
+### План разработки (12 сессий)
+
+```
+Сессия 1:  src/schemas/ + src/config.py + pyproject.toml
+Сессия 2:  src/llm/
+Сессия 3:  src/agents/base.py + registry + orchestrator
+Сессия 4:  src/agents/collectors/
+Сессия 5:  src/agents/analysts/
+Сессия 6:  src/agents/forecasters/ (персоны + медиатор)
+Сессия 7:  src/agents/forecasters/ (judge + калибровка)
+Сессия 8:  src/agents/generators/
+Сессия 9:  src/data_sources/
+Сессия 10: src/api/ + src/db/
+Сессия 11: src/web/
+Сессия 12: Docker + интеграция + e2e тесты + deploy
+```
+
 ### Что осталось до деплоя
 
 - [x] Купить домен
 - [x] Настроить DNS A-запись
+- [x] Аудит конфигурации + фиксы
+- [x] Установить скиллы (Pocock)
 - [ ] Зарезервировать статический IP (перед продакшном)
 - [ ] Установить Docker на сервер
-- [ ] Написать код (начать с `src/schemas/`)
+- [ ] Написать код (12 сессий)
 - [ ] Получить SSL-сертификат
