@@ -21,7 +21,9 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent
 | forecasters | docs/05-delphi-pipeline.md | src/agents/forecasters/ |
 | generators | docs/06-generators.md | src/agents/generators/ |
 | api | docs/08-api-backend.md | src/api/, src/db/ |
+| security | docs/08-api-backend.md (§12) | src/security/, src/api/auth.py, src/api/keys.py |
 | frontend | docs/09-frontend.md | src/web/ |
+| predict-skill | — | .claude/skills/predict/SKILL.md |
 | deploy | docs/10-deployment.md | Docker, nginx, compose |
 
 ## Workflow

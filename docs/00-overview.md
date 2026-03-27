@@ -8,6 +8,19 @@
 
 **Язык интерфейса**: Русский. Анализирует СМИ на любом языке. Результаты генерируются на языке целевого СМИ.
 
+### Два режима работы
+
+| | Web UI | Claude Code mode |
+|---|---|---|
+| **Описание** | Веб-интерфейс. Пользователь вводит свои API-ключи (OpenRouter, YandexGPT) | Пользователь клонирует репо, запускает `/predict` в Claude Code |
+| **Стоимость** | ~$5-50/прогноз (на ключах пользователя) | ~$0 (покрыто подпиской Claude Code Max) |
+| **Model diversity** | Да (5 разных LLM-моделей) | Нет (все субагенты = Opus 4.6, промптовая diversity) |
+| **Автоматизация** | Да (API, расписание) | Нет (ручной запуск) |
+| **Персистентность** | Да (БД, история, аналитика) | Нет (markdown-отчёт) |
+| **Пресеты** | Light / Standard / Full | Один режим (Full) |
+
+Оба режима разделяют промпты персон (`docs/prompts/`) и Pydantic-схемы данных (`src/schemas/`).
+
 ---
 
 ## Архитектура: модульный монолит с гибридным деплоем
@@ -82,6 +95,8 @@
 | Deployment | Docker Compose | 2.0+ | Multi-container orchestration |
 | Web server | Nginx | alpine | Reverse proxy, SSL termination |
 | SSL | Let's Encrypt / Certbot | — | Бесплатные сертификаты |
+| Шифрование | cryptography (Fernet) | 43+ | Шифрование пользовательских API-ключей at rest |
+| Авторизация | PyJWT + bcrypt | — | JWT-токены + хеширование паролей |
 | Форматирование | Ruff | latest | Линтер + форматтер (из CLAUDE.md) |
 | Тесты | pytest + pytest-asyncio | — | Async тесты, httpx test client |
 
@@ -119,9 +134,16 @@ foresighting_news/
 │   │   ├── models.py               # ORM-модели
 │   │   └── repositories.py         # CRUD-операции
 │   │
+│   ├── security/                    # [Спека: 08-api-backend.md §12]
+│   │   ├── __init__.py
+│   │   └── encryption.py           # KeyVault: Fernet encrypt/decrypt API-ключей
+│   │
 │   ├── api/                        # [Спека: 08-api-backend.md]
 │   │   ├── __init__.py
 │   │   ├── router.py               # Главный роутер (монтирует sub-routers)
+│   │   ├── dependencies.py         # JWT auth middleware, get_current_user
+│   │   ├── auth.py                 # POST /auth/register, /auth/login (JWT)
+│   │   ├── keys.py                 # CRUD /keys (пользовательские API-ключи)
 │   │   ├── predictions.py          # POST /api/v1/predictions, GET, SSE
 │   │   ├── outlets.py              # GET /api/v1/outlets (autocomplete)
 │   │   └── health.py               # GET /api/v1/health

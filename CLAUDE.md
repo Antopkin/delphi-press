@@ -2,8 +2,13 @@
 
 Веб-продукт для прогнозирования заголовков СМИ. Мультиагентный Дельфи-пайплайн (5 персон, 2 раунда).
 
+**Два режима работы:**
+- **Web UI** — пользователь вводит свои API-ключи (OpenRouter, YandexGPT). JWT-авторизация. Пресеты: Light / Standard / Full.
+- **Claude Code mode** — пользователь клонирует репо, запускает `/predict`. Субагенты Claude Code = 5 персон (Opus 4.6).
+
 **Стек**: Python 3.12+, FastAPI, ARQ (Redis), SQLite/SQLAlchemy 2.0, Pydantic v2, Jinja2 + Pico.css, Docker Compose.
 **LLM**: OpenRouter (Claude/GPT-4/Gemini) + YandexGPT. Клиент через OpenAI SDK с `base_url`.
+**Auth**: JWT (PyJWT) + bcrypt. API-ключи пользователей: Fernet-шифрование (cryptography).
 **Архитектура**: модульный монолит. Деплой: 4 контейнера (app + worker + redis + nginx).
 **Язык интерфейса**: русский. Результаты на языке целевого СМИ.
 
@@ -21,7 +26,10 @@
 - `src/agents/generators/` → `docs/06-generators.md`
 - `src/llm/` → `docs/07-llm-layer.md`
 - `src/api/`, `src/db/` → `docs/08-api-backend.md`
+- `src/api/auth.py`, `src/api/keys.py` → `docs/08-api-backend.md` (§12: аутентификация)
+- `src/security/` → `docs/08-api-backend.md` (§12: KeyVault, шифрование)
 - `src/web/` → `docs/09-frontend.md`
+- `.claude/skills/predict/` → Claude Code predict skill (сессия 12)
 
 ## Доменный глоссарий
 

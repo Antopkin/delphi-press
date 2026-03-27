@@ -4,6 +4,46 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.2.0] - 2026-03-27
+
+Архитектурное решение: два режима работы продукта.
+
+### Added
+
+**Два режима работы (dual mode)**
+
+| | Web UI | Claude Code mode |
+|---|---|---|
+| Стоимость | ~$5-50/прогноз (ключи пользователя) | ~$0 (подписка Max) |
+| Model diversity | Да (5 разных моделей) | Нет (промптовая diversity, Opus 4.6) |
+| Автоматизация | Да (cron, API) | Нет (ручной запуск) |
+| Персистентность | Да (БД, история) | Нет (markdown отчёт) |
+
+**Web UI — пользовательские API-ключи:**
+- Пользователи вводят свои ключи OpenRouter / YandexGPT
+- Fernet-шифрование at rest (cryptography)
+- JWT-авторизация (PyJWT + bcrypt)
+- Три пресета: Light ($5-10), Standard ($15-25), Full ($30-50)
+- Обновлены спеки: `docs/07-llm-layer.md` (§12), `docs/08-api-backend.md` (§12)
+
+**Claude Code mode — skill `/predict`:**
+- Пользователь клонирует репо, запускает Claude Code
+- Skill оркестрирует через субагентов (5 персон параллельно)
+- Основная сессия = медиатор + судья
+- Opus 4.6 для всех вызовов, покрыто подпиской Max
+- Реализация: `.claude/skills/predict/SKILL.md` (сессия 12)
+
+**Обновлённый план: 13 сессий** (добавлена сессия 12: Claude Code predict skill)
+
+### Changed
+
+- `docs/07-llm-layer.md` — добавлен §12: per-request API keys, фабрика провайдеров, пресеты
+- `docs/08-api-backend.md` — добавлен §12: аутентификация, User/UserAPIKey таблицы, KeyVault
+- `openrouter_api_key` в config.py — из required в optional (fallback)
+- План сессий: 12 → 13
+
+---
+
 ## [0.1.0] - 2026-03-27
 
 Инициализация проекта. Документация, инфраструктура, сервер.

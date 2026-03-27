@@ -1408,3 +1408,127 @@ logger.error(
 - **Автообновление цен**: периодический запрос к `https://openrouter.ai/api/v1/models` для актуализации `MODEL_PRICING`.
 - **Structured outputs**: использовать OpenAI/Anthropic native structured outputs (JSON schema в API) вместо промпт-инструкций.
 - **A/B тестирование моделей**: рандомизация назначений для сравнения качества моделей на одних задачах.
+- **Per-request API keys**: пользователь передаёт свои ключи → провайдеры создаются per-request (см. раздел 12).
+
+---
+
+## 12. Per-request API keys (user-provided)
+
+### Контекст
+
+Пользователи вводят свои API-ключи (OpenRouter, YandexGPT) в веб-интерфейсе. Серверные ключи из `.env` становятся опциональным fallback. Это позволяет:
+- Переложить расходы на пользователя
+- Масштабировать без увеличения собственных затрат
+- Поддерживать пресеты Light / Standard / Full с разным бюджетом
+
+### Изменения в провайдерах
+
+`OpenRouterClient` и `YandexGPTClient` уже принимают `api_key` в конструкторе — изменений в их API не требуется. Изменяется **точка инициализации**: провайдер создаётся per-request с ключом пользователя, а не один раз при старте приложения.
+
+```python
+# src/llm/factory.py
+
+from src.llm.providers import OpenRouterClient, YandexGPTClient
+
+
+def create_providers(
+    *,
+    openrouter_key: str | None = None,
+    yandex_key: str | None = None,
+    yandex_folder_id: str | None = None,
+    settings: Settings | None = None,
+) -> dict[str, LLMProvider]:
+    """Создаёт провайдеры с ключами пользователя (или fallback на серверные).
+
+    Args:
+        openrouter_key: API-ключ пользователя для OpenRouter.
+        yandex_key: API-ключ пользователя для YandexGPT.
+        yandex_folder_id: Yandex Cloud folder ID пользователя.
+        settings: Серверные настройки (fallback).
+
+    Returns:
+        Словарь provider_name → LLMProvider.
+    """
+    if settings is None:
+        settings = get_settings()
+
+    providers: dict[str, LLMProvider] = {}
+
+    or_key = openrouter_key or settings.openrouter_api_key
+    if or_key:
+        providers["openrouter"] = OpenRouterClient(api_key=or_key)
+
+    ya_key = yandex_key or settings.yandex_api_key
+    ya_folder = yandex_folder_id or settings.yandex_folder_id
+    if ya_key and ya_folder:
+        providers["yandex"] = YandexGPTClient(
+            folder_id=ya_folder, api_key=ya_key,
+        )
+
+    return providers
+```
+
+### Изменения в ModelRouter
+
+`ModelRouter.__init__` принимает `providers: dict[str, LLMProvider]` — без изменений. Фабрика `create_providers()` подставляет нужные ключи до создания роутера.
+
+### Поток данных
+
+```
+POST /api/v1/predictions (с user_id в JWT)
+  → API слой: достаёт encrypted keys из БД для user_id
+  → Расшифровка ключей (Fernet)
+  → create_providers(openrouter_key=decrypted_or_key, ...)
+  → ModelRouter(providers=providers, budget=preset_budget)
+  → Orchestrator.run_prediction(...)
+  → Результат + CostRecord (привязан к user_id)
+```
+
+### Изменения в config.py
+
+```python
+# Провайдерские ключи становятся опциональными (fallback)
+openrouter_api_key: str = Field(
+    default="",  # Было: ... (required)
+    description="Серверный API-ключ OpenRouter (fallback, если у пользователя нет своего).",
+)
+
+# Новое поле для шифрования пользовательских ключей
+encryption_key: str = Field(
+    ...,
+    description="Fernet-ключ для шифрования пользовательских API-ключей (32 bytes, base64).",
+    min_length=32,
+)
+```
+
+### Пресеты
+
+Пресеты определяют бюджет и конфигурацию пайплайна:
+
+```python
+class PipelinePreset(StrEnum):
+    LIGHT = "light"        # ~$5-10: 3 персоны, 1 раунд, без медиатора
+    STANDARD = "standard"  # ~$15-25: 5 персон, 1 раунд, Sonnet медиатор/судья
+    FULL = "full"          # ~$30-50: 5 персон, 2 раунда, Opus медиатор/судья
+
+PRESET_CONFIGS = {
+    PipelinePreset.LIGHT: {
+        "delphi_rounds": 1,
+        "delphi_agents": 3,
+        "model_strong": "anthropic/claude-sonnet-4",  # Вместо Opus
+        "skip_mediation": True,
+    },
+    PipelinePreset.STANDARD: {
+        "delphi_rounds": 1,
+        "delphi_agents": 5,
+        "model_strong": "anthropic/claude-sonnet-4",
+        "skip_mediation": False,
+    },
+    PipelinePreset.FULL: {
+        "delphi_rounds": 2,
+        "delphi_agents": 5,
+        "model_strong": "anthropic/claude-opus-4",
+        "skip_mediation": False,
+    },
+}
+```

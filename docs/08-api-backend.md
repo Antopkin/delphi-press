@@ -2777,3 +2777,215 @@ async def test_client(test_engine):
     ) as client:
         yield client
 ```
+
+---
+
+## 12. Аутентификация и управление API-ключами
+
+### Контекст
+
+Пользователи предоставляют свои LLM API-ключи (OpenRouter, YandexGPT) через веб-интерфейс. Ключи хранятся в зашифрованном виде (Fernet). Авторизация — JWT-токены.
+
+### Новые ORM-модели (`src/db/models.py`)
+
+```python
+class User(Base):
+    """Пользователь системы."""
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+    email: Mapped[str] = mapped_column(
+        String(255), unique=True, nullable=False, index=True,
+    )
+    hashed_password: Mapped[str] = mapped_column(
+        String(255), nullable=False,
+    )
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(),
+    )
+
+    # Relationships
+    api_keys: Mapped[list[UserAPIKey]] = relationship(
+        "UserAPIKey", back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    predictions: Mapped[list[Prediction]] = relationship(
+        "Prediction", back_populates="user",
+    )
+
+
+class UserAPIKey(Base):
+    """Зашифрованный API-ключ пользователя для LLM-провайдера."""
+
+    __tablename__ = "user_api_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    provider: Mapped[str] = mapped_column(
+        String(50), nullable=False,
+        doc="Провайдер: 'openrouter' | 'yandex'",
+    )
+    encrypted_key: Mapped[str] = mapped_column(
+        Text, nullable=False,
+        doc="Fernet-зашифрованный API-ключ.",
+    )
+    label: Mapped[str] = mapped_column(
+        String(100), default="",
+        doc="Пользовательская метка (напр. 'Мой OpenRouter').",
+    )
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(),
+    )
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True,
+    )
+
+    # Relationships
+    user: Mapped[User] = relationship("User", back_populates="api_keys")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "provider", name="uq_user_provider"),
+    )
+```
+
+### Изменение Prediction
+
+```python
+# Добавить FK на users
+class Prediction(Base):
+    # ... существующие поля ...
+
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id"),
+        nullable=True, index=True,
+        doc="ID пользователя (nullable для обратной совместимости).",
+    )
+    preset: Mapped[str] = mapped_column(
+        String(20), default="full",
+        doc="Пресет пайплайна: 'light', 'standard', 'full'.",
+    )
+
+    user: Mapped[Optional[User]] = relationship("User", back_populates="predictions")
+```
+
+### Auth endpoints (`src/api/auth.py`)
+
+```python
+# POST /api/v1/auth/register
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+# POST /api/v1/auth/login
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+# Реализация: bcrypt для хеширования, PyJWT для токенов
+# Время жизни токена: 7 дней (настраивается)
+```
+
+### Key management endpoints (`src/api/keys.py`)
+
+```python
+# GET /api/v1/keys — список ключей пользователя (без значений)
+class APIKeyInfo(BaseModel):
+    id: int
+    provider: str
+    label: str
+    is_active: bool
+    created_at: datetime
+    last_used_at: datetime | None
+
+# POST /api/v1/keys — добавить ключ
+class APIKeyCreate(BaseModel):
+    provider: Literal["openrouter", "yandex"]
+    api_key: str = Field(..., min_length=10)
+    label: str = Field(default="", max_length=100)
+    yandex_folder_id: str = Field(default="")  # Только для yandex
+
+# DELETE /api/v1/keys/{key_id} — удалить ключ
+# POST /api/v1/keys/{key_id}/validate — проверить ключ (тестовый запрос к API)
+```
+
+### Шифрование ключей (`src/security/encryption.py`)
+
+```python
+from cryptography.fernet import Fernet
+
+class KeyVault:
+    """Шифрование/расшифровка пользовательских API-ключей."""
+
+    def __init__(self, encryption_key: str) -> None:
+        self._fernet = Fernet(encryption_key.encode())
+
+    def encrypt(self, plaintext: str) -> str:
+        return self._fernet.encrypt(plaintext.encode()).decode()
+
+    def decrypt(self, ciphertext: str) -> str:
+        return self._fernet.decrypt(ciphertext.encode()).decode()
+```
+
+### Middleware авторизации
+
+```python
+# src/api/dependencies.py
+
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+security = HTTPBearer(auto_error=False)
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    session: AsyncSession = Depends(get_session),
+) -> User | None:
+    """Опциональная авторизация — None если без токена."""
+    if credentials is None:
+        return None
+    # Декодирование JWT, поиск пользователя в БД
+    ...
+
+async def require_user(
+    user: User | None = Depends(get_current_user),
+) -> User:
+    """Обязательная авторизация — 401 если без токена."""
+    if user is None:
+        raise HTTPException(status_code=401, detail="Требуется авторизация.")
+    return user
+```
+
+### Поток создания прогноза с пользовательскими ключами
+
+```
+1. POST /api/v1/predictions { outlet, target_date, preset }
+   → require_user → получить user_id из JWT
+2. Загрузить зашифрованные ключи из user_api_keys WHERE user_id=...
+3. Расшифровать ключи через KeyVault
+4. create_providers(openrouter_key=..., yandex_key=...)
+5. Настроить ModelRouter с бюджетом пресета
+6. Enqueue в ARQ с provider_keys (зашифрованными)
+7. Worker: расшифровка → создание провайдеров → запуск пайплайна
+8. Привязать CostRecord к user_id
+```
+
+### Зависимости
+
+```
+cryptography>=43.0  # Fernet encryption
+PyJWT>=2.9          # JWT tokens
+bcrypt>=4.2         # Password hashing
+```
