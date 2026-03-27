@@ -164,4 +164,14 @@ def build_default_registry(
     registry.register_class(EconomicAnalyst)
     registry.register_class(MediaAnalyst)
 
+    # Forecasters: Stages 4-6
+    from src.agents.forecasters.judge import Judge
+    from src.agents.forecasters.mediator import Mediator
+    from src.agents.forecasters.personas import PERSONAS, DelphiPersonaAgent
+
+    for persona in PERSONAS.values():
+        registry.register(DelphiPersonaAgent(llm_client, persona))
+    registry.register_class(Mediator)
+    registry.register_class(Judge)
+
     return registry

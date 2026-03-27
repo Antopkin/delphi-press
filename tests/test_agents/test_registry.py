@@ -144,10 +144,25 @@ def test_build_default_registry_returns_registry(mock_router):
 
 
 def test_build_default_registry_has_analysts(mock_router):
-    """Without collector_deps, only analysts are registered."""
+    """Without collector_deps, analysts + forecasters are registered."""
     result = build_default_registry(mock_router)
-    assert len(result) == 4
+    # 4 analysts + 5 persona agents + mediator + judge = 11
+    assert len(result) == 11
     assert "event_trend_analyzer" in result
     assert "geopolitical_analyst" in result
     assert "economic_analyst" in result
     assert "media_analyst" in result
+
+
+def test_build_default_registry_has_forecasters(mock_router):
+    """Registry includes all 7 forecaster agents."""
+    result = build_default_registry(mock_router)
+    # 5 personas
+    assert "delphi_realist" in result
+    assert "delphi_geostrategist" in result
+    assert "delphi_economist" in result
+    assert "delphi_media_expert" in result
+    assert "delphi_devils_advocate" in result
+    # mediator + judge
+    assert "mediator" in result
+    assert "judge" in result
