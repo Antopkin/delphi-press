@@ -626,3 +626,14 @@ search — используй их для ориентации (не для из
 Стоимость вызова: Claude Opus-4 — дорогая модель (~$2.00 за один вызов судьи).
 Это оправдано: судья — единственная точка финального решения, ошибка здесь
 стоит дороже, чем стоимость модели.
+
+### Upgrade path: CWM (Contribution-Weighted Model)
+
+Текущее: absolute Brier score weighting (brier_weight = 1 / brier_score).
+Upgrade: CWM (Budescu & Chen, 2015) — weight_i = BS_without_i − BS_with_i.
+Выигрыш: +28% vs absolute weighting. Forecaster с плохим абсолютным Brier,
+но некоррелированными ошибками вносит БОЛЬШЕ, чем точный, но коррелированный.
+
+Условие активации: ≥20 resolved predictions на каждую персону.
+Формула: weight_i = max(0.0, brier_group_without_i − brier_group_with_i)
+Нормализация: weights → softmax → use as final_weight in weighted median.

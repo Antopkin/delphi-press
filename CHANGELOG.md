@@ -4,6 +4,26 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.3.1] - 2026-03-27
+
+Раунд 2 evidence-based prompt improvements. Ревизия research-материалов выявила пропущенные высокоценные компоненты.
+
+### Added
+
+- **Calibration Check** (все 5 персон) — pre-output sanity check для extreme values (Halawi et al. 2024, NeurIPS)
+- **Update Trigger** (все 5 персон) — поле `update_trigger` в predictions[], pre-commitment к фальсифицируемости (Mellers et al. 2014, scaffold component 5/5)
+- **Base rate principle** для economist (принцип 0) и geostrateg (усиление шага 3) — Mellers et al. 2014: +6–11% Brier
+- **CWM upgrade path** в dev notes judge.md — документация перехода к Contribution-Weighted Model (Budescu & Chen, 2015, +28%)
+- **Entman 4-function framing** для media-expert — операционализация framing theory (Entman, 1993)
+
+### Не добавлено (с обоснованием)
+
+- Full 5-step scaffold для всех персон — гомогенизирует domain frameworks; cherry-pick компонентов лучше
+- Narrative framing prohibition — текущие промпты не используют narrative framing
+- CI fields в PersonaAssessment — schema change без LLM-валидации
+- IQR в mediator output — все позиции уже показаны для 5 агентов
+- KAC как отдельная секция — `key_assumptions` уже required в output
+
 ## [0.3.0] - 2026-03-27
 
 Систематический обзор академической литературы по методам форсайтинга. Evidence-based улучшение промптов.
