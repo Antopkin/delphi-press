@@ -10,7 +10,7 @@
 **LLM**: OpenRouter (Claude/GPT-4/Gemini) + YandexGPT. Клиент через OpenAI SDK с `base_url`.
 **Auth**: JWT (PyJWT) + bcrypt. API-ключи пользователей: Fernet-шифрование (cryptography).
 **Архитектура**: модульный монолит. Деплой: 4 контейнера (app + worker + redis + nginx).
-**Сервер**: `deploy@158.160.89.45`, Debian 12, Yandex Cloud (4 vCPU, 8GB RAM). Захарденен, Docker 29.3.1, TLS via Let's Encrypt.
+**Сервер**: `deploy@213.165.220.144` (static IP), Debian 12, Yandex Cloud (4 vCPU 20%, 8GB RAM). Захарденен, Docker 29.3.1, TLS via Let's Encrypt.
 **Язык интерфейса**: русский. Результаты на языке целевого СМИ.
 
 ## Спецификации

@@ -155,12 +155,12 @@
 
 **Yandex Cloud сервер**
 - VM: `delphi-press`, Debian 12, Intel Ice Lake
-- Ресурсы: 4 vCPU (50%), 8 GB RAM, 40 GB SSD
+- Ресурсы: 4 vCPU (20%), 8 GB RAM, 40 GB SSD
 - Зона: `ru-central1-b`
-- IP: `158.160.89.45` (динамический)
-- SSH: `deploy@158.160.89.45` (ed25519)
-- Security group: `delphi-press-sg` (22, 80, 443 in; all out)
-- Стоимость: ~4 500 ₽/мес
+- IP: `213.165.220.144` (статический)
+- SSH: `deploy@213.165.220.144` (ed25519)
+- Security group: default (22, 80, 443 in; all out)
+- Стоимость: ~3 600 ₽/мес
 
 ### Решения по инфраструктуре
 
@@ -176,7 +176,7 @@
 
 **Домен**
 - Домен: `antopkin.ru` (reg.ru, до 27.03.2027)
-- Поддомен: `delphi.antopkin.ru` → A-запись на 158.160.89.45
+- Поддомен: `delphi.antopkin.ru` → A-запись на 213.165.220.144
 - DNS: ns1.reg.ru, ns2.reg.ru
 - `antopkin.com` — в redemption на Njalla (истёк 22.01.2026, освободится ~12-17.04.2026)
 
