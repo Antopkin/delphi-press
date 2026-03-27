@@ -4,6 +4,67 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.3.0] - 2026-03-27
+
+Систематический обзор академической литературы по методам форсайтинга. Evidence-based улучшение промптов.
+
+### Added
+
+**Академическое исследование: 80+ источников по 13 темам** (`research/`)
+
+Методология: параллельные research-агенты (13 агентов) с cross-verification через arXiv, Google Scholar, SSRN, Semantic Scholar, Polymarket data.
+
+| Тема | Статей | Ключевые авторы |
+|---|---|---|
+| Classical Delphi & variants | 6 | Dalkey 1963, Rowe & Wright 1999/2001/2005, Turoff 1975, Gordon 2006 |
+| LLM-based forecasting | 8 | Halawi 2024, Schoenegger 2024, AIA 2024, Lorenz 2025, Nel 2025 |
+| Superforecasting | 3 | Tetlock 2005, Mellers 2014/2015 |
+| Prediction markets | 4 | Arrow 2008, Atanasov 2017/2024, Reichenbach 2025 |
+| Scenario planning | 2 | Schoemaker 1993, Gordon & Hayward 1968 |
+| Calibration & aggregation | 6 | Brier 1950, Baron 2014, Satopää 2014, Gneiting 2007, Budescu 2015, Guo 2017 |
+| Multi-agent AI | 5 | Du 2024, Liang 2024, Wang 2024, Chan 2024, Qian 2025 |
+| Political forecasting | 1 | Ye 2024 (Mirai) |
+| Cognitive biases & debiasing | 18 src | Lou 2024, Cheung 2025, Malmqvist 2024 |
+| Prompt engineering for forecasting | 18 src | Lu 2025, Sacilotto 2025, Xiong 2024 |
+| Intelligence analysis (SATs) | 22 src | CIA Tradecraft 2009, Heuer & Pherson 2019, Klein 1989 |
+| Media framing & news prediction | 12 src | Entman 1993, Boydstun 2014, Soroka 2015, Tohidi 2025 |
+| Wisdom of crowds theory | 13 src | Galton 1907, Condorcet 1785, Page 2007, Kim 2025 |
+
+**Артефакты исследования:**
+- 34 индивидуальных конспекта (MD, по шаблону: метаданные → findings → applicability → BibTeX)
+- 4 литобзора (~3000–4000 слов каждый): Delphi evolution, LLM forecasting SOTA, Calibration & aggregation, Multi-agent AI
+- 5 тематических сводок: cognitive biases, prompt engineering, intelligence SATs, media framing, wisdom of crowds
+- `prompt-modification-map.md` — маппинг всех findings → конкретные изменения в 7 промптах
+- `README.md` — сводная таблица + кросс-тематический синтез
+
+**Ключевые findings (LLM-validated):**
+
+| Finding | Источник | LLM-validated? | Expected impact |
+|---|---|---|---|
+| Extremization α=√3≈1.73 | AIA Forecaster 2024 (Brier 0.1076) | Да | Superforecaster parity |
+| Anti-rounding (no multiples of 5/10) | Schoenegger 2024 (12 LLM) | Да | Reduces acquiescence bias |
+| Factual questions > statistics in mediator | Lorenz & Fritz 2025 (r=0.87–0.95) | Да | Genuine deliberation |
+| DoT guard (no "reconsider") | Liang 2024 (EMNLP) | Да (LLM-specific) | Prevents degeneration |
+| Anti-sycophancy Independence Guard | Malmqvist 2024 (bandwagon 0.524) | Да (LLM-specific) | Preserves R2 diversity |
+| Long-horizon penalty >14d | Ye 2024 (GPT-4o on GDELT) | Да | Honest uncertainty |
+| Longshot bias: sub-10% = 14% actual | Reichenbach 2025 (Polymarket) | Да (market data) | Wild cards warranted |
+| Narrative framing = prohibited | Lu 2025 (12 models, 464 questions) | Да | Prevent calibration collapse |
+| Superforecasting scaffold | Mellers 2014 + Lu 2025 | Частично | +6–41% Brier |
+| CWM > Brier weighting (+28%) | Budescu & Chen 2015 | Нет (humans) | Upgrade path |
+
+### Changed
+
+- `docs/prompts/judge.md` — extremization α 1.5→1.73; temporal decay; long-horizon penalty; CWM upgrade path
+- `docs/prompts/mediator.md` — DoT guard; minority protection; reasoning chains; DeLLMphi+Lorenz citations
+- `docs/prompts/realist.md` — explicit Tetlock citation with empirical numbers; fox-style instruction
+- `docs/prompts/geostrateg.md` — Red Team adversary frame; superforecasting scaffold
+- `docs/prompts/economist.md` — superforecasting scaffold; anti-rounding
+- `docs/prompts/media-expert.md` — Boydstun saturation thresholds; task-split newsworthiness vs event probability
+- `docs/prompts/devils-advocate.md` — longshot bias reference; retrospective premortem framing
+- Все 5 персон — Brier criterion; anti-rounding; calibration check; Independence Guard для R2
+
+---
+
 ## [0.2.0] - 2026-03-27
 
 Архитектурное решение: два режима работы продукта.
@@ -137,13 +198,34 @@
 Сессия 12: Docker + интеграция + e2e тесты + deploy
 ```
 
+### Server Hardening (27.03.2026, день)
+
+**Полный аудит и настройка безопасности VPS:**
+
+| Компонент | Конфигурация |
+|---|---|
+| SSH | Drop-in hardening: ed25519 only, AllowUsers deploy, no root, VERBOSE logging |
+| fail2ban | SSH jail (systemd backend), 24h ban, recidive jail (7d) |
+| Kernel (sysctl) | rp_filter, no redirects, SYN cookies, ASLR, IPv6 disabled |
+| Swap | 4 GB `/swapfile`, swappiness=10 |
+| NTP | ntpsec localhost only |
+| Docker | CE 29.3.1, Compose plugin, hardened daemon.json (no-new-privileges, icc=false, log rotation) |
+| Firewall | iptables INPUT DROP (22/80/443 allowed), DOCKER-USER chain, persisted |
+| auditd | SSH, identity, Docker, sudo monitoring |
+| Unattended upgrades | Active, Docker/kernel blacklisted |
+| TLS | Let's Encrypt `delphi.antopkin.ru`, auto-renewal via certbot timer |
+
+**Скрипт:** `scripts/server-hardening.sh` — 12 шагов, идемпотентный, с верификацией.
+
 ### Что осталось до деплоя
 
 - [x] Купить домен
 - [x] Настроить DNS A-запись
 - [x] Аудит конфигурации + фиксы
 - [x] Установить скиллы (Pocock)
+- [x] Захарденить сервер (SSH, firewall, sysctl, fail2ban, auditd)
+- [x] Установить Docker на сервер
+- [x] Получить SSL-сертификат (Let's Encrypt)
 - [ ] Зарезервировать статический IP (перед продакшном)
-- [ ] Установить Docker на сервер
 - [ ] Написать код (12 сессий)
-- [ ] Получить SSL-сертификат
+- [ ] Деплой: `git clone` + `.env` + `docker compose up -d`
