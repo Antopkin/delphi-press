@@ -153,4 +153,15 @@ def build_default_registry(
             )
         )
 
+    # Analysts: Stage 2 + Stage 3
+    from src.agents.analysts.economic import EconomicAnalyst
+    from src.agents.analysts.event_trend import EventTrendAnalyzer
+    from src.agents.analysts.geopolitical import GeopoliticalAnalyst
+    from src.agents.analysts.media import MediaAnalyst
+
+    registry.register_class(EventTrendAnalyzer)
+    registry.register_class(GeopoliticalAnalyst)
+    registry.register_class(EconomicAnalyst)
+    registry.register_class(MediaAnalyst)
+
     return registry

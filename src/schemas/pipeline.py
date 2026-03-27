@@ -212,7 +212,6 @@ class PipelineContext(BaseModel):
             "news_scout": "signals",
             "event_calendar": "scheduled_events",
             "outlet_historian": "outlet_profile",
-            "event_trend_analyzer": "event_threads",
             "judge": "ranked_predictions",
             "framing": "framing_briefs",
             "style_replicator": "generated_headlines",
@@ -228,6 +227,20 @@ class PipelineContext(BaseModel):
                 current.extend(value)
             else:
                 setattr(self, slot, value)
+            return
+
+        # EventTrendAnalyzer возвращает 3 слота: event_threads, trajectories, cross_impact_matrix
+        if result.agent_name == "event_trend_analyzer":
+            if "event_threads" in result.data:
+                threads = result.data["event_threads"]
+                if isinstance(threads, list):
+                    self.event_threads.extend(threads)
+            if "trajectories" in result.data:
+                trajectories = result.data["trajectories"]
+                if isinstance(trajectories, list):
+                    self.trajectories.extend(trajectories)
+            if "cross_impact_matrix" in result.data:
+                self.cross_impact_matrix = result.data["cross_impact_matrix"]
             return
 
         # Delphi-агенты (round1/round2 определяется по наличию ключа)

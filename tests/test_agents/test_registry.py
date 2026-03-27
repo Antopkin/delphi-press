@@ -143,6 +143,11 @@ def test_build_default_registry_returns_registry(mock_router):
     assert isinstance(result, AgentRegistry)
 
 
-def test_build_default_registry_is_empty_stub(mock_router):
+def test_build_default_registry_has_analysts(mock_router):
+    """Without collector_deps, only analysts are registered."""
     result = build_default_registry(mock_router)
-    assert len(result) == 0
+    assert len(result) == 4
+    assert "event_trend_analyzer" in result
+    assert "geopolitical_analyst" in result
+    assert "economic_analyst" in result
+    assert "media_analyst" in result
