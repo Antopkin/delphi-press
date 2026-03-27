@@ -5,6 +5,9 @@ description = "Media headline forecasting with multi-agent Delphi pipeline"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0,<3.0",
+    "pydantic-settings>=2.0",
+    "openai>=1.0",
+    "jinja2>=3.1",
 ]
 
 [project.optional-dependencies]
