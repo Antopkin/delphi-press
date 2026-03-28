@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-28. Production deployed. Обновлено: 2026-03-28 (post-session 4).
+> Статус на 2026-03-29. Production deployed. Обновлено: 2026-03-29 (v0.5.1 foresight bugfix).
 
 ---
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **819 тестов** зелёные. Hardening (retry, SSRF, cron, monitoring) завершён.
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **835 тестов** зелёные. Hardening (retry, SSRF, cron, monitoring) завершён. Foresight bugfix v0.5.1: Metaculus API migration, cache key fix, CLOB param fix.
 
 ### Реализованные компоненты
 
@@ -244,4 +244,4 @@ evaluation = [
 
 ---
 
-*Создано: 2026-03-28. Обновлено: 2026-03-28 (post-session 4, 819 тестов).*
+*Создано: 2026-03-28. Обновлено: 2026-03-29 (v0.5.1, 835 тестов).*
