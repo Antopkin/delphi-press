@@ -57,7 +57,7 @@ def make_metaculus_questions(count: int = 3) -> list[dict]:
             "q2": 0.6 + i * 0.05,
             "resolve_time": "2026-06-01T00:00:00Z",
             "categories": ["politics", "world"],
-            "number_of_forecasters": 100 + i * 10,
+            "nr_forecasters": 100 + i * 10,
         }
         for i in range(count)
     ]
@@ -250,7 +250,7 @@ async def test_foresight_collector_maps_metaculus_questions(
             "q2": 0.73,
             "resolve_time": "2026-07-01T00:00:00Z",
             "categories": ["geopolitics"],
-            "number_of_forecasters": 456,
+            "nr_forecasters": 456,
         }
     ]
     mock_polymarket.fetch_enriched_markets.return_value = []

@@ -214,7 +214,7 @@ Despite being Stage 2, it fills `event_threads`, `trajectories`, AND `cross_impa
 
 ### 7.6 ForesightCollector never calls LLM
 
-Pure data-collection agent. Accepts `llm_client` (BaseAgent contract) but never uses it. Cost is always $0. Foresight APIs are unreliable (Metaculus 403, Polymarket 422, GDELT parse errors). Graceful degradation — never raises.
+Pure data-collection agent. Accepts `llm_client` (BaseAgent contract) but never uses it. Cost is always $0. Foresight APIs may be unreliable (GDELT parse errors on Cyrillic queries). Metaculus uses `/api/posts/` with optional Token auth. Graceful degradation — never raises.
 
 **Affected**: `src/agents/collectors/foresight_collector.py`, `src/data_sources/foresight.py`.
 

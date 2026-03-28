@@ -252,7 +252,7 @@ class ForesightCollector(BaseAgent):
                     "certainty": q.get("q2"),
                     "resolve_date": q.get("resolve_time"),
                     "categories": q.get("categories", []),
-                    "forecasters": q.get("number_of_forecasters", 0),
+                    "forecasters": q.get("nr_forecasters", 0),
                 }
             )
         return mapped

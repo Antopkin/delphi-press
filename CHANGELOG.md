@@ -4,6 +4,27 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.5.1] - 2026-03-29
+
+Foresight module bugfix: Metaculus API migration + cache fix + CLOB fix.
+
+### Fixed
+
+- **Metaculus API migration** — `/api2/questions/` (deprecated, HTTP 403) → `/api/posts/` с новым парсингом `question.aggregations.recency_weighted.latest.centers[0]`. Опциональный `Token` auth через `METACULUS_TOKEN` env var (бесплатный, metaculus.com/aib).
+- **Cache key collision** — `query` параметр не входил в cache key для Metaculus и Polymarket → разные запросы возвращали кеш��рованные данные первого вызова. GDELT был корректен.
+- **CLOB price history param** — `"market"` → `"token_id"` в params запроса к `clob.polymarket.com/prices-history`. Price history enrichment молча не работал.
+- **Metaculus `query` игнорировался** — параметр принимался но не передавался в API. Теперь отправляется как `search`.
+- **Metaculus `status` hardcoded** — параметр shadowed литералом `"open"`. Теперь forwarded как `statuses`.
+- **`price_history` key отсутствовал** — при ошибке CLOB `_enrich` в `fetch_enriched_markets()` market мог остаться без `price_history` key. Добавлен default `[]` перед `gather`.
+
+### Changed
+
+- `number_of_forecasters` → `nr_forecasters` — новое имя поля в Metaculus API v3. Обновлено в client, collector mapping, тестах.
+- `resolve_time` → `scheduled_resolve_time` — новое имя в Metaculus API.
+- 14 новых тестов в `test_foresight.py`, итого 835/835 зелёных.
+
+---
+
 ## [0.5.0] - 2026-03-28
 
 Polymarket enrichment (4 фазы) + production deploy на VPS.

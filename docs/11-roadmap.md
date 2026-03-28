@@ -75,7 +75,7 @@ tests/test_integration/             — 7 E2E integration tests
 | # | Задача | Файлы | Критерий |
 |---|--------|-------|----------|
 | 1.1 | ~~Fix: `_build_response` не извлекает headline text~~ | `src/schemas/pipeline.py`, `src/agents/orchestrator.py` | **DONE** — falsy check `[] or dict` + rank preservation |
-| 1.2 | ~~Fix: Foresight APIs (Polymarket 422, GDELT parse error)~~ | `src/data_sources/foresight.py` | **DONE** — Polymarket camelCase fix, GDELT HTML guard + null articles (987260c). Metaculus: fail-soft (auth token required, возвращает `[]`) |
+| 1.2 | ~~Fix: Foresight APIs (Polymarket 422, GDELT parse error, Metaculus 403)~~ | `src/data_sources/foresight.py` | **DONE** — Polymarket camelCase fix, GDELT HTML guard + null articles (987260c). Metaculus: migrated `/api2/questions/` → `/api/posts/` (v0.5.1), optional Token auth, fail-soft без токена |
 | 1.3 | ~~Refactor: унифицировать `ScenarioType` enum~~ | `src/schemas/events.py` | **DONE** — единый enum: BASELINE/OPTIMISTIC/PESSIMISTIC/BLACK_SWAN/WILDCARD |
 | 1.4 | ~~Docs: написать architectural overview~~ | `docs/architecture.md` | **DONE** — 251 строка, 7 секций, tables-first |
 

@@ -17,7 +17,6 @@ from pydantic_settings import SettingsConfigDict
 
 from src.llm.config import LLMConfig
 
-
 # ── Pipeline Presets ─────────────────────────────────────────────
 
 
@@ -138,6 +137,10 @@ class Settings(LLMConfig):
 
     exa_api_key: str = Field(default="", description="Exa.ai API key.")
     jina_api_key: str = Field(default="", description="Jina AI API key.")
+    metaculus_token: str = Field(
+        default="",
+        description="Metaculus API token (free, from metaculus.com/aib).",
+    )
 
     # === Server ===
 

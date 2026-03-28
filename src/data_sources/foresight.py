@@ -1,11 +1,12 @@
-"""Форсайт-центры -- клиенты Metaculus, Polymarket, GDELT.
+"""Форсайт-центры -- к��иенты Metaculus, Polymarket, GDELT.
 
 Стадия: Stage 1 (сбор данных).
-Спека: docs/01-data-sources.md.
-Контракт: каждый клиент возвращает list[dict], маппинг в Pydantic-схемы
+Сп��ка: docs/01-data-sources.md.
+Контракт: к��ждый клиент возвращает list[dict], маппинг в Pydantic-схемы
           делает ForesightCollector (src/agents/collectors/foresight_collector.py).
 
-Все три API публичные -- авторизация не требуется.
+Metaculus: опциональный Token auth (бесплатный, metaculus.com/aib).
+Polymarket, GDELT: публичные API, авто��изация не требуется.
 """
 
 from __future__ import annotations
@@ -26,14 +27,17 @@ _USER_AGENT = "DelphiPress/1.0 (+https://delphi.antopkin.ru/about)"
 class MetaculusClient:
     """Metaculus crowd probability API.
 
-    Endpoint: GET https://www.metaculus.com/api2/questions/
-    No auth required. Cache TTL: 30 min.
+    Endpoint: GET https://www.metaculus.com/api/posts/
+    Auth: optional Token (free, from metaculus.com/aib). Cache TTL: 30 min.
     """
 
-    def __init__(self, *, timeout: float = 30.0) -> None:
+    def __init__(self, *, token: str = "", timeout: float = 30.0) -> None:
+        headers: dict[str, str] = {"User-Agent": _USER_AGENT}
+        if token:
+            headers["Authorization"] = f"Token {token}"
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout),
-            headers={"User-Agent": _USER_AGENT},
+            headers=headers,
         )
         self._cache: dict[str, tuple[float, list[dict]]] = {}
         self._cache_ttl = 1800  # 30 min
@@ -47,14 +51,14 @@ class MetaculusClient:
         min_forecasters: int = 10,
         status: str = "open",
     ) -> list[dict]:
-        """Fetch open binary questions resolving within resolve_days_ahead.
+        """Fetch binary questions from Metaculus /api/posts/ endpoint.
 
         Returns:
             List of dicts with keys: id, title, url, q2 (median probability),
-            q1, q3, resolve_time, categories, number_of_forecasters.
+            q1, q3, resolve_time, categories, nr_forecasters.
             Filters out questions with < min_forecasters.
         """
-        cache_key = f"metaculus:{resolve_days_ahead}:{limit}:{min_forecasters}"
+        cache_key = f"metaculus:{query}:{resolve_days_ahead}:{limit}:{min_forecasters}"
         cached = self._cache.get(cache_key)
         if cached and (time.monotonic() - cached[0]) < self._cache_ttl:
             return cached[1]
@@ -63,19 +67,21 @@ class MetaculusClient:
         resolve_gt = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         resolve_lt = (now + timedelta(days=resolve_days_ahead)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        params = {
-            "status": "open",
+        params: dict[str, str | int] = {
+            "statuses": status,
             "forecast_type": "binary",
-            "resolve_time__gt": resolve_gt,
-            "resolve_time__lt": resolve_lt,
-            "order_by": "-activity",
+            "scheduled_resolve_time__gt": resolve_gt,
+            "scheduled_resolve_time__lt": resolve_lt,
+            "order_by": "-hotness",
             "limit": limit,
-            "include_description": "false",
+            "with_cp": "true",
         }
+        if query:
+            params["search"] = query
 
         try:
             response = await self._client.get(
-                "https://www.metaculus.com/api2/questions/",
+                "https://www.metaculus.com/api/posts/",
                 params=params,
             )
             response.raise_for_status()
@@ -90,27 +96,38 @@ class MetaculusClient:
             return []
 
         results: list[dict] = []
-        for q in data.get("results", []):
-            cp = q.get("community_prediction")
-            if cp is None:
-                continue
-
-            forecasters = q.get("number_of_forecasters", 0)
+        for post in data.get("results", []):
+            forecasters = post.get("nr_forecasters", 0)
             if forecasters < min_forecasters:
                 continue
 
-            full = cp.get("full", {})
+            question = post.get("question") or {}
+            agg = question.get("aggregations") or {}
+            rw = agg.get("recency_weighted") or agg.get("unweighted") or {}
+            latest = rw.get("latest") or {}
+            centers = latest.get("centers") or []
+            q2 = centers[0] if centers else None
+            if q2 is None:
+                continue
+
+            lb = latest.get("interval_lower_bounds") or []
+            ub = latest.get("interval_upper_bounds") or []
+
+            # Extract categories from projects.category
+            categories_raw = post.get("projects", {}).get("category", [])
+            categories = [c.get("name", "") for c in categories_raw if isinstance(c, dict)]
+
             results.append(
                 {
-                    "id": q.get("id"),
-                    "title": q.get("title", ""),
-                    "url": q.get("url", ""),
-                    "q2": full.get("q2"),
-                    "q1": full.get("q1"),
-                    "q3": full.get("q3"),
-                    "resolve_time": q.get("resolve_time"),
-                    "categories": [c.get("name", "") for c in q.get("categories", [])],
-                    "number_of_forecasters": forecasters,
+                    "id": post.get("id"),
+                    "title": post.get("title", ""),
+                    "url": post.get("url", ""),
+                    "q2": q2,
+                    "q1": lb[0] if lb else None,
+                    "q3": ub[0] if ub else None,
+                    "resolve_time": question.get("scheduled_resolve_time"),
+                    "categories": categories,
+                    "nr_forecasters": forecasters,
                 }
             )
 
@@ -163,7 +180,7 @@ class PolymarketClient:
             outcomePrices is a JSON-stringified string, not an array.
             Must json.loads() before float().
         """
-        cache_key = f"polymarket:{limit}:{min_liquidity}:{end_date_days_ahead}"
+        cache_key = f"polymarket:{query}:{limit}:{min_liquidity}:{end_date_days_ahead}"
         cached = self._cache.get(cache_key)
         if cached and (time.monotonic() - cached[0]) < self._cache_ttl:
             return cached[1]
@@ -272,7 +289,7 @@ class PolymarketClient:
         if cached and (time.monotonic() - cached[0]) < self._cache_ttl:
             return cached[1]
 
-        params = {"market": token_id, "interval": interval, "fidelity": fidelity}
+        params = {"token_id": token_id, "interval": interval, "fidelity": fidelity}
         try:
             async with self._semaphore:
                 response = await self._clob_client.get("/prices-history", params=params)
@@ -320,6 +337,10 @@ class PolymarketClient:
         )
         if not markets:
             return markets
+
+        # Pre-set default so every market has price_history even on error
+        for m in markets:
+            m["price_history"] = []
 
         async def _enrich(market: dict) -> None:
             token_id = market.get("clob_token_id", "")

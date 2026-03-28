@@ -1,5 +1,7 @@
 # Metaculus API — Диагностика и актуальный reference
 
+> **STATUS: DONE** — реализовано в v0.5.1 (2026-03-29). Коммит: см. CHANGELOG.md.
+
 ## Проблема
 HTTP 403 from `GET https://www.metaculus.com/api2/questions/`
 
