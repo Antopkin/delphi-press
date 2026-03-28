@@ -84,7 +84,7 @@ class BasePrompt:
         except ValidationError as e:
             raise PromptParseError(str(e), raw_content=content) from e
 
-        # Try markdown code block
+        # Try markdown code block (with closing ```)
         match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
         if match:
             try:
@@ -92,6 +92,16 @@ class BasePrompt:
                 return self.output_schema.model_validate(data)
             except (json.JSONDecodeError, ValidationError) as e:
                 raise PromptParseError(str(e), raw_content=content) from e
+
+        # Fallback: strip opening ```json fence (truncated response without closing ```)
+        stripped = re.sub(r"^```(?:json)?\s*\n?", "", content.strip())
+        if stripped != content.strip():
+            stripped = re.sub(r"\n?```\s*$", "", stripped)
+            try:
+                data = json.loads(stripped)
+                return self.output_schema.model_validate(data)
+            except (json.JSONDecodeError, ValidationError):
+                pass
 
         raise PromptParseError(
             f"Could not parse JSON from LLM response: {content[:200]}",
