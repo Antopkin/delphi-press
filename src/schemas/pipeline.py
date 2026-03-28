@@ -78,6 +78,16 @@ class PipelineContext(BaseModel):
         description="OutletProfile. Стилевой и редакционный профиль издания.",
     )
 
+    foresight_events: list[Any] = Field(
+        default_factory=list,
+        description="Metaculus prediction questions (foresight data).",
+    )
+
+    foresight_signals: list[Any] = Field(
+        default_factory=list,
+        description="Polymarket + GDELT foresight signals.",
+    )
+
     # === Stage 2: Event Identification ===
 
     event_threads: list[Any] = Field(
@@ -227,6 +237,18 @@ class PipelineContext(BaseModel):
                 current.extend(value)
             else:
                 setattr(self, slot, value)
+            return
+
+        # ForesightCollector returns foresight_events + foresight_signals
+        if result.agent_name == "foresight_collector":
+            if "foresight_events" in result.data:
+                events = result.data["foresight_events"]
+                if isinstance(events, list):
+                    self.foresight_events.extend(events)
+            if "foresight_signals" in result.data:
+                signals = result.data["foresight_signals"]
+                if isinstance(signals, list):
+                    self.foresight_signals.extend(signals)
             return
 
         # EventTrendAnalyzer возвращает 3 слота: event_threads, trajectories, cross_impact_matrix

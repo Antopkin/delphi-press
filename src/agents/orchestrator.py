@@ -58,7 +58,12 @@ class Orchestrator:
     STAGES: list[StageDefinition] = [
         StageDefinition(
             name=ProgressStage.COLLECTION,
-            agent_names=["news_scout", "event_calendar", "outlet_historian"],
+            agent_names=[
+                "news_scout",
+                "event_calendar",
+                "outlet_historian",
+                "foresight_collector",
+            ],
             parallel=True,
             min_successful=2,
             timeout_seconds=600,

@@ -109,15 +109,15 @@ def build_default_registry(
     *,
     collector_deps: dict | None = None,
 ) -> AgentRegistry:
-    """Создать реестр со всеми 17 агентами пайплайна.
+    """Создать реестр со всеми 18 агентами пайплайна.
 
     Args:
         llm_client: ModelRouter для всех агентов.
         collector_deps: Зависимости для коллекторов (rss_fetcher, web_search и др.).
-            Если None — коллекторы не регистрируются.
+            Если None -- коллекторы не регистрируются.
 
-    Агенты для регистрации (17):
-    - Collectors: NewsScout, EventCalendar, OutletHistorian
+    Агенты для регистрации (18):
+    - Collectors: NewsScout, EventCalendar, OutletHistorian, ForesightCollector
     - Analysts: EventTrendAnalyzer, GeopoliticalAnalyst, EconomicAnalyst, MediaAnalyst
     - Forecasters: RealistAgent, GeostrategistAgent, EconomistAgent,
                    MediaExpertAgent, DevilsAdvocateAgent, MediatorAgent, JudgeAgent
@@ -127,6 +127,7 @@ def build_default_registry(
 
     if collector_deps is not None:
         from src.agents.collectors.event_calendar import EventCalendar
+        from src.agents.collectors.foresight_collector import ForesightCollector
         from src.agents.collectors.news_scout import NewsScout
         from src.agents.collectors.outlet_historian import OutletHistorian
 
@@ -152,6 +153,20 @@ def build_default_registry(
                 profile_cache=collector_deps["profile_cache"],
             )
         )
+
+        # ForesightCollector -- foresight clients are optional;
+        # only register if all three are present in collector_deps.
+        if all(
+            k in collector_deps for k in ("metaculus_client", "polymarket_client", "gdelt_client")
+        ):
+            registry.register(
+                ForesightCollector(
+                    llm_client,
+                    metaculus_client=collector_deps["metaculus_client"],
+                    polymarket_client=collector_deps["polymarket_client"],
+                    gdelt_client=collector_deps["gdelt_client"],
+                )
+            )
 
     # Analysts: Stage 2 + Stage 3
     from src.agents.analysts.economic import EconomicAnalyst

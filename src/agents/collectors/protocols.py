@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
@@ -100,3 +100,30 @@ class ProfileCacheProto(Protocol):
     async def get(self, outlet: str, ttl_days: int = 7) -> OutletProfile | None: ...
 
     async def put(self, outlet: str, profile: OutletProfile) -> None: ...
+
+
+# =====================================================================
+# Foresight data source protocols
+# =====================================================================
+
+
+class MetaculusClientProto(Protocol):
+    """Протокол для Metaculus API клиента."""
+
+    async def fetch_questions(
+        self, query: str, *, limit: int = 20, status: str = "open"
+    ) -> list[dict[str, Any]]: ...
+
+
+class PolymarketClientProto(Protocol):
+    """Протокол для Polymarket CLOB API клиента."""
+
+    async def fetch_markets(self, query: str, *, limit: int = 20) -> list[dict[str, Any]]: ...
+
+
+class GdeltClientProto(Protocol):
+    """Протокол для GDELT DOC 2.0 API клиента."""
+
+    async def fetch_articles(
+        self, query: str, *, language: str = "english", limit: int = 50, days_back: int = 3
+    ) -> list[dict[str, Any]]: ...

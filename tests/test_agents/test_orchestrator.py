@@ -138,9 +138,10 @@ def test_collection_stage_min_successful_is_2():
     assert stage.min_successful == 2
 
 
-def test_collection_stage_has_3_agents():
+def test_collection_stage_has_4_agents():
     stage = Orchestrator.STAGES[0]
-    assert len(stage.agent_names) == 3
+    assert len(stage.agent_names) == 4
+    assert "foresight_collector" in stage.agent_names
 
 
 def test_delphi_r1_has_5_agents():

@@ -63,7 +63,10 @@ async def run_prediction_task(
 
     # --- 3. Создание инфраструктуры ---
     from src.data_sources import (
+        GdeltDocClient,
+        MetaculusClient,
         OutletsCatalog,
+        PolymarketClient,
         RedisProfileCache,
         RSSFetcher,
         TrafilaturaScraper,
@@ -89,6 +92,9 @@ async def run_prediction_task(
         "outlet_catalog": OutletsCatalog(),
         "scraper": TrafilaturaScraper(),
         "profile_cache": RedisProfileCache(redis),
+        "metaculus_client": MetaculusClient(),
+        "polymarket_client": PolymarketClient(),
+        "gdelt_client": GdeltDocClient(),
     }
 
     registry = build_default_registry(llm_client, collector_deps=collector_deps)
