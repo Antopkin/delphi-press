@@ -144,10 +144,10 @@ def test_build_default_registry_returns_registry(mock_router):
 
 
 def test_build_default_registry_has_analysts(mock_router):
-    """Without collector_deps, analysts + forecasters are registered."""
+    """Without collector_deps, analysts + forecasters + generators are registered."""
     result = build_default_registry(mock_router)
-    # 4 analysts + 5 persona agents + mediator + judge = 11
-    assert len(result) == 11
+    # 4 analysts + 5 persona agents + mediator + judge + 3 generators = 14
+    assert len(result) == 14
     assert "event_trend_analyzer" in result
     assert "geopolitical_analyst" in result
     assert "economic_analyst" in result
@@ -166,3 +166,11 @@ def test_build_default_registry_has_forecasters(mock_router):
     # mediator + judge
     assert "mediator" in result
     assert "judge" in result
+
+
+def test_build_default_registry_has_generators(mock_router):
+    """Registry includes all 3 generator agents."""
+    result = build_default_registry(mock_router)
+    assert "framing" in result
+    assert "style_replicator" in result
+    assert "quality_gate" in result

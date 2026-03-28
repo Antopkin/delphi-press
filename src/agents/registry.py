@@ -174,4 +174,13 @@ def build_default_registry(
     registry.register_class(Mediator)
     registry.register_class(Judge)
 
+    # Generators: Stages 7-9
+    from src.agents.generators.framing import FramingAnalyzer
+    from src.agents.generators.quality_gate import QualityGate
+    from src.agents.generators.style_replicator import StyleReplicator
+
+    registry.register_class(FramingAnalyzer)
+    registry.register_class(StyleReplicator)
+    registry.register_class(QualityGate)
+
     return registry
