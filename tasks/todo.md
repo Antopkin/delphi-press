@@ -12,95 +12,71 @@
 
 ## Общий статус проекта
 
+> Полный roadmap с зависимостями и критериями готовности: **`docs/11-roadmap.md`**
+
 | Стадия | Статус | Что готово |
 |--------|--------|-----------|
 | **Stage 1: Collection** | DONE | 4 коллектора, cron jobs, 16 RSS, Metaculus/Polymarket/GDELT |
 | **Stage 2: Event Identification** | DONE | EventTrendAnalyzer (TF-IDF + HDBSCAN + LLM) |
 | **Stage 3: Trajectory Analysis** | DONE | 3 аналитика (geo, econ, media) — parallel |
-| **Stage 4: Delphi R1** | **STUB** | 5 персон определены, `execute()` пустой |
-| **Stage 5: Mediator + R2** | **90%** | Mediator DONE; R2 = повторный вызов персон с feedback |
+| **Stage 4: Delphi R1** | DONE | 5 персон, `execute()` реализован (personas.py:269-310) |
+| **Stage 5: Mediator + R2** | DONE | Mediator + двухфазный `_run_delphi_r2()` в orchestrator |
 | **Stage 6: Judge** | DONE | Агрегация, калибровка, ранкинг top 7 + wildcards |
 | **Stage 7: Framing** | DONE | FramingAnalyzer — editorial angles |
 | **Stage 8: Generation** | DONE | StyleReplicator — headline + lede variants |
 | **Stage 9: Quality Gate** | DONE | Fact-check + style conformance + dedup |
 | **LLM Layer** | DONE | OpenRouter client, ModelRouter (40+ task mappings), BudgetTracker |
-| **Orchestrator** | DONE | 9 стадий, SSE progress, fail-soft (min_successful) |
+| **Orchestrator** | DONE | 9 стадий, SSE progress, fail-soft, R2 two-phase |
 | **Schemas** | DONE | 60+ моделей в 7 файлах |
-| **Prompts** | DONE | 14 файлов промптов для всех агентов |
+| **Prompts** | DONE | 21 prompt-класс для всех агентов |
 | **API + Backend** | DONE | JWT auth, predictions API, worker |
+| **Agent Registry** | DONE | 18 агентов зарегистрированы |
 | **Frontend** | Частично | Главная, about, progress, results — работают |
-| **Eval** | Пилот | Brier Score + ground truth; BERTScore, runner — TODO |
+| **Evaluation** | Пилот | Brier Score + ground truth; BERTScore, runner — TODO |
 | **Deploy** | Отложен | Сервер захарденен, Docker готов |
 
-**Вывод:** Единственный блокер для запуска end-to-end пайплайна — `ExpertPersona.execute()` (1 файл, ~50 строк).
+**Вывод:** Пайплайн feature-complete (18/18 агентов, 9/9 стадий). Следующий шаг — первый реальный прогноз.
 
 ---
 
 ## Что делать дальше (по приоритету)
 
-### Сессия 1: Запуск пайплайна end-to-end 🔴 КРИТИЧЕСКИЙ ПУТЬ
+> Детали, зависимости, критерии готовности: **`docs/11-roadmap.md`**
 
-**Цель:** Реализовать `ExpertPersona.execute()` → пайплайн работает от Stage 1 до Stage 9.
+### Сессия 1: First Real Prediction
 
-- [ ] **1.1** Реализовать `ExpertPersona.execute()` — `src/agents/forecasters/personas.py:~200`
-  - Загрузить system prompt персоны (уже определён в модуле)
-  - Branch: `mediator_feedback is None` → R1; иначе → R2 (добавить feedback в user prompt)
-  - LLM вызов: `self.llm.complete(task=f"delphi_r{round}_{self.task_prefix}", messages=[...], json_mode=True)`
-  - Парсинг ответа → `PersonaAssessment` (из `src/schemas/agent.py`)
-  - `self.track_llm_usage(...)`
-  - ~50 строк кода
+- [ ] Настроить `.env` с OpenRouter ключом
+- [ ] Запустить dev-сервер + worker + Redis
+- [ ] Первый реальный прогноз (ТАСС RU, завтра)
+- [ ] Замерить стоимость, время, количество LLM-вызовов
 
-- [ ] **1.2** Архитектурное решение: R2 после медиатора
-  - Сейчас: `DELPHI_R2 = ["mediator"]` → после него сразу Judge
-  - Нужно: Mediator → 5 персон R2 (с feedback) → Judge
-  - Варианты: (a) добавить stage DELPHI_R2_PERSONAS; (b) mediator внутренне запускает R2; (c) расширить delphi.py как composite agent
-  - Решение повлияет на `ProgressStage` enum + orchestrator.py
+### Сессия 2: Hardening
 
-- [ ] **1.3** Реализовать `delphi.py` — оркестрация R1→Mediator→R2 (или скорректировать Orchestrator)
-  - `src/agents/forecasters/delphi.py` — сейчас только dataclasses
-  - Нужно: `DelphiOrchestrator` или новые stage definitions
+- [ ] Retry 429/5xx в web search
+- [ ] SSRF protection
+- [ ] ARQ cron: `scrape_pending_articles`
+- [ ] Мониторинг feeds
 
-- [ ] **1.4** Тесты персон (mock LLM)
-  - `test_persona_r1_returns_assessment` — mock LLM → PersonaAssessment
-  - `test_persona_r2_includes_mediator_feedback` — feedback передаётся в prompt
-  - `test_delphi_full_flow` — R1 → Mediator → R2 → Judge (integration)
+### Сессия 3: Evaluation — завершить модуль
 
-- [ ] **1.5** E2E smoke test — запустить полный пайплайн через API с mock LLM
-  - `PredictionRequest` → 9 стадий → `PredictionResponse`
-
-### Сессия 2: Hardening + первый реальный прогноз
-
-- [ ] **2.1** Retry 429/5xx в web search (`src/data_sources/web_search.py`)
-- [ ] **2.2** SSRF protection — валидация URL на приватные IP
-- [ ] **2.3** Первый реальный прогноз (с OpenRouter ключом)
-  - ТАСС RU, target_date = завтра
-  - Проверить: все 9 стадий, стоимость, время выполнения
-- [ ] **2.4** ARQ cron: `scrape_pending_articles` каждые 2 часа
-
-### Сессия 3: Eval — завершить модуль
-
-- [ ] **3.1** BERTScore eval: `src/eval/bertscore_eval.py` — кешированный scorer
-  - Зависимость: `bert-score>=0.3.13` + torch (~2GB)
-  - RU: `DeepPavlov/rubert-base-cased`; EN: `roberta-large`; cross: `xlm-roberta-base`
-- [ ] **3.2** LLM-as-judge: StyleMatch через Claude Sonnet
-  - Отдельный промпт от генерации (избежать self-enhancement bias)
-- [ ] **3.3** Runner: `src/eval/runner.py` — оркестратор: ground truth → BERTScore → TopicMatch → BS
-- [ ] **3.4** Report: `src/eval/report.py` — reliability diagram + per-persona BS таблица
-- [ ] **3.5** Пилот: 50 runs × 3 горизонта × 3 издания (< $1)
+- [ ] BERTScore evaluator (`src/eval/bertscore_eval.py`)
+- [ ] LLM-as-judge: StyleMatch
+- [ ] TopicMatch (3-ступенчатый)
+- [ ] Runner (`src/eval/runner.py`)
+- [ ] Report generator (`src/eval/report.py`)
+- [ ] Пилот: 50 runs (< $1)
 
 ### Сессия 4: Frontend
 
-- [ ] **4.1** UI для API-ключей — поля ввода OpenRouter/YandexGPT (бэкенд готов: Fernet)
-- [ ] **4.2** "Последние прогнозы" — фильтр по текущему пользователю
-- [ ] **4.3** Редизайн фронтенда
+- [ ] UI для API-ключей
+- [ ] Фильтр "Мои прогнозы" по пользователю
+- [ ] Пресеты (Light/Standard/Full)
 
 ### Сессия 5: Deploy
 
-- [ ] **5.1** Деплой на `deploy@213.165.220.144`
-  - `.env` с OpenRouter ключом
-  - Docker Compose: app + worker + redis + nginx
-  - TLS via Let's Encrypt
-- [ ] **5.2** Мониторинг: Redis pub/sub для feed fetch events
+- [ ] Production `.env` + Docker build
+- [ ] TLS + deploy на VPS
+- [ ] Smoke test + мониторинг
 
 ---
 

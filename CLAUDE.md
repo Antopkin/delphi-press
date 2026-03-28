@@ -32,6 +32,8 @@
 - `src/data_sources/foresight.py` → `tasks/research/metaculus_polymarket_api.md`, `tasks/research/gdelt_api.md`
 - `src/agents/collectors/foresight_collector.py` → `docs/03-collectors.md` + ресёрчи выше
 - `src/web/` → `docs/09-frontend.md`
+- `src/eval/` → `tasks/research/retrospective_testing.md`
+- Roadmap (оставшиеся сессии) → `docs/11-roadmap.md`
 - `.claude/skills/predict/` → Claude Code predict skill (сессия 12)
 
 ## Доменный глоссарий
