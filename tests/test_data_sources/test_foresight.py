@@ -686,6 +686,195 @@ class TestPolymarketClientCLOB:
 
 
 # ===========================================================================
+# PolymarketClient — Resolved markets
+# ===========================================================================
+
+POLYMARKET_RESOLVED_YES = [
+    {
+        "id": "resolved_yes_1",
+        "question": "Will X happen by March?",
+        "slug": "will-x-happen-march",
+        "description": "Resolves YES if...",
+        "endDate": "2026-03-15T00:00:00Z",
+        "closedTime": "2026-03-15T12:00:00+00:00",
+        "active": False,
+        "closed": True,
+        "outcomes": '["Yes", "No"]',
+        "outcomePrices": '["1", "0"]',
+        "volume": "250000.00",
+        "liquidity": "0.00",
+        "clobTokenIds": '["token_res_yes", "token_res_no"]',
+        "tags": [{"id": 1, "label": "Politics"}],
+    },
+]
+
+POLYMARKET_RESOLVED_NO = [
+    {
+        "id": "resolved_no_1",
+        "question": "Will Y pass by April?",
+        "slug": "will-y-pass-april",
+        "description": "Resolves YES if...",
+        "endDate": "2026-04-01T00:00:00Z",
+        "closedTime": "2026-04-01T18:00:00+00:00",
+        "active": False,
+        "closed": True,
+        "outcomes": '["Yes", "No"]',
+        "outcomePrices": '["0", "1"]',
+        "volume": "180000.00",
+        "liquidity": "0.00",
+        "clobTokenIds": '["token_n_yes", "token_n_no"]',
+        "tags": [{"id": 2, "label": "Economics"}],
+    },
+]
+
+POLYMARKET_RESOLVED_LOW_VOL = [
+    {
+        "id": "low_vol_resolved",
+        "question": "Tiny resolved market",
+        "slug": "tiny-resolved",
+        "description": "",
+        "endDate": "2026-03-10T00:00:00Z",
+        "closedTime": "2026-03-10T10:00:00+00:00",
+        "active": False,
+        "closed": True,
+        "outcomePrices": '["1", "0"]',
+        "volume": "500.00",
+        "liquidity": "0.00",
+        "tags": [],
+    },
+]
+
+
+class TestPolymarketResolvedMarkets:
+    async def test_fetch_resolved_markets_success(self) -> None:
+        """Resolved YES market parsed correctly from outcomePrices."""
+        client = PolymarketClient()
+        mock_resp = _make_response(200, POLYMARKET_RESOLVED_YES)
+        with patch.object(client._client, "get", new_callable=AsyncMock, return_value=mock_resp):
+            results = await client.fetch_resolved_markets()
+
+        assert len(results) == 1
+        m = results[0]
+        assert m["market_id"] == "resolved_yes_1"
+        assert m["question"] == "Will X happen by March?"
+        assert m["resolved_yes"] is True
+        assert m["closed_time"] == "2026-03-15T12:00:00+00:00"
+        assert m["volume"] == pytest.approx(250000.0)
+        assert m["clob_token_id"] == "token_res_yes"
+        assert m["categories"] == ["Politics"]
+
+    async def test_fetch_resolved_markets_resolved_no(self) -> None:
+        """outcomePrices=["0","1"] means resolved NO."""
+        client = PolymarketClient()
+        mock_resp = _make_response(200, POLYMARKET_RESOLVED_NO)
+        with patch.object(client._client, "get", new_callable=AsyncMock, return_value=mock_resp):
+            results = await client.fetch_resolved_markets()
+
+        assert len(results) == 1
+        assert results[0]["resolved_yes"] is False
+
+    async def test_fetch_resolved_markets_filters_low_volume(self) -> None:
+        """Markets with volume below threshold are excluded."""
+        client = PolymarketClient()
+        mock_resp = _make_response(200, POLYMARKET_RESOLVED_LOW_VOL)
+        with patch.object(client._client, "get", new_callable=AsyncMock, return_value=mock_resp):
+            results = await client.fetch_resolved_markets(min_volume=10_000.0)
+
+        assert results == []
+
+    async def test_fetch_resolved_markets_http_error_returns_empty(self) -> None:
+        client = PolymarketClient()
+        with patch.object(
+            client._client,
+            "get",
+            new_callable=AsyncMock,
+            side_effect=httpx.ConnectError("connection refused"),
+        ):
+            results = await client.fetch_resolved_markets()
+
+        assert results == []
+
+    async def test_fetch_resolved_markets_caches(self) -> None:
+        client = PolymarketClient()
+        mock_resp = _make_response(200, POLYMARKET_RESOLVED_YES)
+        mock_get = AsyncMock(return_value=mock_resp)
+        with patch.object(client._client, "get", mock_get):
+            first = await client.fetch_resolved_markets()
+            second = await client.fetch_resolved_markets()
+
+        assert mock_get.await_count == 1
+        assert first == second
+
+    async def test_fetch_resolved_markets_sends_closed_params(self) -> None:
+        """API must be called with active=false&closed=true."""
+        client = PolymarketClient()
+        mock_resp = _make_response(200, [])
+        mock_get = AsyncMock(return_value=mock_resp)
+        with patch.object(client._client, "get", mock_get):
+            await client.fetch_resolved_markets()
+
+        params = mock_get.call_args.kwargs.get("params", {})
+        assert params.get("active") == "false"
+        assert params.get("closed") == "true"
+
+
+# ===========================================================================
+# PolymarketClient — Historical price at timestamp
+# ===========================================================================
+
+CLOB_HISTORICAL_RESPONSE = {
+    "history": [
+        {"t": 1710500000, "p": "0.48"},
+        {"t": 1710503600, "p": "0.51"},
+        {"t": 1710507200, "p": "0.53"},
+    ]
+}
+
+
+class TestPolymarketHistoricalPrice:
+    async def test_fetch_historical_price_success(self) -> None:
+        """Returns price closest to target timestamp."""
+        client = PolymarketClient()
+        mock_resp = _make_response(200, CLOB_HISTORICAL_RESPONSE)
+        with patch.object(
+            client._clob_client, "get", new_callable=AsyncMock, return_value=mock_resp
+        ):
+            # Target closest to middle point (1710503600)
+            price = await client.fetch_historical_price("token_abc", 1710503500)
+
+        assert price is not None
+        assert price == pytest.approx(0.51)
+
+    async def test_fetch_historical_price_no_data_returns_none(self) -> None:
+        client = PolymarketClient()
+        mock_resp = _make_response(200, CLOB_EMPTY_HISTORY)
+        with patch.object(
+            client._clob_client, "get", new_callable=AsyncMock, return_value=mock_resp
+        ):
+            price = await client.fetch_historical_price("token_xyz", 1710500000)
+
+        assert price is None
+
+    async def test_fetch_historical_price_uses_startTs_endTs(self) -> None:
+        """Must use startTs/endTs, NOT interval=max (resolved markets bug)."""
+        client = PolymarketClient()
+        mock_resp = _make_response(200, CLOB_EMPTY_HISTORY)
+        mock_get = AsyncMock(return_value=mock_resp)
+        with patch.object(client._clob_client, "get", mock_get):
+            await client.fetch_historical_price("token_check", 1710500000)
+
+        params = mock_get.call_args.kwargs.get("params", {})
+        assert "startTs" in params
+        assert "endTs" in params
+        assert "interval" not in params
+
+    async def test_fetch_historical_price_empty_token(self) -> None:
+        client = PolymarketClient()
+        price = await client.fetch_historical_price("", 1710500000)
+        assert price is None
+
+
+# ===========================================================================
 # GdeltDocClient
 # ===========================================================================
 

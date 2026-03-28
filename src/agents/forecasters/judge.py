@@ -327,14 +327,9 @@ class Judge(BaseAgent):
     ) -> dict | None:
         """Three-tier fuzzy match of event thread to market signal.
 
-        Tier 1: title score >= 65
-        Tier 2: title score >= 40 AND category Jaccard >= 0.3
-        Tier 3: no match
+        Delegates to src.utils.fuzzy_match.fuzzy_match_to_market.
         """
-        if not market_index:
-            return None
-
-        from rapidfuzz import fuzz
+        from src.utils.fuzzy_match import fuzzy_match_to_market
 
         # Build search text from event_id + prediction texts
         search_texts = [event_id.replace("_", " ")]
@@ -342,37 +337,20 @@ class Judge(BaseAgent):
             if hasattr(pred, "prediction") and pred.prediction:
                 search_texts.append(pred.prediction)
 
-        best_score = 0.0
-        best_market: dict | None = None
+        # Collect event categories from predictions
+        event_cats: set[str] = set()
+        for pred in agent_preds.values():
+            if hasattr(pred, "categories"):
+                event_cats.update(c.lower() for c in pred.categories)
 
-        for title, market in market_index.items():
-            for text in search_texts:
-                score = fuzz.token_sort_ratio(text.lower(), title) / 100.0
-                if score > best_score:
-                    best_score = score
-                    best_market = market
-
-        if best_market is None:
-            return None
-
-        # Tier 1: high title similarity
-        if best_score >= MARKET_MATCH_TIER1_SCORE / 100.0:
-            return best_market
-
-        # Tier 2: moderate title + category overlap
-        if best_score >= MARKET_MATCH_TIER2_SCORE / 100.0:
-            market_cats = set(c.lower() for c in best_market.get("categories", []))
-            # Collect event categories from predictions
-            event_cats: set[str] = set()
-            for pred in agent_preds.values():
-                if hasattr(pred, "categories"):
-                    event_cats.update(c.lower() for c in pred.categories)
-            if market_cats and event_cats:
-                jaccard = len(market_cats & event_cats) / len(market_cats | event_cats)
-                if jaccard >= MARKET_MATCH_TIER2_JACCARD:
-                    return best_market
-
-        return None
+        return fuzzy_match_to_market(
+            search_texts=search_texts,
+            market_index=market_index,
+            tier1_threshold=MARKET_MATCH_TIER1_SCORE / 100.0,
+            tier2_threshold=MARKET_MATCH_TIER2_SCORE / 100.0,
+            tier2_jaccard_min=MARKET_MATCH_TIER2_JACCARD,
+            event_categories=event_cats or None,
+        )
 
     @staticmethod
     def _compute_market_weight(market: dict) -> float:

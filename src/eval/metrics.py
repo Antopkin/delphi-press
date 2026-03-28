@@ -119,3 +119,51 @@ def composite_score(
         Weighted composite score in [0, 1].
     """
     return 0.40 * topic_match + 0.35 * semantic_sim + 0.25 * style_match
+
+
+def market_brier_comparison(
+    delphi_probs: list[float],
+    market_probs_24h: list[float],
+    market_probs_48h: list[float],
+    market_probs_7d: list[float],
+    outcomes: list[float],
+) -> dict:
+    """Compare Delphi Brier Score against market prices at different horizons.
+
+    Args:
+        delphi_probs: Delphi's predicted probabilities for each event.
+        market_probs_24h: Market prices 24h before resolution.
+        market_probs_48h: Market prices 48h before resolution.
+        market_probs_7d: Market prices 7d before resolution.
+        outcomes: Binary outcomes (1.0=YES resolved, 0.0=NO resolved).
+
+    Returns:
+        Dict with keys: delphi_brier, market_brier_24h, market_brier_48h,
+        market_brier_7d, delphi_skill_vs_24h, n_events.
+
+    Raises:
+        ValueError: If input lists have different lengths or are empty.
+    """
+    all_lists = [delphi_probs, market_probs_24h, market_probs_48h, market_probs_7d, outcomes]
+    lengths = {len(lst) for lst in all_lists}
+    if len(lengths) > 1:
+        raise ValueError("All input lists must have same length")
+    if lengths == {0}:
+        raise ValueError("Input lists must contain at least one element")
+
+    bs_delphi = brier_score(delphi_probs, outcomes).score
+    bs_24h = brier_score(market_probs_24h, outcomes).score
+    bs_48h = brier_score(market_probs_48h, outcomes).score
+    bs_7d = brier_score(market_probs_7d, outcomes).score
+
+    # Brier Skill Score: how much better Delphi is vs market-24h baseline
+    skill = 1.0 - bs_delphi / bs_24h if bs_24h > 0 else 0.0
+
+    return {
+        "n_events": len(outcomes),
+        "delphi_brier": bs_delphi,
+        "market_brier_24h": bs_24h,
+        "market_brier_48h": bs_48h,
+        "market_brier_7d": bs_7d,
+        "delphi_skill_vs_24h": skill,
+    }

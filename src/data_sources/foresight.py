@@ -334,6 +334,152 @@ class PolymarketClient:
         self._price_cache[cache_key] = (time.monotonic(), prices)
         return prices
 
+    async def fetch_resolved_markets(
+        self,
+        *,
+        limit: int = 100,
+        min_volume: float = 10_000.0,
+    ) -> list[dict]:
+        """Fetch resolved (closed) markets from Gamma API.
+
+        Resolution outcome is determined from outcomePrices:
+        winning side = "1". Uses closedTime as resolution timestamp
+        (resolvedAt field does not exist in the Gamma API).
+
+        Returns:
+            List of dicts with keys: market_id, question, slug,
+            resolved_yes, closed_time, volume, categories, clob_token_id.
+        """
+        cache_key = f"polymarket_resolved:{limit}:{min_volume}"
+        cached = self._cache.get(cache_key)
+        if cached and (time.monotonic() - cached[0]) < self._cache_ttl:
+            return cached[1]
+
+        params = {
+            "active": "false",
+            "closed": "true",
+            "order": "volume",
+            "ascending": "false",
+            "limit": limit,
+        }
+
+        try:
+            response = await retry_with_backoff(
+                lambda: self._client.get("/markets", params=params),
+                max_retries=2,
+                base_delay=1.0,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.warning("Polymarket resolved markets API failed: %s", exc)
+            return []
+
+        try:
+            markets_raw = response.json()
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.warning("Polymarket resolved response parse error: %s", exc)
+            return []
+
+        results: list[dict] = []
+        for market in markets_raw:
+            # Parse volume, filter below threshold
+            try:
+                volume = float(market.get("volume") or 0)
+            except (ValueError, TypeError):
+                volume = 0.0
+            if volume < min_volume:
+                continue
+
+            # Determine resolution from outcomePrices
+            # outcomePrices[0]=="1" → YES; outcomePrices[1]=="1" → NO
+            try:
+                prices = json.loads(market.get("outcomePrices", "[]"))
+                resolved_yes = len(prices) >= 1 and float(prices[0]) == 1.0
+            except (json.JSONDecodeError, ValueError, TypeError, IndexError):
+                continue  # Skip unresolvable markets
+
+            # Extract CLOB token ID
+            try:
+                clob_ids = json.loads(market.get("clobTokenIds", "[]"))
+                clob_token_id = clob_ids[0] if clob_ids else ""
+            except (json.JSONDecodeError, ValueError, TypeError, IndexError):
+                clob_token_id = ""
+
+            categories = [t.get("label", "") for t in market.get("tags", [])]
+
+            results.append(
+                {
+                    "market_id": market.get("id", ""),
+                    "question": market.get("question", ""),
+                    "slug": market.get("slug", ""),
+                    "resolved_yes": resolved_yes,
+                    "closed_time": market.get("closedTime", ""),
+                    "volume": volume,
+                    "categories": categories,
+                    "clob_token_id": clob_token_id,
+                }
+            )
+
+        self._cache[cache_key] = (time.monotonic(), results)
+        return results
+
+    async def fetch_historical_price(
+        self,
+        token_id: str,
+        target_timestamp: int,
+        *,
+        window_seconds: int = 3600,
+    ) -> float | None:
+        """Get market price at a specific historical moment.
+
+        Uses chunked startTs/endTs instead of interval=max, which returns
+        empty for resolved markets with fidelity < 720 (known CLOB bug).
+
+        Args:
+            token_id: CLOB token ID.
+            target_timestamp: Unix timestamp to get price at.
+            window_seconds: Search window around target (default 1 hour).
+
+        Returns:
+            Price closest to target_timestamp, or None if no data.
+        """
+        if not token_id:
+            return None
+
+        params = {
+            "token_id": token_id,
+            "startTs": target_timestamp - window_seconds,
+            "endTs": target_timestamp + window_seconds,
+            "fidelity": 60,
+        }
+        try:
+            async with self._semaphore:
+                response = await retry_with_backoff(
+                    lambda: self._clob_client.get("/prices-history", params=params),
+                    max_retries=2,
+                    base_delay=1.0,
+                )
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.warning("CLOB historical price failed for %s: %s", token_id, exc)
+            return None
+
+        try:
+            data = response.json()
+        except (json.JSONDecodeError, ValueError):
+            return None
+
+        history = data.get("history", [])
+        if not history:
+            return None
+
+        # Find point closest to target_timestamp
+        best_point = min(history, key=lambda pt: abs(int(pt.get("t", 0)) - target_timestamp))
+        try:
+            return float(best_point["p"])
+        except (KeyError, ValueError, TypeError):
+            return None
+
     async def fetch_enriched_markets(
         self,
         query: str = "",

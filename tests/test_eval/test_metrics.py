@@ -7,7 +7,13 @@ from __future__ import annotations
 
 import pytest
 
-from src.eval.metrics import BrierResult, brier_score, composite_score, log_score
+from src.eval.metrics import (
+    BrierResult,
+    brier_score,
+    composite_score,
+    log_score,
+    market_brier_comparison,
+)
 
 
 class TestBrierScore:
@@ -105,3 +111,54 @@ class TestCompositeScore:
     def test_composite_score_all_zeros(self) -> None:
         """All zeros yield 0.0."""
         assert composite_score(0.0, 0.0, 0.0) == pytest.approx(0.0, abs=1e-9)
+
+
+class TestMarketBrierComparison:
+    """Market-calibrated Brier Score comparison."""
+
+    def test_delphi_beats_market(self) -> None:
+        """Delphi probs closer to outcomes → lower BS, positive skill."""
+        outcomes = [1.0, 0.0, 1.0, 0.0, 1.0]
+        delphi = [0.9, 0.1, 0.8, 0.2, 0.7]  # good calibration
+        market_24h = [0.6, 0.4, 0.6, 0.4, 0.6]  # mediocre
+        market_48h = [0.55, 0.45, 0.55, 0.45, 0.55]
+        market_7d = [0.5, 0.5, 0.5, 0.5, 0.5]
+
+        result = market_brier_comparison(delphi, market_24h, market_48h, market_7d, outcomes)
+        assert result["delphi_brier"] < result["market_brier_24h"]
+        assert result["delphi_skill_vs_24h"] > 0
+        assert result["n_events"] == 5
+
+    def test_market_beats_delphi(self) -> None:
+        """Market is better → negative BSS."""
+        outcomes = [1.0, 0.0, 1.0]
+        delphi = [0.5, 0.5, 0.5]  # random guess
+        market_24h = [0.95, 0.05, 0.90]  # market knows
+
+        result = market_brier_comparison(delphi, market_24h, market_24h, market_24h, outcomes)
+        assert result["delphi_brier"] > result["market_brier_24h"]
+        assert result["delphi_skill_vs_24h"] < 0
+
+    def test_equal_performance(self) -> None:
+        """Same probs → BSS near 0."""
+        outcomes = [1.0, 0.0]
+        probs = [0.7, 0.3]
+        result = market_brier_comparison(probs, probs, probs, probs, outcomes)
+        assert result["delphi_skill_vs_24h"] == pytest.approx(0.0, abs=1e-9)
+
+    def test_perfect_delphi_vs_random_market(self) -> None:
+        """Perfect Delphi vs 0.5 market → BSS = 1."""
+        outcomes = [1.0, 0.0, 1.0, 0.0]
+        delphi = [1.0, 0.0, 1.0, 0.0]
+        market = [0.5, 0.5, 0.5, 0.5]
+        result = market_brier_comparison(delphi, market, market, market, outcomes)
+        assert result["delphi_brier"] == pytest.approx(0.0, abs=1e-9)
+        assert result["delphi_skill_vs_24h"] == pytest.approx(1.0, abs=1e-9)
+
+    def test_mismatched_lengths_raises(self) -> None:
+        with pytest.raises(ValueError, match="same length"):
+            market_brier_comparison([0.5], [0.5, 0.5], [0.5], [0.5], [1.0])
+
+    def test_empty_inputs_raises(self) -> None:
+        with pytest.raises(ValueError, match="at least one"):
+            market_brier_comparison([], [], [], [], [])
