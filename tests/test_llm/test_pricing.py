@@ -100,6 +100,11 @@ class TestPricingTablesComplete:
             "meta-llama/llama-4-maverick",
             "deepseek/deepseek-r1",
             "deepseek/deepseek-v3-0324",
+            "google/gemini-3.1-flash-lite-preview",
+            "anthropic/claude-opus-4.6",
+            "anthropic/claude-sonnet-4.5",
+            "meta-llama/llama-4-scout",
+            "google/gemini-2.5-flash",
         }
         assert expected.issubset(MODEL_PRICING.keys())
 

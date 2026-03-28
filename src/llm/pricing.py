@@ -21,6 +21,11 @@ MODEL_PRICING: dict[str, tuple[float, float]] = {
     "meta-llama/llama-4-maverick": (0.20, 0.60),
     "deepseek/deepseek-r1": (0.55, 2.19),
     "deepseek/deepseek-v3-0324": (0.30, 0.88),
+    "google/gemini-3.1-flash-lite-preview": (0.25, 1.50),
+    "anthropic/claude-opus-4.6": (5.00, 25.00),
+    "anthropic/claude-sonnet-4.5": (3.00, 15.00),
+    "meta-llama/llama-4-scout": (0.08, 0.30),
+    "google/gemini-2.5-flash": (0.30, 2.50),
 }
 
 # YandexGPT: $/1K tokens (input, output)

@@ -11,9 +11,9 @@ class TestLLMConfig:
         config = LLMConfig()
         assert config.openrouter_api_key == ""
         assert config.yandex_api_key == ""
-        assert config.default_model_cheap == "openai/gpt-4o-mini"
-        assert config.default_model_reasoning == "anthropic/claude-sonnet-4"
-        assert config.default_model_strong == "anthropic/claude-opus-4"
+        assert config.default_model_cheap == "google/gemini-3.1-flash-lite-preview"
+        assert config.default_model_reasoning == "anthropic/claude-opus-4.6"
+        assert config.default_model_strong == "anthropic/claude-opus-4.6"
         assert config.default_model_russian == "yandexgpt"
         assert config.llm_max_retries == 3
         assert config.max_budget_usd == 50.0

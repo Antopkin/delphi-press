@@ -20,9 +20,9 @@ class LLMConfig(BaseSettings):
     yandex_api_key: str = ""
 
     # Дефолтные модели
-    default_model_cheap: str = "openai/gpt-4o-mini"
-    default_model_reasoning: str = "anthropic/claude-sonnet-4"
-    default_model_strong: str = "anthropic/claude-opus-4"
+    default_model_cheap: str = "google/gemini-3.1-flash-lite-preview"
+    default_model_reasoning: str = "anthropic/claude-opus-4.6"
+    default_model_strong: str = "anthropic/claude-opus-4.6"
     default_model_russian: str = "yandexgpt"
 
     # Retry

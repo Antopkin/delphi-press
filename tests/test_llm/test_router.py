@@ -63,17 +63,11 @@ class TestModelRouter:
 
     @pytest.mark.asyncio
     async def test_complete_fallback(self, mock_openrouter, mock_yandex):
-        mock_openrouter.complete = AsyncMock(
-            side_effect=LLMProviderError("fail", provider="openrouter", status_code=500)
-        )
-        # event_calendar fallback is yandexgpt-lite -> yandex provider
-        # But yandexgpt-lite goes to yandex provider which is a stub.
-        # Let's use a task where fallback stays on openrouter.
-        # trajectory_analysis: primary=claude-sonnet-4, fallback=gpt-4o
+        # trajectory_analysis: primary=claude-opus-4.6, fallback=claude-sonnet-4.5
         mock_openrouter.complete = AsyncMock(
             side_effect=[
                 LLMProviderError("fail", provider="openrouter", status_code=500),
-                _make_response(model="openai/gpt-4o"),
+                _make_response(model="anthropic/claude-sonnet-4.5"),
             ]
         )
         router = ModelRouter(
@@ -81,7 +75,7 @@ class TestModelRouter:
             budget_usd=50.0,
         )
         result = await router.complete(task="trajectory_analysis", messages=_make_messages())
-        assert result.model == "openai/gpt-4o"
+        assert result.model == "anthropic/claude-sonnet-4.5"
 
     @pytest.mark.asyncio
     async def test_complete_all_fail(self, mock_openrouter, mock_yandex):
@@ -119,7 +113,7 @@ class TestModelRouter:
 
     def test_get_model_for_task(self, router):
         model = router.get_model_for_task("event_calendar")
-        assert model == "openai/gpt-4o-mini"
+        assert model == "google/gemini-3.1-flash-lite-preview"
 
     def test_get_model_for_unknown_task(self, router):
         with pytest.raises(KeyError):
@@ -130,9 +124,9 @@ class TestModelRouter:
 
 
 class TestDelphi:
-    def test_model_diversity(self):
-        models = list(DELPHI_PERSONA_MODELS.values())
-        assert len(set(models)) == len(models), "Each Delphi persona must use a unique model"
+    def test_all_personas_use_opus(self):
+        for persona, model in DELPHI_PERSONA_MODELS.items():
+            assert model == "anthropic/claude-opus-4.6", f"{persona} should use opus-4.6"
 
     def test_all_delphi_tasks_in_assignments(self):
         for persona in DELPHI_PERSONA_MODELS:
