@@ -162,10 +162,11 @@ class QualityGate(BaseAgent):
             cost_usd=response.cost_usd,
         )
 
-        parsed = prompt.parse_response(response.content)
-        if parsed is not None:
-            return parsed
-        return CheckResult(score=3, feedback="Could not parse factual check response.")
+        try:
+            return prompt.parse_response(response.content)
+        except Exception as exc:
+            self.logger.warning("Factual check parse failed for %s: %s", headline.id, exc)
+            return CheckResult(score=3, feedback="Could not parse factual check response.")
 
     async def _check_style(
         self, headline: GeneratedHeadline, profile: OutletProfile | None
@@ -196,10 +197,11 @@ class QualityGate(BaseAgent):
             cost_usd=response.cost_usd,
         )
 
-        parsed = prompt.parse_response(response.content)
-        if parsed is not None:
-            return parsed
-        return CheckResult(score=3, feedback="Could not parse style check response.")
+        try:
+            return prompt.parse_response(response.content)
+        except Exception as exc:
+            self.logger.warning("Style check parse failed for %s: %s", headline.id, exc)
+            return CheckResult(score=3, feedback="Could not parse style check response.")
 
     def _make_decision(
         self,

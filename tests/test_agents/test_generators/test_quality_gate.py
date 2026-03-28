@@ -205,6 +205,40 @@ class TestQualityGateExecute:
         assert gate._tokens_in > 0
 
 
+class TestQualityGateParseErrors:
+    """Test that _check_factual/_check_style catch PromptParseError internally."""
+
+    @pytest.mark.asyncio
+    async def test_check_factual_parse_error_returns_neutral(self, mock_router):
+        from src.agents.generators.quality_gate import QualityGate
+
+        gate = QualityGate(llm_client=mock_router)
+        headline = make_generated_headline()
+        prediction = make_ranked_prediction()
+
+        mock_router.complete.return_value = make_llm_response("INVALID JSON")
+
+        # _check_factual must return neutral CheckResult, not raise
+        result = await gate._check_factual(headline, prediction)
+        assert result.score == 3
+        assert "parse" in result.feedback.lower() or "could not" in result.feedback.lower()
+
+    @pytest.mark.asyncio
+    async def test_check_style_parse_error_returns_neutral(self, mock_router):
+        from src.agents.generators.quality_gate import QualityGate
+
+        gate = QualityGate(llm_client=mock_router)
+        headline = make_generated_headline()
+        profile = make_outlet_profile()
+
+        mock_router.complete.return_value = make_llm_response("INVALID JSON")
+
+        # _check_style must return neutral CheckResult, not raise
+        result = await gate._check_style(headline, profile)
+        assert result.score == 3
+        assert "parse" in result.feedback.lower() or "could not" in result.feedback.lower()
+
+
 class TestBuildFinalPredictions:
     """Test _build_final_predictions helper."""
 
