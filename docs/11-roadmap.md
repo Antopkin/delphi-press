@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-29. Production deployed. Обновлено: 2026-03-29 (v0.5.1 foresight bugfix).
+> Статус на 2026-03-29. Production deployed. Обновлено: 2026-03-29 (v0.5.2 delphi parse-error fix).
 
 ---
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **835 тестов** зелёные. Hardening (retry, SSRF, cron, monitoring) завершён. Foresight bugfix v0.5.1: Metaculus API migration, cache key fix, CLOB param fix.
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **846 тестов** зелёные. Hardening (retry, SSRF, cron, monitoring) завершён. Foresight bugfix v0.5.1: Metaculus API migration, cache key fix, CLOB param fix. Delphi parse-error fix v0.5.2: personas PromptParseError fallback, orchestrator quorum 4→3.
 
 ### Реализованные компоненты
 
@@ -184,6 +184,15 @@ evaluation = [
 | `d1ce04d` | `BudgetTracker._budget` attribute fix |
 | `48cc4e6` | Truncated markdown JSON fence fallback в LLM parser |
 
+#### v0.5.2 — Delphi parse-error fix (2026-03-29)
+
+| Коммит | Что |
+|--------|-----|
+| `568134d` | `personas.py`: catch PromptParseError → fallback empty assessment (R1/R2) |
+| `e68c9b4` | `orchestrator.py`: Delphi quorum 4→3 (majority of 5) для R1 и R2 |
+
+**Причина:** При дешёвых моделях (gemini-flash-lite) parse_response() бросает PromptParseError на обрезанном JSON. Fallback `if parsed else {}` был мёртвым кодом. С quorum=4 выпадение 2 из 5 персон убивало pipeline. Тот же паттерн бага, что и в stages 7-9 (v0.5.1).
+
 ---
 
 ### Сессия 5: Deploy
@@ -244,4 +253,4 @@ evaluation = [
 
 ---
 
-*Создано: 2026-03-28. Обновлено: 2026-03-29 (v0.5.1, 835 тестов).*
+*Создано: 2026-03-28. Обновлено: 2026-03-29 (v0.5.2, 846 тестов).*
