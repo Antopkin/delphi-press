@@ -4,6 +4,27 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.5.0] - 2026-03-28
+
+Polymarket enrichment (4 фазы) + production deploy на VPS.
+
+### Added
+
+- **Distribution metrics module** (`src/data_sources/market_metrics.py`) — volatility (logit-returns), trend (EMA-delta), spread (sigmoid uncertainty), liquidity-weighted probability, empirical CI. Чистая математика, zero I/O.
+- **CLOB API в PolymarketClient** — `fetch_price_history()`, `fetch_enriched_markets()`, параллельное обогащение с semaphore(10), кеш 15 мин.
+- **ForesightCollector enrichment** — `_map_polymarket()` вычисляет distribution metrics из price history, добавляет volatility_7d, trend_7d, lw_probability, CI к foresight signals.
+- **Judge: 6-я виртуальная персона "market"** — fuzzy matching (rapidfuzz, 3-tier), dynamic weight (liquidity × volatility × reliability), alignment boost (+0.04), longshot safeguard (<0.10).
+- **60 новых тестов**, итого 789/789 зелёных.
+
+### Milestone
+
+- **Production deploy** на VPS `delphi.antopkin.ru` (213.165.220.144).
+- 4 Docker-контейнера: app (FastAPI/uvicorn), worker (ARQ), redis 7.4, nginx (TLS).
+- TLS через Let's Encrypt, security headers, rate limiting.
+- Health endpoint: DB ok (1ms), Redis ok (0ms).
+
+---
+
 ## [0.4.0] - 2026-03-28
 
 Первый E2E dry run pipeline. 10 integration-багов найдено и пофикшено. 9/9 стадий пройдены (gemini-2.5-flash, 5 threads, $0.24, 6 мин).

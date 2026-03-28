@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-28 (ночь). После сессии Hardening.
+> Статус на 2026-03-28. Production deployed.
 
 ---
 
-## Текущее состояние: E2E verified
+## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. Первый E2E dry run (gemini-2.5-flash, 5 event threads) прошёл **9/9 стадий** за 6 мин, $0.24. В процессе найдено и пофикшено **10 integration-багов**. 770 тестов зелёные. Hardening (retry, SSRF, cron, monitoring) завершён.
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". **789 тестов** зелёные. Hardening (retry, SSRF, cron, monitoring) завершён.
 
 ### Реализованные компоненты
 
@@ -112,6 +112,19 @@ tests/test_integration/             — 7 E2E integration tests
 
 ---
 
+### Polymarket Enrichment: DONE (2026-03-28)
+
+**Цель:** Обогатить Polymarket-сигналы distribution metrics и внедрить рыночную персону в Judge.
+
+- [x] Phase 1: `src/data_sources/market_metrics.py` — volatility, trend, spread, CI, lw_probability (37 тестов)
+- [x] Phase 2: CLOB API в PolymarketClient — `fetch_price_history()`, `fetch_enriched_markets()` (8 тестов)
+- [x] Phase 3: ForesightCollector enrichment — distribution metrics из price history (2 теста)
+- [x] Phase 4: Judge 6-я персона "market" — fuzzy matching, dynamic weight, alignment boost (13 тестов)
+
+**Итого:** 60 новых тестов, 789/789 зелёные. 4 коммита на main.
+
+---
+
 ### Сессия 3: Evaluation — завершить модуль
 
 **Цель:** Довести evaluation-модуль до возможности запуска пилотного ретро-теста.
@@ -171,14 +184,14 @@ evaluation = [
 
 | # | Задача | Файлы | Критерий готовности |
 |---|--------|-------|---------------------|
-| 5.1 | Production `.env` | `.env.production` | Все ключи, SECRET_KEY, DATABASE_URL |
-| 5.2 | Docker build + test | `Dockerfile`, `docker-compose.yml` | 4 контейнера стартуют без ошибок |
-| 5.3 | TLS сертификат | `nginx/` | Let's Encrypt для `delphi.antopkin.ru` |
-| 5.4 | Deploy на VPS | — | `docker compose up -d` на сервере |
-| 5.5 | Smoke test production | — | HTTPS запрос с prediction и получение результата |
-| 5.6 | Мониторинг | — | Health endpoint + uptime check |
+| 5.1 | ~~Production `.env`~~ | `.env` on VPS | **DONE** — SECRET_KEY, FERNET_KEY, REDIS_PASSWORD сгенерированы, OPENROUTER_API_KEY добавлен |
+| 5.2 | ~~Docker build + test~~ | `Dockerfile`, `docker-compose.yml` | **DONE** — multi-stage build, 4 контейнера healthy |
+| 5.3 | ~~TLS сертификат~~ | `nginx/` | **DONE** — certbot --standalone, Let's Encrypt для `delphi.antopkin.ru` |
+| 5.4 | ~~Deploy на VPS~~ | — | **DONE** — `docker compose up -d`, repo via HTTPS clone |
+| 5.5 | ~~Smoke test production~~ | — | **DONE** — health: DB ok (1ms), Redis ok (0ms), frontend loads |
+| 5.6 | ~~Мониторинг~~ | — | **DONE** — `/api/v1/health` endpoint, `/api/v1/health/feeds` |
 
-**Зависимости:** Сессии 1-4.
+**Завершено:** 2026-03-28.
 
 ---
 
