@@ -56,6 +56,13 @@ async def run_prediction_task(
         await session.commit()
 
     # --- 3. Создание инфраструктуры ---
+    from src.data_sources import (
+        NoopScraper,
+        OutletsCatalog,
+        RedisProfileCache,
+        RSSFetcher,
+        WebSearchService,
+    )
     from src.llm.providers import OpenRouterClient
 
     providers: dict = {}
@@ -63,7 +70,22 @@ async def run_prediction_task(
         providers["openrouter"] = OpenRouterClient(api_key=settings.openrouter_api_key)
 
     llm_client = ModelRouter(providers=providers, budget_usd=settings.max_budget_usd)
-    registry = build_default_registry(llm_client)
+
+    # Collector dependencies (data sources)
+    rss_fetcher = RSSFetcher()
+    web_search = WebSearchService(
+        exa_api_key=settings.exa_api_key,
+        jina_api_key=settings.jina_api_key,
+    )
+    collector_deps = {
+        "rss_fetcher": rss_fetcher,
+        "web_search": web_search,
+        "outlet_catalog": OutletsCatalog(),
+        "scraper": NoopScraper(),
+        "profile_cache": RedisProfileCache(redis),
+    }
+
+    registry = build_default_registry(llm_client, collector_deps=collector_deps)
     orchestrator = Orchestrator(registry)
 
     # --- 4. Progress callback ---
