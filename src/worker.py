@@ -243,6 +243,22 @@ async def shutdown(ctx: dict[str, Any]) -> None:
     logger.info("Worker shut down")
 
 
+def _parse_redis_settings() -> RedisSettings:
+    """Parse REDIS_URL into ARQ RedisSettings at module load time."""
+    from urllib.parse import urlparse
+
+    from src.config import get_settings
+
+    settings = get_settings()
+    parsed = urlparse(settings.redis_url)
+    return RedisSettings(
+        host=parsed.hostname or "redis",
+        port=parsed.port or 6379,
+        password=parsed.password,
+        database=int(parsed.path.lstrip("/") or 0),
+    )
+
+
 class WorkerSettings:
     """Конфигурация ARQ worker."""
 
@@ -250,20 +266,7 @@ class WorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
 
-    @staticmethod
-    def redis_settings() -> RedisSettings:
-        from urllib.parse import urlparse
-
-        from src.config import get_settings
-
-        settings = get_settings()
-        parsed = urlparse(settings.redis_url)
-        return RedisSettings(
-            host=parsed.hostname or "redis",
-            port=parsed.port or 6379,
-            password=parsed.password,
-            database=int(parsed.path.lstrip("/") or 0),
-        )
+    redis_settings = _parse_redis_settings()
 
     max_jobs = 10
     job_timeout = 1800
