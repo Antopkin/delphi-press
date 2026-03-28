@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-28 (вечер). После E2E dry run.
+> Статус на 2026-03-28 (ночь). После сессии Hardening.
 
 ---
 
 ## Текущее состояние: E2E verified
 
-Все 18 агентов реализованы. Первый E2E dry run (gemini-2.5-flash, 5 event threads) прошёл **9/9 стадий** за 6 мин, $0.24. В процессе найдено и пофикшено **10 integration-багов**. 708 тестов зелёные (7 новых E2E).
+Все 18 агентов реализованы. Первый E2E dry run (gemini-2.5-flash, 5 event threads) прошёл **9/9 стадий** за 6 мин, $0.24. В процессе найдено и пофикшено **10 integration-багов**. 770 тестов зелёные. Hardening (retry, SSRF, cron, monitoring) завершён.
 
 ### Реализованные компоненты
 
@@ -74,10 +74,10 @@ tests/test_integration/             — 7 E2E integration tests
 
 | # | Задача | Файлы | Критерий |
 |---|--------|-------|----------|
-| 1.1 | Fix: `_build_response` не извлекает headline text из `final_predictions` | `src/agents/orchestrator.py` | Dry run возвращает headlines с текстом |
-| 1.2 | Fix: Foresight APIs (Metaculus 403, Polymarket 422, GDELT parse error) | `src/data_sources/foresight.py` | Хотя бы 1 из 3 API возвращает данные |
-| 1.3 | Refactor: унифицировать `ScenarioType` enum (agent.py vs events.py — два разных) | `src/schemas/agent.py`, `src/schemas/events.py` | Один enum, используется везде |
-| 1.4 | Docs: написать architectural overview (`docs/architecture.md`) | `docs/architecture.md`, `CLAUDE.md` | Pipeline flow, task IDs, data contracts в одном месте |
+| 1.1 | ~~Fix: `_build_response` не извлекает headline text~~ | `src/schemas/pipeline.py`, `src/agents/orchestrator.py` | **DONE** — falsy check `[] or dict` + rank preservation |
+| 1.2 | Fix: Foresight APIs (Metaculus 403, Polymarket 422, GDELT parse error) | `src/data_sources/foresight.py` | В работе (отдельная сессия) |
+| 1.3 | ~~Refactor: унифицировать `ScenarioType` enum~~ | `src/schemas/events.py` | **DONE** — единый enum: BASELINE/OPTIMISTIC/PESSIMISTIC/BLACK_SWAN/WILDCARD |
+| 1.4 | ~~Docs: написать architectural overview~~ | `docs/architecture.md` | **DONE** — 251 строка, 7 секций, tables-first |
 
 #### Осталось: первый прогноз на Opus
 
@@ -97,10 +97,10 @@ tests/test_integration/             — 7 E2E integration tests
 
 | # | Задача | Файлы | Спека | Критерий готовности |
 |---|--------|-------|-------|---------------------|
-| 2.1 | Retry 429/5xx в web search | `src/data_sources/web_search.py` | `docs/01-data-sources.md` (раздел 4) | Тест: mock 429, retry, успех |
-| 2.2 | SSRF protection | `src/data_sources/web_search.py`, `src/data_sources/scraper.py` | OWASP SSRF | Тест: приватные IP (10.x, 127.x, 192.168.x) отклонены |
-| 2.3 | ARQ cron: scrape_pending_articles | `src/worker.py` | `docs/01-data-sources.md` (раздел 6) | Cron запускается каждые 2 часа, backfill `cleaned_text` |
-| 2.4 | Мониторинг feeds | `src/worker.py` | `docs/01-data-sources.md` (раздел 7) | Redis pub/sub для feed fetch events |
+| 2.1 | ~~Retry 429/5xx в web search + scraper~~ | `src/utils/retry.py`, `src/data_sources/web_search.py`, `src/data_sources/scraper.py` | `docs/01-data-sources.md` | **DONE** — exponential backoff, Retry-After header, 4 теста |
+| 2.2 | ~~SSRF protection~~ | `src/utils/url_validator.py`, `src/data_sources/scraper.py` | OWASP SSRF | **DONE** — private IP blocklist, DNS resolution check, 9 тестов |
+| 2.3 | ~~ARQ cron: scrape_pending_articles~~ | `src/worker.py`, `src/data_sources/scraper.py` | `docs/01-data-sources.md` | **DONE** — каждые 2 часа, batch 20, extract_text_from_url, 2 теста |
+| 2.4 | ~~Мониторинг feeds~~ | `src/api/health.py`, `src/worker.py` | `docs/01-data-sources.md` | **DONE** — `/health/feeds` endpoint, Redis hash per-feed, 2 теста |
 
 **Зависимости:** Сессия 1 (убедиться что пайплайн работает).
 
