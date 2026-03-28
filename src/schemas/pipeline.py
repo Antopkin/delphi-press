@@ -61,6 +61,11 @@ class PipelineContext(BaseModel):
         description="Timestamp создания контекста.",
     )
 
+    pipeline_config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Runtime config from preset (model, max_event_threads, etc.).",
+    )
+
     # === Stage 1: Collection ===
 
     signals: list[Any] = Field(

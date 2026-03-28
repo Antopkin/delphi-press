@@ -27,14 +27,25 @@ async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> User | None:
-    """Опциональная авторизация — None если без токена."""
-    if credentials is None:
+    """Опциональная авторизация — None если без токена.
+
+    Поддерживает два механизма:
+    1. Bearer header (приоритет) — для API-клиентов.
+    2. HttpOnly cookie 'access_token' (fallback) — для web UI.
+    """
+    token: str | None = None
+    if credentials is not None:
+        token = credentials.credentials
+    else:
+        token = request.cookies.get("access_token")
+
+    if token is None:
         return None
 
     settings = request.app.state.settings
 
     try:
-        payload = decode_access_token(credentials.credentials, settings.secret_key)
+        payload = decode_access_token(token, settings.secret_key)
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
         return None
 

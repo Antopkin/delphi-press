@@ -1,0 +1,93 @@
+{# src/web/templates/settings.html -- API key management page. #}
+{% extends "base.html" %}
+
+{% block title %}Настройки -- Delphi Press{% endblock %}
+
+{% block content %}
+<section>
+    <h1>Настройки</h1>
+    <p>Управление API-ключами для запуска прогнозов.</p>
+
+    {# ── Existing keys ── #}
+    <h2>Ваши ключи</h2>
+
+    {% if keys %}
+    <div class="overflow-auto">
+        <table id="keys-table">
+            <thead>
+                <tr>
+                    <th>Провайдер</th>
+                    <th>Метка</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key in keys %}
+                <tr data-key-id="{{ key.id }}">
+                    <td>{{ key.provider }}</td>
+                    <td>{{ key.label or '—' }}</td>
+                    <td>
+                        {% if key.is_active %}
+                        <span class="fn-badge fn-badge--success">Активен</span>
+                        {% else %}
+                        <span class="fn-badge fn-badge--danger">Неактивен</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="outline secondary fn-validate-btn"
+                                data-key-id="{{ key.id }}"
+                                type="button">
+                            Проверить
+                        </button>
+                        <button class="outline fn-delete-btn"
+                                data-key-id="{{ key.id }}"
+                                type="button"
+                                style="color: var(--fn-confidence-speculative);">
+                            Удалить
+                        </button>
+                        <small class="fn-validate-result" data-key-id="{{ key.id }}"></small>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p><em>У вас пока нет сохранённых API-ключей.</em></p>
+    {% endif %}
+
+    {# ── Add key form ── #}
+    <h2>Добавить ключ</h2>
+
+    <form id="add-key-form">
+        <div class="grid">
+            <div>
+                <label for="provider">Провайдер</label>
+                <select id="provider" name="provider" required>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="yandex">YandexGPT</option>
+                </select>
+            </div>
+            <div>
+                <label for="api_key">API-ключ</label>
+                <input type="password" id="api_key" name="api_key"
+                       placeholder="sk-or-..." required minlength="10">
+            </div>
+        </div>
+
+        <label for="label">Метка (необязательно)</label>
+        <input type="text" id="label" name="label"
+               placeholder="Основной ключ" maxlength="100">
+
+        <button type="submit" id="add-key-btn">Добавить</button>
+
+        <p id="add-key-error" class="fn-form-error" role="alert" hidden></p>
+        <p id="add-key-success" style="color: var(--fn-step-done);" hidden></p>
+    </form>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/settings.js') }}"></script>
+{% endblock %}

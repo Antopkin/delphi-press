@@ -366,6 +366,38 @@ class ModelRouter:
         """Установить внешний BudgetTracker (от Orchestrator)."""
         self._budget_tracker = tracker
 
+    def with_model_override(
+        self,
+        model: str,
+        *,
+        budget_usd: float | None = None,
+        exclude_tasks: set[str] | None = None,
+    ) -> ModelRouter:
+        """Create a new router with all tasks overridden to use the given model.
+
+        YandexGPT-specific tasks are excluded by default to preserve
+        Russian language generation quality.
+        """
+        exclude = exclude_tasks or {"style_generation", "style_generation_ru", "quality_style"}
+        new_assignments: dict[str, ModelAssignment] = {}
+        for task, a in self._assignments.items():
+            if task in exclude:
+                new_assignments[task] = a
+            else:
+                new_assignments[task] = ModelAssignment(
+                    task=a.task,
+                    primary_model=model,
+                    fallback_models=a.fallback_models,
+                    temperature=a.temperature,
+                    max_tokens=a.max_tokens,
+                    json_mode=a.json_mode,
+                )
+        return ModelRouter(
+            providers=self._providers,
+            assignments=new_assignments,
+            budget_usd=budget_usd or self._budget_tracker._budget_usd,
+        )
+
     def _resolve_provider(self, model: str) -> LLMProvider | None:
         """Определить провайдера по имени модели."""
         if model.startswith("yandexgpt"):

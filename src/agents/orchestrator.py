@@ -131,9 +131,21 @@ class Orchestrator:
         Returns:
             PredictionResponse с результатами или ошибкой.
         """
+        from src.config import get_preset
+
+        preset_name = getattr(request, "preset", "full")
+        preset_config = get_preset(preset_name)
+
         context = PipelineContext(
             outlet=request.outlet,
             target_date=request.target_date,
+            pipeline_config={
+                "model": preset_config.model,
+                "max_event_threads": preset_config.max_event_threads,
+                "delphi_rounds": preset_config.delphi_rounds,
+                "max_headlines": preset_config.max_headlines,
+                "quality_gate_min_score": preset_config.quality_gate_min_score,
+            },
         )
         if progress_callback is not None:
             context.set_progress_callback(progress_callback)
@@ -147,6 +159,19 @@ class Orchestrator:
         )
 
         for stage_def in self.STAGES:
+            # Skip Delphi R2 for single-round presets (e.g. "light")
+            if stage_def.name == ProgressStage.DELPHI_R2:
+                rounds = context.pipeline_config.get("delphi_rounds", 2)
+                if rounds < 2:
+                    context.stage_results.append(
+                        StageResult(
+                            stage_name=str(ProgressStage.DELPHI_R2),
+                            success=True,
+                            duration_ms=0,
+                        )
+                    )
+                    continue
+
             stage_result = await self._run_stage(stage_def, context)
             context.stage_results.append(stage_result)
 

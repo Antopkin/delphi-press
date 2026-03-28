@@ -20,6 +20,22 @@
 
   if (!form || !outletInput) return;
 
+  // --- Preset card selection ---
+  var presetCards = document.querySelectorAll(".fn-preset-card");
+  presetCards.forEach(function (card) {
+    var radio = card.querySelector('input[type="radio"]');
+    if (radio) {
+      radio.addEventListener("change", function () {
+        presetCards.forEach(function (c) {
+          c.classList.remove("fn-preset-card--selected");
+        });
+        if (radio.checked) {
+          card.classList.add("fn-preset-card--selected");
+        }
+      });
+    }
+  });
+
   // --- Autocomplete state ---
   var debounceTimer = null;
   var DEBOUNCE_MS = 300;
@@ -203,9 +219,14 @@
       var resp = await fetch("/api/v1/predictions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({
           outlet: outlet,
           target_date: targetDate,
+          preset: (function () {
+            var r = form.querySelector('input[name="preset"]:checked');
+            return r ? r.value : "standard";
+          })(),
         }),
       });
 

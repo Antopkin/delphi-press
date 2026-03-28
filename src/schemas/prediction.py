@@ -27,6 +27,11 @@ class PredictionRequest(BaseModel):
         description="Дата, на которую делается прогноз (YYYY-MM-DD).",
     )
 
+    preset: str = Field(
+        default="full",
+        description="Pipeline preset: light, standard, full.",
+    )
+
 
 class HeadlineOutput(BaseModel):
     """Один прогнозированный заголовок в финальном ответе."""

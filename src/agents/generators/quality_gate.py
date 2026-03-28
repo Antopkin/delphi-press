@@ -81,8 +81,9 @@ class QualityGate(BaseAgent):
         passed: list[GeneratedHeadline] = []
         deprioritized: list[GeneratedHeadline] = []
 
+        min_score = context.pipeline_config.get("quality_gate_min_score", FACTUAL_MIN_SCORE)
         for headline, score in scored:
-            decision = self._make_decision(score)
+            decision = self._make_decision(score, min_score=min_score)
             if decision == GateDecision.PASS:
                 passed.append(headline)
             elif decision == GateDecision.DEPRIORITIZE:
@@ -184,15 +185,20 @@ class QualityGate(BaseAgent):
             return parsed
         return CheckResult(score=3, feedback="Could not parse style check response.")
 
-    def _make_decision(self, score: QualityScore) -> GateDecision:
+    def _make_decision(
+        self,
+        score: QualityScore,
+        *,
+        min_score: int = FACTUAL_MIN_SCORE,
+    ) -> GateDecision:
         """Gate decision based on scores (docs/06-generators.md §3.3)."""
-        if score.factual_score < FACTUAL_MIN_SCORE:
+        if score.factual_score < min_score:
             return GateDecision.REJECT
         if score.is_internal_duplicate:
             return GateDecision.MERGE
         if score.is_external_duplicate:
             return GateDecision.DEPRIORITIZE
-        if score.style_score < STYLE_MIN_SCORE:
+        if score.style_score < min_score:
             return GateDecision.REVISE
         return GateDecision.PASS
 

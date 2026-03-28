@@ -53,6 +53,38 @@ async def test_create_prediction_invalid_outlet_returns_422(test_client):
     assert resp.status_code == 422
 
 
+async def test_create_prediction_with_preset_light(test_client):
+    resp = await test_client.post(
+        "/api/v1/predictions",
+        json={"outlet": "ТАСС", "target_date": "2026-04-02", "preset": "light"},
+    )
+    assert resp.status_code == 201
+
+
+async def test_create_prediction_with_invalid_preset_returns_422(test_client):
+    resp = await test_client.post(
+        "/api/v1/predictions",
+        json={"outlet": "ТАСС", "target_date": "2026-04-02", "preset": "ultra"},
+    )
+    assert resp.status_code == 422
+
+
+async def test_create_prediction_without_preset_defaults_to_full(test_client, test_app):
+    resp = await test_client.post(
+        "/api/v1/predictions",
+        json={"outlet": "TASS", "target_date": "2026-04-02"},
+    )
+    prediction_id = resp.json()["id"]
+
+    from src.db.engine import get_session
+    from src.db.repositories import PredictionRepository
+
+    async with get_session(test_app.state.session_factory) as session:
+        repo = PredictionRepository(session)
+        pred = await repo.get_by_id(prediction_id)
+        assert pred.preset == "full"
+
+
 # ── GET /predictions/{id} ──────────────────────────────────────────
 
 

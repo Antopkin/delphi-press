@@ -128,6 +128,22 @@ class PredictionRepository:
 
         return predictions, total
 
+    async def get_by_user(
+        self,
+        user_id: str,
+        *,
+        limit: int = 20,
+    ) -> Sequence[Prediction]:
+        """Прогнозы конкретного пользователя (для 'Мои прогнозы')."""
+        limit = min(limit, 100)
+        result = await self.session.execute(
+            select(Prediction)
+            .where(Prediction.user_id == user_id)
+            .order_by(Prediction.created_at.desc())
+            .limit(limit)
+        )
+        return result.scalars().all()
+
     async def save_headlines(
         self,
         prediction_id: str,

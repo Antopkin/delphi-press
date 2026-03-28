@@ -203,8 +203,9 @@ class Judge(BaseAgent):
             )
 
         # Sort by headline_score descending
+        top_n = context.pipeline_config.get("max_headlines", TOP_N_HEADLINES)
         scored.sort(key=lambda p: p.headline_score, reverse=True)
-        top = scored[:TOP_N_HEADLINES]
+        top = scored[:top_n]
 
         # Wild cards
         wild_cards = self._select_wild_cards(scored, top, assessments)

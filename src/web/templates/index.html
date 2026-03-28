@@ -83,6 +83,39 @@
                 <small id="date-help">От завтра до +30 дней</small>
             </label>
 
+            {# -- Preset selection -- #}
+            <fieldset class="fn-preset-group" role="radiogroup" aria-label="Выберите режим прогноза">
+                <legend>Режим прогноза</legend>
+                <div class="grid">
+                    <label class="fn-preset-card" data-preset="light">
+                        <input type="radio" name="preset" value="light">
+                        <div class="fn-preset-card__body">
+                            <strong>Light</strong>
+                            <span class="fn-preset-cost">~$1</span>
+                            <small>Gemini Flash, 5 событий, 1 раунд</small>
+                        </div>
+                    </label>
+
+                    <label class="fn-preset-card fn-preset-card--selected" data-preset="standard">
+                        <input type="radio" name="preset" value="standard" checked>
+                        <div class="fn-preset-card__body">
+                            <strong>Standard</strong>
+                            <span class="fn-preset-cost">~$5</span>
+                            <small>Claude Sonnet, 10 событий, 2 раунда</small>
+                        </div>
+                    </label>
+
+                    <label class="fn-preset-card" data-preset="full">
+                        <input type="radio" name="preset" value="full">
+                        <div class="fn-preset-card__body">
+                            <strong>Full</strong>
+                            <span class="fn-preset-cost">~$15</span>
+                            <small>Claude Opus, 20 событий, 2 раунда</small>
+                        </div>
+                    </label>
+                </div>
+            </fieldset>
+
             {# -- Submit -- #}
             <button type="submit" id="submit-btn">
                 Прогнозировать
@@ -96,10 +129,10 @@
     </article>
 </section>
 
-{# ===== RECENT PREDICTIONS ===== #}
-{% if recent_predictions %}
+{# ===== MY / RECENT PREDICTIONS ===== #}
+{% if current_user and recent_predictions %}
 <section>
-    <h2>Последние прогнозы</h2>
+    <h2>Мои прогнозы</h2>
     <div class="overflow-auto">
         <table>
             <thead>
@@ -150,6 +183,12 @@
             </tbody>
         </table>
     </div>
+</section>
+{% elif not current_user %}
+<section style="text-align: center;">
+    <p>
+        <a href="/register">Зарегистрируйтесь</a>, чтобы сохранять и отслеживать свои прогнозы.
+    </p>
 </section>
 {% endif %}
 

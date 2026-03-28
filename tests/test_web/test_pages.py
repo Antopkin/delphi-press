@@ -165,6 +165,16 @@ class TestIndexPage:
         assert 'id="outlet"' in resp.text
         assert 'id="target_date"' in resp.text
 
+    async def test_index_contains_preset_cards(self, web_client):
+        resp = await web_client.get("/")
+        assert 'name="preset"' in resp.text
+        assert 'value="light"' in resp.text
+        assert 'value="standard"' in resp.text
+        assert 'value="full"' in resp.text
+        assert "~$1" in resp.text
+        assert "~$5" in resp.text
+        assert "~$15" in resp.text
+
 
 # ── About page ────────────────────────────────────────────────────
 
@@ -232,3 +242,218 @@ class TestResultsPage:
         assert resp.status_code == 200
         # Should render progress template
         assert "Формируем прогноз" in resp.text
+
+
+# ── Auth pages ────────────────────────────────────────────────────
+
+
+class TestLoginPage:
+    async def test_login_page_returns_200(self, web_client):
+        resp = await web_client.get("/login")
+        assert resp.status_code == 200
+        assert "Вход" in resp.text
+
+    async def test_login_contains_form(self, web_client):
+        resp = await web_client.get("/login")
+        assert 'action="/login"' in resp.text
+        assert 'name="email"' in resp.text
+        assert 'name="password"' in resp.text
+
+    async def test_login_redirects_when_authenticated(self, web_client):
+        # Register a user first
+        email = f"auth-{uuid.uuid4().hex[:8]}@test.com"
+        reg = await web_client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "securepass123"},
+        )
+        token = reg.json()["access_token"]
+
+        resp = await web_client.get(
+            "/login",
+            cookies={"access_token": token},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 302
+        assert resp.headers["location"] == "/"
+
+    async def test_login_submit_success_sets_cookie(self, web_client):
+        email = f"login-{uuid.uuid4().hex[:8]}@test.com"
+        await web_client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "securepass123"},
+        )
+
+        resp = await web_client.post(
+            "/login",
+            data={"email": email, "password": "securepass123", "next": "/"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 302
+        assert "access_token" in resp.cookies
+
+    async def test_login_submit_wrong_password_shows_error(self, web_client):
+        email = f"fail-{uuid.uuid4().hex[:8]}@test.com"
+        await web_client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "securepass123"},
+        )
+
+        resp = await web_client.post(
+            "/login",
+            data={"email": email, "password": "wrongpassword", "next": "/"},
+        )
+        assert resp.status_code == 200
+        assert "Неверный email или пароль" in resp.text
+
+
+class TestRegisterPage:
+    async def test_register_page_returns_200(self, web_client):
+        resp = await web_client.get("/register")
+        assert resp.status_code == 200
+        assert "Регистрация" in resp.text
+
+    async def test_register_submit_success_sets_cookie(self, web_client):
+        email = f"reg-{uuid.uuid4().hex[:8]}@test.com"
+        resp = await web_client.post(
+            "/register",
+            data={"email": email, "password": "securepass123"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 302
+        assert "access_token" in resp.cookies
+
+    async def test_register_duplicate_email_shows_error(self, web_client):
+        email = f"dup-{uuid.uuid4().hex[:8]}@test.com"
+        await web_client.post(
+            "/register",
+            data={"email": email, "password": "securepass123"},
+            follow_redirects=False,
+        )
+        resp = await web_client.post(
+            "/register",
+            data={"email": email, "password": "anotherpass123"},
+        )
+        assert resp.status_code == 200
+        assert "уже существует" in resp.text
+
+    async def test_register_short_password_shows_error(self, web_client):
+        resp = await web_client.post(
+            "/register",
+            data={"email": "short@test.com", "password": "short"},
+        )
+        assert resp.status_code == 200
+        assert "не менее 8 символов" in resp.text
+
+
+class TestLogout:
+    async def test_logout_clears_cookie_and_redirects(self, web_client):
+        resp = await web_client.get("/logout", follow_redirects=False)
+        assert resp.status_code == 302
+        assert resp.headers["location"] == "/"
+
+
+class TestMyPredictions:
+    async def test_guest_sees_registration_prompt(self, web_client):
+        resp = await web_client.get("/")
+        assert "Зарегистрируйтесь" in resp.text
+        assert "Мои прогнозы" not in resp.text
+
+    async def test_authenticated_user_sees_my_predictions_label(
+        self, web_client, seed_web_prediction
+    ):
+        email = f"my-{uuid.uuid4().hex[:8]}@test.com"
+        reg = await web_client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "securepass123"},
+        )
+        token = reg.json()["access_token"]
+
+        # Get user_id from /me
+        me = await web_client.get(
+            "/api/v1/auth/me",
+            cookies={"access_token": token},
+        )
+        user_id = me.json()["id"]
+
+        # Create a prediction for this user
+        await seed_web_prediction(user_id=user_id)
+
+        resp = await web_client.get("/", cookies={"access_token": token})
+        assert "Мои прогнозы" in resp.text
+        assert "Зарегистрируйтесь" not in resp.text
+
+    async def test_authenticated_user_does_not_see_other_users_predictions(
+        self, web_client, seed_web_prediction
+    ):
+        # Create prediction for another user
+        await seed_web_prediction(user_id="other-user-id", outlet_name="SecretOutlet")
+
+        # Register new user
+        email = f"filter-{uuid.uuid4().hex[:8]}@test.com"
+        reg = await web_client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "securepass123"},
+        )
+        token = reg.json()["access_token"]
+
+        resp = await web_client.get("/", cookies={"access_token": token})
+        assert "SecretOutlet" not in resp.text
+
+
+class TestSettingsPage:
+    async def test_settings_redirects_to_login_for_guests(self, web_client):
+        resp = await web_client.get("/settings", follow_redirects=False)
+        assert resp.status_code == 302
+        assert "/login" in resp.headers["location"]
+
+    async def test_settings_returns_200_for_authenticated(self, web_client):
+        email = f"settings-{uuid.uuid4().hex[:8]}@test.com"
+        reg = await web_client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "securepass123"},
+        )
+        token = reg.json()["access_token"]
+
+        resp = await web_client.get("/settings", cookies={"access_token": token})
+        assert resp.status_code == 200
+        assert "Настройки" in resp.text
+        assert "Добавить ключ" in resp.text
+
+    async def test_settings_shows_keys_table(self, web_client):
+        email = f"keys-{uuid.uuid4().hex[:8]}@test.com"
+        reg = await web_client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "securepass123"},
+        )
+        token = reg.json()["access_token"]
+
+        # Add a key via API
+        await web_client.post(
+            "/api/v1/keys",
+            json={"provider": "openrouter", "api_key": "sk-or-test-key-12345"},
+            cookies={"access_token": token},
+        )
+
+        resp = await web_client.get("/settings", cookies={"access_token": token})
+        assert resp.status_code == 200
+        assert "openrouter" in resp.text
+
+
+class TestNavigation:
+    async def test_nav_shows_login_for_guests(self, web_client):
+        resp = await web_client.get("/")
+        assert "Войти" in resp.text
+        assert "Настройки" not in resp.text
+
+    async def test_nav_shows_settings_for_authenticated(self, web_client):
+        email = f"nav-{uuid.uuid4().hex[:8]}@test.com"
+        reg = await web_client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "securepass123"},
+        )
+        token = reg.json()["access_token"]
+
+        resp = await web_client.get("/", cookies={"access_token": token})
+        assert "Настройки" in resp.text
+        assert "Выйти" in resp.text
+        assert "Войти" not in resp.text

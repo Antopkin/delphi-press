@@ -56,6 +56,7 @@ async def run_prediction_task(
 
         outlet_name = prediction.outlet_name
         target_date = prediction.target_date
+        preset_name = prediction.preset or "full"
 
         # --- 2. Обновление статуса ---
         await repo.update_status(prediction_id, PredictionStatus.COLLECTING)
@@ -78,7 +79,14 @@ async def run_prediction_task(
     if settings.openrouter_api_key:
         providers["openrouter"] = OpenRouterClient(api_key=settings.openrouter_api_key)
 
-    llm_client = ModelRouter(providers=providers, budget_usd=settings.max_budget_usd)
+    from src.config import get_preset
+
+    preset_config = get_preset(preset_name)
+    llm_client = ModelRouter(
+        providers=providers,
+        budget_usd=preset_config.estimated_cost_usd * 2,
+    )
+    llm_client = llm_client.with_model_override(preset_config.model)
 
     # Collector dependencies (data sources)
     rss_fetcher = RSSFetcher()
@@ -138,7 +146,7 @@ async def run_prediction_task(
     # --- 5. Запуск пайплайна ---
     from src.schemas.prediction import PredictionRequest
 
-    request = PredictionRequest(outlet=outlet_name, target_date=target_date)
+    request = PredictionRequest(outlet=outlet_name, target_date=target_date, preset=preset_name)
 
     try:
         response = await orchestrator.run_prediction(request, progress_callback=progress_callback)

@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -15,6 +16,70 @@ from pydantic import Field, field_validator
 from pydantic_settings import SettingsConfigDict
 
 from src.llm.config import LLMConfig
+
+
+# ── Pipeline Presets ─────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class PresetConfig:
+    """Immutable pipeline preset configuration."""
+
+    name: str
+    label: str
+    description: str
+    estimated_cost_usd: float
+    model: str
+    max_event_threads: int
+    delphi_rounds: int
+    max_headlines: int
+    quality_gate_min_score: int
+
+
+PRESETS: dict[str, PresetConfig] = {
+    "light": PresetConfig(
+        name="light",
+        label="Light",
+        description="Быстрый прогноз на базе Gemini Flash",
+        estimated_cost_usd=1.0,
+        model="google/gemini-2.5-flash",
+        max_event_threads=5,
+        delphi_rounds=1,
+        max_headlines=5,
+        quality_gate_min_score=2,
+    ),
+    "standard": PresetConfig(
+        name="standard",
+        label="Standard",
+        description="Сбалансированный прогноз на Claude Sonnet",
+        estimated_cost_usd=5.0,
+        model="anthropic/claude-sonnet-4.6",
+        max_event_threads=10,
+        delphi_rounds=2,
+        max_headlines=7,
+        quality_gate_min_score=3,
+    ),
+    "full": PresetConfig(
+        name="full",
+        label="Full",
+        description="Максимальная глубина на Claude Opus",
+        estimated_cost_usd=15.0,
+        model="anthropic/claude-opus-4.6",
+        max_event_threads=20,
+        delphi_rounds=2,
+        max_headlines=10,
+        quality_gate_min_score=4,
+    ),
+}
+
+
+def get_preset(name: str) -> PresetConfig:
+    """Get preset by name. Raises ValueError if unknown."""
+    preset = PRESETS.get(name)
+    if preset is None:
+        valid = ", ".join(sorted(PRESETS.keys()))
+        raise ValueError(f"Unknown preset '{name}'. Valid: {valid}")
+    return preset
 
 
 class Settings(LLMConfig):

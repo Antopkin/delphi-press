@@ -111,8 +111,9 @@ class EventTrendAnalyzer(BaseAgent):
         threads = await self._label_and_score_clusters(raw_clusters)
 
         # Ранжирование
+        max_threads = context.pipeline_config.get("max_event_threads", self.MAX_THREADS)
         threads.sort(key=lambda t: t.significance_score, reverse=True)
-        threads = threads[: self.MAX_THREADS]
+        threads = threads[:max_threads]
 
         self.logger.info("Identified %d event threads from %d signals", len(threads), len(signals))
 

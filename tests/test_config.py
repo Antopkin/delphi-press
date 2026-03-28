@@ -155,3 +155,54 @@ def test_get_settings_returns_singleton():
     s2 = get_settings()
     assert s1 is s2
     get_settings.cache_clear()
+
+
+# ── Presets ────────────────────────────────────────────────────────
+
+
+def test_presets_are_defined():
+    from src.config import PRESETS
+
+    assert "light" in PRESETS
+    assert "standard" in PRESETS
+    assert "full" in PRESETS
+    assert len(PRESETS) == 3
+
+
+def test_preset_config_fields():
+    from src.config import PRESETS
+
+    for name, preset in PRESETS.items():
+        assert preset.name == name
+        assert preset.label
+        assert preset.description
+        assert preset.estimated_cost_usd > 0
+        assert preset.model
+        assert preset.max_event_threads > 0
+        assert preset.delphi_rounds >= 1
+        assert preset.max_headlines > 0
+        assert preset.quality_gate_min_score >= 1
+
+
+def test_get_preset_valid():
+    from src.config import get_preset
+
+    preset = get_preset("light")
+    assert preset.name == "light"
+    assert preset.model == "google/gemini-2.5-flash"
+    assert preset.delphi_rounds == 1
+
+
+def test_get_preset_invalid_raises():
+    from src.config import get_preset
+
+    with pytest.raises(ValueError, match="Unknown preset"):
+        get_preset("custom")
+
+
+def test_preset_config_is_frozen():
+    from src.config import get_preset
+
+    preset = get_preset("full")
+    with pytest.raises(AttributeError):
+        preset.model = "changed"

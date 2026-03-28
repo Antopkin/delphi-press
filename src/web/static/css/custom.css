@@ -540,3 +540,75 @@ progress::-moz-progress-bar {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+
+/* ===================================================================
+   PRESET SELECTION CARDS
+   =================================================================== */
+
+.fn-preset-group {
+  border: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.fn-preset-group legend {
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.fn-preset-card {
+  display: block;
+  position: relative;
+  border: 2px solid var(--fn-card-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: var(--pico-background-color);
+}
+
+.fn-preset-card input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.fn-preset-card:hover {
+  border-color: var(--pico-primary);
+}
+
+.fn-preset-card--selected,
+.fn-preset-card:has(input:checked) {
+  border-color: var(--pico-primary);
+  box-shadow: 0 0 0 3px var(--pico-primary-focus);
+}
+
+.fn-preset-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.fn-preset-card__body strong {
+  font-size: 1.1rem;
+}
+
+.fn-preset-cost {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--pico-primary);
+}
+
+.fn-preset-card__body small {
+  color: var(--pico-muted-color);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 576px) {
+  .fn-preset-group .grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+}

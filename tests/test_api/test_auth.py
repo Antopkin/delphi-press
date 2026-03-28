@@ -118,3 +118,53 @@ class TestMe:
             headers={"Authorization": "Bearer invalid.token.here"},
         )
         assert resp.status_code == 401
+
+
+# ── Cookie Auth Fallback ──────────────────────────────────────────
+
+
+class TestCookieAuthFallback:
+    async def test_me_with_cookie_returns_user(self, test_client):
+        email = f"cookie-{uuid.uuid4().hex[:8]}@example.com"
+        reg = await test_client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "securepass123"},
+        )
+        token = reg.json()["access_token"]
+
+        resp = await test_client.get(
+            "/api/v1/auth/me",
+            cookies={"access_token": token},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["email"] == email
+
+    async def test_bearer_takes_priority_over_cookie(self, test_client):
+        """Bearer header should win when both cookie and header are present."""
+        email1 = f"bearer-{uuid.uuid4().hex[:8]}@example.com"
+        email2 = f"cookie-{uuid.uuid4().hex[:8]}@example.com"
+        reg1 = await test_client.post(
+            "/api/v1/auth/register",
+            json={"email": email1, "password": "securepass123"},
+        )
+        reg2 = await test_client.post(
+            "/api/v1/auth/register",
+            json={"email": email2, "password": "securepass123"},
+        )
+        token1 = reg1.json()["access_token"]
+        token2 = reg2.json()["access_token"]
+
+        resp = await test_client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token1}"},
+            cookies={"access_token": token2},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["email"] == email1
+
+    async def test_invalid_cookie_returns_401(self, test_client):
+        resp = await test_client.get(
+            "/api/v1/auth/me",
+            cookies={"access_token": "invalid.token.here"},
+        )
+        assert resp.status_code == 401

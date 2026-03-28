@@ -18,7 +18,7 @@ import uuid
 from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sse_starlette.sse import EventSourceResponse
 
 from src.api.dependencies import get_current_user
@@ -36,6 +36,14 @@ class CreatePredictionRequest(BaseModel):
     outlet: str = Field(..., min_length=1, max_length=200)
     target_date: date = Field(...)
     preset: str = Field(default="full")
+
+    @field_validator("preset")
+    @classmethod
+    def validate_preset(cls, v: str) -> str:
+        valid = {"light", "standard", "full"}
+        if v not in valid:
+            raise ValueError(f"preset must be one of {valid}, got '{v}'")
+        return v
 
 
 class CreatePredictionResponse(BaseModel):

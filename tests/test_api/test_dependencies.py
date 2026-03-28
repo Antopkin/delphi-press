@@ -18,6 +18,7 @@ async def test_get_current_user_no_credentials_returns_none(test_app):
 
     class FakeRequest:
         app = test_app
+        cookies: dict = {}
 
     user = await get_current_user(FakeRequest(), credentials=None)
     assert user is None
