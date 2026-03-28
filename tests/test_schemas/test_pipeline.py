@@ -74,6 +74,19 @@ def test_merge_agent_result_mediator_synthesis():
     assert ctx.mediator_synthesis == synthesis
 
 
+def test_merge_agent_result_quality_gate_empty_list():
+    """Empty list from quality_gate must be stored as [], not as the raw dict."""
+    ctx = PipelineContext(outlet="TASS", target_date=date(2026, 4, 1))
+    result = AgentResult(
+        agent_name="quality_gate",
+        success=True,
+        data={"final_predictions": []},
+    )
+    ctx.merge_agent_result(result)
+    assert ctx.final_predictions == []
+    assert isinstance(ctx.final_predictions, list)
+
+
 def test_merge_agent_result_skips_failed():
     ctx = PipelineContext(outlet="TASS", target_date=date(2026, 4, 1))
     result = AgentResult(

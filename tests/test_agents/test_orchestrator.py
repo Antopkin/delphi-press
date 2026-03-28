@@ -432,6 +432,30 @@ async def test_build_response_empty_headlines_if_no_finals(populated_registry, m
     assert resp.headlines == []
 
 
+@pytest.mark.asyncio
+async def test_build_response_preserves_rank_from_prediction(populated_registry, make_context):
+    """_build_response must use rank from FinalPrediction, not enumerate index."""
+    orch = Orchestrator(populated_registry)
+    ctx = make_context()
+    ctx.final_predictions = [
+        {
+            "rank": 3,
+            "headline": "Test headline",
+            "first_paragraph": "First paragraph.",
+            "confidence": 0.75,
+            "confidence_label": "high",
+            "category": "politics",
+            "reasoning": "Because reasons.",
+            "evidence_chain": [],
+            "agent_agreement": "consensus",
+            "dissenting_views": [],
+        }
+    ]
+    resp = orch._build_response(ctx, duration_ms=500)
+    assert len(resp.headlines) == 1
+    assert resp.headlines[0].rank == 3  # must be 3, not 1
+
+
 # ── _build_error_response() ─────────────────────────────────────────
 
 

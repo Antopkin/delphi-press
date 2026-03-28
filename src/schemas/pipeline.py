@@ -231,7 +231,7 @@ class PipelineContext(BaseModel):
         # Прямой маппинг для агентов с единственным слотом
         if result.agent_name in slot_mapping:
             slot = slot_mapping[result.agent_name]
-            value = result.data.get(slot) or result.data
+            value = result.data[slot] if slot in result.data else result.data
             current = getattr(self, slot)
             if isinstance(current, list) and isinstance(value, list):
                 current.extend(value)

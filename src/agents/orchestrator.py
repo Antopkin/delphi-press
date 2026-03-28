@@ -397,7 +397,7 @@ class Orchestrator:
         for i, pred in enumerate(context.final_predictions, start=1):
             try:
                 headline = HeadlineOutput(
-                    rank=i,
+                    rank=self._get_field(pred, "rank", i),
                     headline=self._get_field(pred, "headline", ""),
                     first_paragraph=self._get_field(pred, "first_paragraph", ""),
                     confidence=self._get_field(pred, "confidence", 0.0),
@@ -413,7 +413,9 @@ class Orchestrator:
                 )
                 headlines.append(headline)
             except Exception:
-                logger.warning("Failed to convert prediction #%d to HeadlineOutput", i)
+                logger.warning(
+                    "Failed to convert prediction #%d to HeadlineOutput", i, exc_info=True
+                )
 
         stage_results_dicts = []
         for sr in context.stage_results:
