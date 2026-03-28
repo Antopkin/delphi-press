@@ -421,6 +421,45 @@ async def cleanup_old_articles(ctx: dict[str, Any]) -> dict[str, int]:
     return {"deleted": deleted}
 
 
+async def scrape_pending_articles(ctx: dict[str, Any], *, batch_size: int = 20) -> dict[str, int]:
+    """Cron: backfill cleaned_text for articles missing extracted text.
+
+    Runs every 2 hours. Processes up to batch_size articles per run.
+    """
+    from src.db.engine import get_session
+    from src.db.repositories import RawArticleRepository
+
+    session_factory = ctx["session_factory"]
+    scraper = ctx.get("collector_deps", {}).get("scraper")
+    if scraper is None:
+        logger.warning("scrape_pending_articles: no scraper in context, skipping")
+        return {"processed": 0, "failed": 0, "skipped": True}
+
+    processed = 0
+    failed = 0
+
+    async with get_session(session_factory) as session:
+        repo = RawArticleRepository(session)
+        pending = await repo.get_pending_text_extraction(limit=batch_size)
+
+        for article in pending:
+            try:
+                text = await scraper.extract_text_from_url(article.url)
+                if text:
+                    await repo.update_cleaned_text(article.id, text)
+                    processed += 1
+                else:
+                    failed += 1
+            except Exception:
+                logger.warning("Failed to scrape %s", article.url, exc_info=True)
+                failed += 1
+
+        await session.commit()
+
+    logger.info("scrape_pending_articles: processed=%d, failed=%d", processed, failed)
+    return {"processed": processed, "failed": failed}
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     """ARQ worker startup: инициализация зависимостей."""
     from src.config import get_settings
@@ -483,6 +522,7 @@ class WorkerSettings:
         cron(fetch_rss_global, minute=5),
         cron(fetch_rss_per_outlet, minute={10, 40}),
         cron(cleanup_old_articles, hour=3, minute=0),
+        cron(scrape_pending_articles, hour={1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23}, minute=30),
     ]
 
     redis_settings = _parse_redis_settings()

@@ -112,6 +112,16 @@ class TrafilaturaScraper:
             logger.warning("Unexpected error scraping %s: %s", url, exc)
             return []
 
+    async def extract_text_from_url(self, url: str) -> str | None:
+        """Fetch a URL and extract clean text via trafilatura. Returns None on failure."""
+        html = await self._fetch_page(url)
+        if html is None:
+            return None
+        raw = await asyncio.to_thread(
+            trafilatura.extract, html, url=url, include_tables=True, favor_recall=True
+        )
+        return raw.strip() if raw else None
+
     async def close(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()

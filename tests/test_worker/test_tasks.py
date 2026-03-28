@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import AsyncMock, patch
 
-from src.db.models import PredictionStatus
+import pytest
+
+from src.db.models import FetchMethod, PredictionStatus, RawArticle
 from src.schemas.prediction import HeadlineOutput, PredictionResponse
 
 # ── run_prediction_task ─────────────────────────────────────────────
@@ -88,3 +90,62 @@ async def test_task_marks_failed_on_pipeline_error(worker_ctx, seeded_prediction
         pred = await repo.get_by_id(seeded_prediction_id)
         assert pred.status == PredictionStatus.FAILED
         assert "Pipeline crashed" in pred.error_message
+
+
+# ── scrape_pending_articles ─────────────────────────────────────────
+
+
+@pytest.fixture
+async def articles_with_null_text(test_session_factory):
+    """Seed articles with cleaned_text=None."""
+    async with test_session_factory() as session:
+        for i in range(3):
+            session.add(
+                RawArticle(
+                    url=f"https://example.com/article-{i}",
+                    title=f"Test Article {i}",
+                    summary="Summary",
+                    cleaned_text=None,
+                    source_outlet="TASS",
+                    fetch_method=FetchMethod.RSS,
+                )
+            )
+        session.add(
+            RawArticle(
+                url="https://example.com/already-scraped",
+                title="Already Scraped",
+                summary="Summary",
+                cleaned_text="Full article text here.",
+                source_outlet="TASS",
+                fetch_method=FetchMethod.RSS,
+            )
+        )
+        await session.commit()
+
+
+async def test_scrape_pending_articles_processes_null_cleaned_text(
+    worker_ctx, articles_with_null_text
+):
+    from src.worker import scrape_pending_articles
+
+    mock_scraper = AsyncMock()
+    mock_scraper.extract_text_from_url = AsyncMock(return_value="Extracted text content.")
+    worker_ctx["collector_deps"] = {"scraper": mock_scraper}
+
+    result = await scrape_pending_articles(worker_ctx)
+
+    assert result["processed"] == 3
+    assert result["failed"] == 0
+    assert mock_scraper.extract_text_from_url.call_count == 3
+
+
+async def test_scrape_pending_articles_respects_batch_limit(worker_ctx, articles_with_null_text):
+    from src.worker import scrape_pending_articles
+
+    mock_scraper = AsyncMock()
+    mock_scraper.extract_text_from_url = AsyncMock(return_value="Text.")
+    worker_ctx["collector_deps"] = {"scraper": mock_scraper}
+
+    result = await scrape_pending_articles(worker_ctx, batch_size=2)
+
+    assert result["processed"] <= 2
