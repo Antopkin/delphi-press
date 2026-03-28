@@ -7,7 +7,7 @@
 from src.data_sources.outlets_catalog import OutletsCatalog
 from src.data_sources.profile_cache import RedisProfileCache
 from src.data_sources.rss import RSSFetcher
-from src.data_sources.scraper import NoopScraper
+from src.data_sources.scraper import NoopScraper, TrafilaturaScraper
 from src.data_sources.web_search import WebSearchService
 
 __all__ = [
@@ -15,5 +15,6 @@ __all__ = [
     "OutletsCatalog",
     "RedisProfileCache",
     "RSSFetcher",
+    "TrafilaturaScraper",
     "WebSearchService",
 ]
