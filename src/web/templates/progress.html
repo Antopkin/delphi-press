@@ -5,122 +5,119 @@
 
 {% block content %}
 
-<section>
-    <hgroup>
-        <h1>Формируем прогноз</h1>
-        <p>
-            <strong>{{ outlet }}</strong> &middot; {{ target_date }}
-        </p>
-    </hgroup>
+<section class="mb-8">
+    <h1 class="text-2xl mb-2">Формируем прогноз</h1>
+    <p class="text-text-muted">
+        <strong class="text-text">{{ outlet }}</strong> &middot; {{ target_date }}
+    </p>
 </section>
 
 {# ===== PROGRESS BAR ===== #}
-<section>
+<section class="mb-8">
     <progress id="progress-bar" value="0" max="100"></progress>
     <div class="fn-progress-meta">
-        <span id="progress-percent" class="fn-tabular-nums">0%</span>
-        <span id="progress-elapsed" class="fn-tabular-nums"></span>
+        <span id="progress-percent" class="tabular-nums">0%</span>
+        <span id="progress-elapsed" class="tabular-nums"></span>
     </div>
 </section>
 
 {# ===== STEP LIST ===== #}
-<section>
-    <article>
-        <ul id="step-list" class="fn-step-list fn-timeline">
+<section class="mb-8">
+    <div class="bg-surface-1 border border-border rounded-lg p-6">
+        <ul id="step-list" class="list-none p-0 m-0 fn-timeline">
             <li class="fn-step fn-step--pending" data-stage="collection">
-                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content">
-                    <strong>Собираем новости</strong>
-                    <small>RSS-фиды, поисковые системы, архивы издания</small>
+                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content flex-1">
+                    <strong class="block">Собираем новости</strong>
+                    <small class="text-text-muted">RSS-фиды, поисковые системы, архивы издания</small>
                 </div>
-                <span class="fn-step-duration"></span>
+                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
             </li>
             <li class="fn-step fn-step--pending" data-stage="event_identification">
-                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content">
-                    <strong>Выявляем ключевые события</strong>
-                    <small>Кластеризация сигналов, определение трендов</small>
+                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content flex-1">
+                    <strong class="block">Выявляем ключевые события</strong>
+                    <small class="text-text-muted">Кластеризация сигналов, определение трендов</small>
                 </div>
-                <span class="fn-step-duration"></span>
+                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
             </li>
             <li class="fn-step fn-step--pending" data-stage="trajectory">
-                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content">
-                    <strong>Анализируем траектории событий</strong>
-                    <small>Сценарии развития, перекрёстные влияния</small>
+                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content flex-1">
+                    <strong class="block">Анализируем траектории событий</strong>
+                    <small class="text-text-muted">Сценарии развития, перекрёстные влияния</small>
                 </div>
-                <span class="fn-step-duration"></span>
+                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
             </li>
             <li class="fn-step fn-step--pending" data-stage="delphi_r1">
-                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content">
-                    <strong>Экспертная панель: раунд 1</strong>
-                    <small>Пять ИИ-экспертов независимо оценивают ситуацию</small>
+                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content flex-1">
+                    <strong class="block">Экспертная панель: раунд 1</strong>
+                    <small class="text-text-muted">Пять ИИ-экспертов независимо оценивают ситуацию</small>
                 </div>
-                <span class="fn-step-duration"></span>
+                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
             </li>
             <li class="fn-step fn-step--pending" data-stage="delphi_r2">
-                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content">
-                    <strong>Экспертная панель: раунд 2</strong>
-                    <small>Медиация расхождений, уточнение прогнозов</small>
+                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content flex-1">
+                    <strong class="block">Экспертная панель: раунд 2</strong>
+                    <small class="text-text-muted">Медиация расхождений, уточнение прогнозов</small>
                 </div>
-                <span class="fn-step-duration"></span>
+                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
             </li>
             <li class="fn-step fn-step--pending" data-stage="consensus">
-                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content">
-                    <strong>Формируем консенсус</strong>
-                    <small>Агрегация оценок, калибровка вероятностей</small>
+                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content flex-1">
+                    <strong class="block">Формируем консенсус</strong>
+                    <small class="text-text-muted">Агрегация оценок, калибровка вероятностей</small>
                 </div>
-                <span class="fn-step-duration"></span>
+                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
             </li>
             <li class="fn-step fn-step--pending" data-stage="framing">
-                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content">
-                    <strong>Анализируем стиль издания</strong>
-                    <small>Как {{ outlet }} подаст каждое событие</small>
+                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content flex-1">
+                    <strong class="block">Анализируем стиль издания</strong>
+                    <small class="text-text-muted">Как {{ outlet }} подаст каждое событие</small>
                 </div>
-                <span class="fn-step-duration"></span>
+                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
             </li>
             <li class="fn-step fn-step--pending" data-stage="generation">
-                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content">
-                    <strong>Генерируем заголовки</strong>
-                    <small>Стилизация под формат издания</small>
+                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content flex-1">
+                    <strong class="block">Генерируем заголовки</strong>
+                    <small class="text-text-muted">Стилизация под формат издания</small>
                 </div>
-                <span class="fn-step-duration"></span>
+                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
             </li>
             <li class="fn-step fn-step--pending" data-stage="quality_gate">
-                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content">
-                    <strong>Проверяем качество</strong>
-                    <small>Факт-чек, стилистика, дедупликация</small>
+                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content flex-1">
+                    <strong class="block">Проверяем качество</strong>
+                    <small class="text-text-muted">Факт-чек, стилистика, дедупликация</small>
                 </div>
-                <span class="fn-step-duration"></span>
+                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
             </li>
         </ul>
-    </article>
+    </div>
 </section>
 
 {# ===== NARRATIVE MESSAGE ===== #}
-<section>
-    <article id="narrative-area" class="fn-narrative" hidden>
-        <p id="narrative-message" class="fn-narrative-serif"></p>
-    </article>
+<section class="mb-8">
+    <div id="narrative-area" class="text-center" hidden>
+        <p id="narrative-message" class="font-heading italic text-text-muted animate-fade-in"></p>
+    </div>
 </section>
 
 {# ===== ERROR DISPLAY (hidden by default) ===== #}
 <section id="error-section" hidden>
-    <article class="fn-error-card fn-error-entrance">
-        <header>
-            <h3>Произошла ошибка</h3>
-        </header>
-        <p id="error-message"></p>
-        <footer>
-            <a href="/" role="button">Попробовать снова</a>
-        </footer>
-    </article>
+    <div class="border-l-4 border-confidence-speculative bg-red-50 rounded-md p-6 animate-fade-in-up">
+        <h3 class="text-lg mb-2">Произошла ошибка</h3>
+        <p id="error-message" class="text-text-muted mb-4"></p>
+        <a href="/"
+           class="inline-block bg-primary text-white font-semibold py-2 px-6 rounded-md no-underline hover:bg-primary-hover">
+            Попробовать снова
+        </a>
+    </div>
 </section>
 
 {% endblock %}

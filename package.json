@@ -1,0 +1,29 @@
+{
+  "name": "delphi_press",
+  "version": "1.0.0",
+  "description": "Веб-продукт для прогнозирования заголовков СМИ на заданную дату.",
+  "private": true,
+  "scripts": {
+    "css:build": "postcss src/web/static/css/input.css -o src/web/static/css/tailwind.css",
+    "css:dev": "postcss src/web/static/css/input.css -o src/web/static/css/tailwind.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Antopkin/delphi-press.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Antopkin/delphi-press/issues"
+  },
+  "homepage": "https://github.com/Antopkin/delphi-press#readme",
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.11",
+    "@tailwindcss/postcss": "^4.2.2",
+    "postcss": "^8.5.8",
+    "postcss-cli": "^11.0.1",
+    "tailwindcss": "^4.2.2"
+  }
+}

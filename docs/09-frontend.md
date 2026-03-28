@@ -1,7 +1,7 @@
 # 09 -- Frontend: Architecture & Design System
 
-> Реализуемые файлы: `src/web/templates/*.html`, `src/web/static/css/custom.css`, `src/web/static/js/*.js`, `src/web/router.py`
-> Зависимости: Pico.css 2.0 (CDN), Google Fonts, Vanilla JS (ES2022), Jinja2 3.1+, FastAPI
+> Реализуемые файлы: `src/web/templates/*.html`, `src/web/static/css/input.css`, `src/web/static/js/*.js`, `src/web/router.py`
+> Зависимости: Tailwind CSS v4.2.2 (PostCSS build), Google Fonts, Vanilla JS (ES2022), Jinja2 3.1+, FastAPI
 
 ---
 
@@ -10,10 +10,10 @@
 Фронтенд строится на шести ключевых принципах:
 
 1. **Grandmother-friendly** — интерфейс понятен без инструкций, без специальных знаний ИТ
-2. **Semantic HTML first** — Pico.css стилизует элементы без классов; кастомные классы только для компонентов (`fn-*`)
+2. **Utility-first CSS** — Tailwind CSS генерирует классы из конфига; JS-referenced компоненты в `@layer components`
 3. **Progressive enhancement** — сайт работает без JS; скрипты добавляют полировку (автодополнение, анимации, SSE)
-4. **Mobile-first** — все страницы адаптивны; брейкпойнты на 576px и 768px
-5. **Minimal CSS** — один файл `custom.css` с дизайн-токенами и компонентами
+4. **Mobile-first** — все страницы адаптивны; брейкпойнты в Tailwind config
+5. **CSS-first config** — дизайн-токены (цвета, spacing, motion) в `@theme` директиве `input.css`
 6. **One-request-one-screen** — нет SPA; каждый роут = отдельная HTML-страница с SSR
 
 ---
@@ -36,7 +36,8 @@ src/web/
 │       └── reasoning_block.html # Расширяемый блок с обоснованием
 └── static/
     ├── css/
-    │   └── custom.css          # Дизайн-система + компоненты (1270 строк)
+    │   ├── input.css           # Tailwind source + @theme дизайн-токены
+    │   └── tailwind.css        # Compiled output (committed)
     └── js/
         ├── form.js             # Автодополнение + отправка формы
         ├── progress.js         # SSE + обновление UI прогресса
@@ -207,30 +208,37 @@ base.html
 
 ## 6. CSS-архитектура
 
-### Структура `custom.css` (1270 строк):
+### Структура `input.css` (Tailwind CSS v4):
 
-1. **Reset & variables** — CSS-переменные (цвета, spacing, motion, radius)
-2. **Typography** — Overrides Pico (Newsreader, Source Sans 3, JetBrains Mono)
-3. **Focus & interaction** — `:focus-visible` ring (2px синий)
-4. **Navigation** — Nav bar, hamburger, underline hover-animation
-5. **Layout helpers** — Footer, hero section, container spacing
-6. **Progress UI** — Progress-bar, step list, timeline
-7. **Cards & badges** — Headline cards, badge states, confidence dots
-8. **Reasoning blocks** — Accordion-style details, evidence formatting
-9. **Form components** — Autocomplete dropdown, input focus, preset cards
-10. **Error states** — Error card entrance animation
-11. **Animations** — Keyframes for fade-in, slide-in, scale-in, shimmer, pulse
-12. **Scroll-reveal** — Data-reveal trigger + stagger
-13. **Accessibility** — Focus rings, reduced-motion, aria-busy styling
-14. **Results page** — Headline cards (hero/secondary), meta chips
-15. **About page** — Persona grid, pull-quote
-16. **Settings page** — Buttons, delete button styling
-17. **Auth pages** — Centered section, logo placement
+**Основные слои:**
+
+1. **@theme directive** — CSS-переменные дизайн-системы (цвета OKLCH, spacing, motion, radius, fonts)
+2. **@layer components** — 17 JS-referenced `fn-*` классов (nav, footer, cards, badges, forms и т.д.)
+3. **@tailwindcss/forms** — базовые стили форм (input, button, select)
+4. **Tailwind utilities** — автоматически генерируются из config
+
+**Компиляция:**
+
+```bash
+npm run css:build   # Production: input.css → tailwind.css (minified)
+npm run css:dev     # Development: input.css → tailwind.css (watch mode)
+```
+
+**Docker:** `css-builder` stage компилирует CSS при сборке образа.
+
+**Дизайн-токены в @theme:**
+- Цветовая палитра (OKLCH синеватые нейтралы + confidence levels)
+- Spacing scale (4pt base: 0.25rem–6rem)
+- Motion: easing functions, duration scale
+- Радиусы: sm, md, lg, full
+- Fonts: Newsreader (headings), Source Sans 3 (body), JetBrains Mono (code)
+- Брейкпойнты: мобильный-first (sm: 576px, md: 768px)
 
 **Соглашение о классах:**
-- `fn-` префикс для всех кастомных классов (не `Pico.css`)
+- `fn-` префикс для 17 JS-referenced компонентов (сохранены как `@layer components`)
 - BEM-подобные модификаторы: `fn-badge--success`, `fn-step--done`, `fn-preset-card--selected`
 - Для ARIA-состояний: `aria-busy="true"` стилизуется через `button[aria-busy="true"]`
+- Остальное: Tailwind utility classes (например, `flex`, `gap-4`, `rounded-md`)
 
 ---
 
@@ -354,12 +362,12 @@ base.html
 ## 11. Performance
 
 - **Fonts**: Google Fonts с `font-display: swap` (текст показывается сразу, шрифт подгружается асинхронно)
-- **CSS**: 1 файл (~1270 строк), minified ~9KB
+- **CSS**: 1 файл (`tailwind.css`), minified, оптимизирован PurgeCSS (только используемые классы)
 - **JS**: 5 модулей по 2-8KB каждый; отсутствует на некоторых страницах
-- **No frameworks**: Vanilla JS, Pico.css CDN → минимум бандла
+- **No frameworks**: Vanilla JS, Tailwind CSS build (не CDN) → контролируемый размер
 - **CSS hamburger**: `<details>` работает без JS
 - **GPU animations**: только `transform` и `opacity` (трансформы GPU-ускорены)
-- **Page load**: ~1.5s на медленном 3G
+- **Page load**: ~1.3–1.5s на медленном 3G
 
 ---
 
@@ -430,9 +438,18 @@ base.html
 
 Фронтенд развёртывается вместе с бэком:
 - Шаблоны загружаются из `src/web/templates/`
-- CSS подключается из `src/web/static/css/custom.css`
+- CSS компилируется в `src/web/static/css/tailwind.css` (committed в repo)
 - JS загружается с `{{ url_for('static', path='js/form.js') }}`
 - В production: static файлы сервируются через nginx (кеширование с Cache-Control)
+- Docker: `css-builder` stage выполняет `npm run css:build` при сборке образа
+
+**Локальная разработка:**
+
+```bash
+npm install                    # Установить зависимости (package.json)
+npm run css:dev               # Watch mode: input.css → tailwind.css при изменении
+uv run uvicorn src.main:app   # Dev сервер (потребляет tailwind.css)
+```
 
 ---
 

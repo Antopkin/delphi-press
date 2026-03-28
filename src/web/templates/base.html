@@ -1,6 +1,6 @@
 {# src/web/templates/base.html -- Base layout for all pages. #}
 <!doctype html>
-<html lang="ru" data-theme="light">
+<html lang="ru">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,11 +14,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;0,6..72,700;1,6..72,400&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
 
-    {# Pico.css -- semantic HTML framework, no classes needed for most elements #}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-
-    {# Project design system + custom components #}
-    <link rel="stylesheet" href="{{ url_for('static', path='css/custom.css') }}">
+    {# Tailwind CSS (built from input.css via PostCSS) #}
+    <link rel="stylesheet" href="{{ url_for('static', path='css/tailwind.css') }}">
 
     <link rel="icon" href="{{ url_for('static', path='img/favicon.svg') }}" type="image/svg+xml">
 
@@ -27,57 +24,55 @@
 <body>
 
     {# ===== NAVIGATION ===== #}
-    <nav class="container fn-nav">
-        <ul>
-            <li>
-                <a href="/" class="fn-logo">
-                    <strong>Delphi Press</strong>
-                </a>
-            </li>
-        </ul>
+    <nav class="max-w-5xl mx-auto w-full px-4 sm:px-6 flex items-center justify-between py-4 border-b border-border mb-8">
+        <a href="/" class="font-heading text-xl no-underline text-text-heading hover:text-text-heading">
+            <strong>Delphi Press</strong>
+        </a>
+
         {# Desktop nav #}
-        <ul class="fn-desktop-nav">
-            <li><a href="/"{% if request.url.path == '/' %} class="fn-nav-active"{% endif %}>Главная</a></li>
-            <li><a href="/about"{% if request.url.path == '/about' %} class="fn-nav-active"{% endif %}>О методологии</a></li>
+        <ul class="hidden md:flex items-center gap-6 list-none m-0 p-0">
+            <li><a href="/" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">Главная</a></li>
+            <li><a href="/about" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/about' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">О методологии</a></li>
             {% if current_user %}
-            <li><a href="/settings"{% if request.url.path == '/settings' %} class="fn-nav-active"{% endif %}>Настройки</a></li>
-            <li><a href="/logout">Выйти</a></li>
+            <li><a href="/settings" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/settings' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">Настройки</a></li>
+            <li><a href="/logout" class="text-text-muted no-underline transition-colors duration-fast hover:text-primary">Выйти</a></li>
             {% else %}
-            <li><a href="/login"{% if request.url.path == '/login' %} class="fn-nav-active"{% endif %}>Войти</a></li>
+            <li><a href="/login" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/login' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">Войти</a></li>
             {% endif %}
         </ul>
-        {# Mobile hamburger nav (CSS-only, no JS) #}
-        <details class="fn-mobile-nav">
-            <summary>&#9776;</summary>
-            <ul>
-                <li><a href="/">Главная</a></li>
-                <li><a href="/about">О методологии</a></li>
+
+        {# Mobile hamburger nav (CSS-only) #}
+        <details class="md:hidden relative">
+            <summary class="cursor-pointer list-none text-2xl leading-none p-2 text-text-muted select-none [&::-webkit-details-marker]:hidden">&#9776;</summary>
+            <ul class="absolute right-0 top-full mt-2 bg-white border border-border rounded-md shadow-lg py-2 min-w-[160px] list-none m-0 p-0 z-50">
+                <li><a href="/" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">Главная</a></li>
+                <li><a href="/about" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">О методологии</a></li>
                 {% if current_user %}
-                <li><a href="/settings">Настройки</a></li>
-                <li><a href="/logout">Выйти</a></li>
+                <li><a href="/settings" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">Настройки</a></li>
+                <li><a href="/logout" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">Выйти</a></li>
                 {% else %}
-                <li><a href="/login">Войти</a></li>
+                <li><a href="/login" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">Войти</a></li>
                 {% endif %}
             </ul>
         </details>
     </nav>
 
     {# ===== MAIN CONTENT ===== #}
-    <main class="container">
+    <main class="max-w-5xl mx-auto w-full px-4 sm:px-6 animate-fade-in-up">
         {% block content %}{% endblock %}
     </main>
 
     {# ===== FOOTER ===== #}
-    <footer class="container fn-footer">
-        <div class="fn-footer-grid">
+    <footer class="max-w-5xl mx-auto w-full px-4 sm:px-6 border-t border-border pt-6 mt-12 text-text-muted">
+        <div class="flex justify-between items-center flex-wrap gap-4 pb-6">
             <small>
                 &copy; {{ current_year | default(2026) }} Delphi Press.
                 Прогнозы носят исследовательский характер.
             </small>
-            <small class="fn-footer-right">
+            <small class="text-right">
                 Powered by AI &middot;
-                <a href="https://github.com/Antopkin/delphi-press" target="_blank" rel="noopener noreferrer">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <a href="https://github.com/Antopkin/delphi-press" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 no-underline hover:text-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="align-text-bottom">
                         <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
                     </svg>GitHub
                 </a>

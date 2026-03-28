@@ -6,130 +6,131 @@
 {% block content %}
 
 {# ===== HERO SECTION ===== #}
-<section class="fn-hero">
-    <hgroup>
-        <h1>Что напишут СМИ завтра?</h1>
-        <p>
-            Мультиагентная система прогнозирования заголовков.
-            Пять ИИ-экспертов анализируют события и предсказывают,
-            о чём будет писать выбранное издание.
-        </p>
-    </hgroup>
+<section class="py-12 pb-8">
+    <h1 class="text-4xl md:text-5xl leading-tight mb-3 animate-fade-in-up">Что напишут СМИ завтра?</h1>
+    <p class="max-w-xl text-text-muted text-lg leading-relaxed animate-fade-in-up [animation-delay:150ms]">
+        Мультиагентная система прогнозирования заголовков.
+        Пять ИИ-экспертов анализируют события и предсказывают,
+        о чём будет писать выбранное издание.
+    </p>
 </section>
 
 {# ===== HOW IT WORKS ===== #}
-<section>
-    <div class="fn-steps-flow" data-stagger>
-        <div class="fn-flow-step" style="--fn-stagger-i: 0;">
-            <span class="fn-flow-number">1</span>
+<section class="pb-8">
+    <div class="flex flex-col md:flex-row items-start gap-4 py-8" data-stagger>
+        <div class="flex-1 flex flex-col gap-2" style="--fn-stagger-i: 0;">
+            <span class="font-heading text-xl text-text-muted font-semibold leading-none">1</span>
             <strong>Выберите СМИ</strong>
-            <small>Укажите издание: ТАСС, РБК, BBC Russian, Незыгарь или любое другое</small>
+            <small class="text-text-muted leading-relaxed">Укажите издание: ТАСС, РБК, BBC Russian, Незыгарь или любое другое</small>
         </div>
-        <div class="fn-flow-connector" aria-hidden="true"></div>
-        <div class="fn-flow-step" style="--fn-stagger-i: 1;">
-            <span class="fn-flow-number">2</span>
+        <div class="hidden md:block shrink-0 w-8 h-0.5 bg-border mt-4" aria-hidden="true"></div>
+        <div class="flex-1 flex flex-col gap-2" style="--fn-stagger-i: 1;">
+            <span class="font-heading text-xl text-text-muted font-semibold leading-none">2</span>
             <strong>Укажите дату</strong>
-            <small>На какой день нужен прогноз -- от завтра до +30 дней</small>
+            <small class="text-text-muted leading-relaxed">На какой день нужен прогноз -- от завтра до +30 дней</small>
         </div>
-        <div class="fn-flow-connector" aria-hidden="true"></div>
-        <div class="fn-flow-step" style="--fn-stagger-i: 2;">
-            <span class="fn-flow-number">3</span>
+        <div class="hidden md:block shrink-0 w-8 h-0.5 bg-border mt-4" aria-hidden="true"></div>
+        <div class="flex-1 flex flex-col gap-2" style="--fn-stagger-i: 2;">
+            <span class="font-heading text-xl text-text-muted font-semibold leading-none">3</span>
             <strong>Получите прогноз</strong>
-            <small>Система соберёт данные, проведёт экспертный анализ и выдаст заголовки с обоснованиями</small>
+            <small class="text-text-muted leading-relaxed">Система соберёт данные, проведёт экспертный анализ и выдаст заголовки с обоснованиями</small>
         </div>
     </div>
 </section>
 
 {# ===== PREDICTION FORM ===== #}
 <section>
-    <h2>Новый прогноз</h2>
+    <h2 class="text-xl mb-4">Новый прогноз</h2>
 
-    <form id="prediction-form" action="/api/v1/predictions" method="post">
+    <form id="prediction-form" action="/api/v1/predictions" method="post" class="space-y-4 max-w-2xl">
 
-            {# -- Outlet field with autocomplete -- #}
-            <label for="outlet">
-                СМИ
-                <div class="fn-autocomplete-wrapper">
-                    <input
-                        type="text"
-                        id="outlet"
-                        name="outlet"
-                        placeholder="Начните вводить название, например: ТАСС"
-                        autocomplete="off"
-                        required
-                        aria-describedby="outlet-help"
-                    >
-                    <ul id="outlet-suggestions" class="fn-autocomplete-dropdown" role="listbox" hidden></ul>
-                </div>
-                <small id="outlet-help">Название издания на русском или английском</small>
-            </label>
-
-            {# -- Target date field -- #}
-            <label for="target_date">
-                Дата прогноза
+        {# -- Outlet field with autocomplete -- #}
+        <div>
+            <label for="outlet" class="block text-sm font-semibold mb-1">СМИ</label>
+            <div class="relative">
                 <input
-                    type="date"
-                    id="target_date"
-                    name="target_date"
-                    min="{{ min_date }}"
-                    max="{{ max_date }}"
+                    type="text"
+                    id="outlet"
+                    name="outlet"
+                    placeholder="Начните вводить название, например: ТАСС"
+                    autocomplete="off"
                     required
-                    aria-describedby="date-help"
+                    aria-describedby="outlet-help"
+                    class="w-full rounded-md border-border px-3 py-2"
                 >
-                <small id="date-help">От завтра до +30 дней</small>
-            </label>
+                <ul id="outlet-suggestions" class="fn-autocomplete-dropdown" role="listbox" hidden></ul>
+            </div>
+            <small id="outlet-help" class="text-text-muted">Название издания на русском или английском</small>
+        </div>
 
-            {# -- Preset selection -- #}
-            <fieldset class="fn-preset-group" role="radiogroup" aria-label="Выберите режим прогноза">
-                <legend>Режим прогноза</legend>
-                <div class="grid">
-                    <label class="fn-preset-card" data-preset="light">
-                        <input type="radio" name="preset" value="light">
-                        <div class="fn-preset-card__body">
-                            <strong>Light</strong>
-                            <span class="fn-preset-cost">~$1</span>
-                            <small>Gemini Flash, 5 событий, 1 раунд</small>
-                        </div>
-                    </label>
+        {# -- Target date field -- #}
+        <div>
+            <label for="target_date" class="block text-sm font-semibold mb-1">Дата прогноза</label>
+            <input
+                type="date"
+                id="target_date"
+                name="target_date"
+                min="{{ min_date }}"
+                max="{{ max_date }}"
+                required
+                aria-describedby="date-help"
+                class="w-full rounded-md border-border px-3 py-2"
+            >
+            <small id="date-help" class="text-text-muted">От завтра до +30 дней</small>
+        </div>
 
-                    <label class="fn-preset-card fn-preset-card--selected" data-preset="standard">
-                        <input type="radio" name="preset" value="standard" checked>
-                        <div class="fn-preset-card__body">
-                            <strong>Standard</strong>
-                            <span class="fn-preset-cost">~$5</span>
-                            <small>Claude Sonnet, 10 событий, 2 раунда</small>
-                        </div>
-                    </label>
+        {# -- Preset selection -- #}
+        <fieldset class="border-none p-0 my-4" role="radiogroup" aria-label="Выберите режим прогноза">
+            <legend class="font-semibold mb-3">Режим прогноза</legend>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label class="fn-preset-card" data-preset="light">
+                    <input type="radio" name="preset" value="light">
+                    <div class="flex flex-col gap-1">
+                        <strong class="text-lg">Light</strong>
+                        <span class="text-xl font-bold text-primary">~$1</span>
+                        <small class="text-text-muted text-sm">Gemini Flash, 5 событий, 1 раунд</small>
+                    </div>
+                </label>
 
-                    <label class="fn-preset-card" data-preset="full">
-                        <input type="radio" name="preset" value="full">
-                        <div class="fn-preset-card__body">
-                            <strong>Full</strong>
-                            <span class="fn-preset-cost">~$15</span>
-                            <small>Claude Opus, 20 событий, 2 раунда</small>
-                        </div>
-                    </label>
-                </div>
-            </fieldset>
+                <label class="fn-preset-card fn-preset-card--selected" data-preset="standard">
+                    <input type="radio" name="preset" value="standard" checked>
+                    <div class="flex flex-col gap-1">
+                        <strong class="text-lg">Standard</strong>
+                        <span class="text-xl font-bold text-primary">~$5</span>
+                        <small class="text-text-muted text-sm">Claude Sonnet, 10 событий, 2 раунда</small>
+                    </div>
+                </label>
 
-            {# -- Submit -- #}
-            <button type="submit" id="submit-btn">
-                Прогнозировать
-            </button>
+                <label class="fn-preset-card" data-preset="full">
+                    <input type="radio" name="preset" value="full">
+                    <div class="flex flex-col gap-1">
+                        <strong class="text-lg">Full</strong>
+                        <span class="text-xl font-bold text-primary">~$15</span>
+                        <small class="text-text-muted text-sm">Claude Opus, 20 событий, 2 раунда</small>
+                    </div>
+                </label>
+            </div>
+        </fieldset>
 
-        </form>
+        {# -- Submit -- #}
+        <button type="submit" id="submit-btn"
+                class="bg-primary text-white font-semibold py-2.5 px-8 rounded-md hover:bg-primary-hover cursor-pointer">
+            Прогнозировать
+        </button>
 
-        {# -- Error display area -- #}
-        <div id="form-error" class="fn-form-error" hidden role="alert"></div>
+    </form>
+
+    {# -- Error display area -- #}
+    <div id="form-error" class="mt-4 px-4 py-3 bg-red-50 border border-red-200 rounded-md text-confidence-speculative text-sm" hidden role="alert"></div>
 
 </section>
 
 {# ===== MY / RECENT PREDICTIONS ===== #}
 {% if current_user and recent_predictions %}
-<section>
-    <h2>Мои прогнозы</h2>
-    <div class="overflow-auto">
-        <table class="fn-table-hover">
+<section class="mt-12">
+    <h2 class="text-xl mb-4">Мои прогнозы</h2>
+    <div class="overflow-x-auto">
+        <table>
             <thead>
                 <tr>
                     <th scope="col">СМИ</th>
@@ -141,18 +142,18 @@
             </thead>
             <tbody data-stagger>
                 {% for pred in recent_predictions %}
-                <tr style="--fn-stagger-i: {{ loop.index0 }}">
+                <tr style="--fn-stagger-i: {{ loop.index0 }}" class="hover:bg-surface-1 transition-colors duration-fast">
                     <td>{{ pred.outlet_name }}</td>
                     <td>{{ pred.target_date.strftime('%d.%m.%Y') }}</td>
                     <td>
                         {% if pred.status.value == 'completed' %}
-                            <span class="fn-badge fn-badge--success">Готово</span>
+                            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-very-high">Готово</span>
                         {% elif pred.status.value == 'in_progress' %}
-                            <span class="fn-badge fn-badge--info">В процессе</span>
+                            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-high">В процессе</span>
                         {% elif pred.status.value == 'failed' %}
-                            <span class="fn-badge fn-badge--danger">Ошибка</span>
+                            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-speculative">Ошибка</span>
                         {% else %}
-                            <span class="fn-badge">{{ pred.status.value }}</span>
+                            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-text-muted">{{ pred.status.value }}</span>
                         {% endif %}
                     </td>
                     <td>
@@ -164,11 +165,13 @@
                     </td>
                     <td>
                         {% if pred.status.value == 'completed' %}
-                            <a href="/results/{{ pred.id }}" role="button" class="outline secondary">
+                            <a href="/results/{{ pred.id }}"
+                               class="inline-block text-sm border border-border rounded-md px-3 py-1 no-underline text-text hover:bg-surface-1">
                                 Результаты
                             </a>
                         {% elif pred.status.value == 'in_progress' %}
-                            <a href="/predict/{{ pred.id }}" role="button" class="outline">
+                            <a href="/predict/{{ pred.id }}"
+                               class="inline-block text-sm border border-primary rounded-md px-3 py-1 no-underline text-primary hover:bg-primary hover:text-white">
                                 Следить
                             </a>
                         {% endif %}
@@ -180,8 +183,8 @@
     </div>
 </section>
 {% elif not current_user %}
-<section class="fn-text-center">
-    <p>
+<section class="text-center mt-12">
+    <p class="text-text-muted">
         <a href="/register">Зарегистрируйтесь</a>, чтобы сохранять и отслеживать свои прогнозы.
     </p>
 </section>

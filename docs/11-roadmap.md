@@ -66,6 +66,43 @@ tests/test_integration/             — 7 E2E integration tests
 
 ## Оставшиеся сессии
 
+### Сессия 0: Frontend: Tailwind CSS Migration
+
+**Цель:** Мигрировать с Pico.css 2.0 (CDN) на Tailwind CSS v4 с CSS-first конфигом.
+
+**Статус:** DONE (2026-03-28)
+
+**Что реализовано:**
+
+- [x] Удалена Pico.css CDN зависимость
+- [x] Tailwind CSS v4.2.2 с PostCSS build установлен
+- [x] `input.css` создан с `@theme` директивой (дизайн-токены: цвета OKLCH, spacing, motion, радиусы)
+- [x] 17 JS-referenced `fn-*` классов сохранены в `@layer components`
+- [x] `tailwind.css` скомпилирован и committed в repo
+- [x] Docker css-builder stage добавлен в Dockerfile
+- [x] npm build commands: `css:build`, `css:dev` (watch mode)
+- [x] 10 HTML-шаблонов переписаны с Tailwind utilities
+- [x] @tailwindcss/forms plugin подключен для baseline стилей форм
+- [x] Все дизайн-токены (цвета, spacing, easing, animations) в @theme
+- [x] 902 теста pass, 29 web тестов verified (unchanged)
+
+**Результат:**
+
+- Контролируемый размер CSS (PurgeCSS только используемые классы)
+- CSS-first конфигурация (не CDN)
+- Maintenance улучшен (дизайн-токены в одном месте)
+- Performance сохранена (~1.3-1.5s page load)
+
+**Файлы:**
+
+- `src/web/static/css/input.css` — Tailwind source + @theme config
+- `src/web/static/css/tailwind.css` — compiled output
+- `package.json` — npm dependencies + build scripts
+- `Dockerfile` — css-builder stage
+- `docs/09-frontend.md` — обновлена документация
+
+---
+
 ### Сессия 1: First Real Prediction
 
 **Цель:** Запустить полный 9-стадийный пайплайн на реальных данных и получить заголовки.

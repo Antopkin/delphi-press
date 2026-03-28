@@ -1,5 +1,17 @@
 # syntax=docker/dockerfile:1
 
+# ── Stage 0: CSS Builder (Tailwind CSS) ──────────────────────────────────────
+FROM node:20-alpine AS css-builder
+
+WORKDIR /build
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY postcss.config.mjs ./
+COPY src/web/static/css/input.css ./src/web/static/css/
+COPY src/web/templates/ ./src/web/templates/
+RUN npx postcss src/web/static/css/input.css -o src/web/static/css/tailwind.css
+
+
 # ── Stage 1: Builder ─────────────────────────────────────────────────────────
 FROM python:3.12-slim AS builder
 
@@ -36,6 +48,8 @@ RUN groupadd -g 1001 appgroup && \
 # Copy virtualenv and source
 COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appgroup /app/src /app/src
+# Copy compiled CSS from node builder (overwrite with fresh build)
+COPY --from=css-builder --chown=appuser:appgroup /build/src/web/static/css/tailwind.css /app/src/web/static/css/tailwind.css
 
 # Data directory for SQLite
 RUN mkdir -p /app/data && chown appuser:appgroup /app/data

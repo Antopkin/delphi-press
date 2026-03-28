@@ -5,162 +5,164 @@
 
 {% block content %}
 
-<section>
-    <hgroup>
-        <h1>О методологии</h1>
-        <p>Как работает прогнозирование заголовков</p>
-    </hgroup>
+<section class="mb-10">
+    <h1 class="text-2xl mb-2">О методологии</h1>
+    <p class="text-text-muted text-lg">Как работает прогнозирование заголовков</p>
 </section>
 
 {# ===== DELPHI METHOD ===== #}
-<section>
-    <h2>Метод Дельфи</h2>
-    <blockquote class="fn-pull-quote">
+<section class="mb-10">
+    <h2 class="text-xl mb-4">Метод Дельфи</h2>
+    <blockquote class="font-heading italic text-lg border-l-3 border-primary pl-6 my-8 text-text-muted not-italic">
         В основе Delphi Press лежит
-        <strong>метод Дельфи</strong> -- проверенная методика
+        <strong class="text-text">метод Дельфи</strong> -- проверенная методика
         группового прогнозирования, разработанная корпорацией RAND
         в 1960-х годах.
     </blockquote>
-    <p>
-        Суть метода: несколько экспертов <em>независимо</em> оценивают
-        ситуацию, затем знакомятся с аргументами друг друга
-        (не зная авторства) и пересматривают свои оценки.
-        Анонимность устраняет давление авторитета.
-        Итерация позволяет скорректировать ошибки.
-        Статистическая агрегация даёт более точный результат,
-        чем мнение любого отдельного эксперта.
-    </p>
-    <p>
-        В нашей системе роль экспертов выполняют пять ИИ-агентов
-        на базе Claude Opus 4.6 -- каждый с уникальной аналитической рамкой
-        и системным промптом. Разнообразие перспектив обеспечивается
-        не разными моделями, а разными экспертными ролями и методологическими
-        фокусами, что минимизирует систематические ошибки.
-    </p>
+    <div class="space-y-4 text-text leading-relaxed max-w-prose">
+        <p>
+            Суть метода: несколько экспертов <em>независимо</em> оценивают
+            ситуацию, затем знакомятся с аргументами друг друга
+            (не зная авторства) и пересматривают свои оценки.
+            Анонимность устраняет давление авторитета.
+            Итерация позволяет скорректировать ошибки.
+            Статистическая агрегация даёт более точный результат,
+            чем мнение любого отдельного эксперта.
+        </p>
+        <p>
+            В нашей системе роль экспертов выполняют пять ИИ-агентов
+            на базе Claude Opus 4.6 -- каждый с уникальной аналитической рамкой
+            и системным промптом. Разнообразие перспектив обеспечивается
+            не разными моделями, а разными экспертными ролями и методологическими
+            фокусами, что минимизирует систематические ошибки.
+        </p>
+    </div>
 </section>
 
 {# ===== EXPERT PERSONAS ===== #}
-<section>
-    <h2>Пять экспертов</h2>
+<section class="mb-10">
+    <h2 class="text-xl mb-6">Пять экспертов</h2>
 
-    <div class="fn-persona-grid" data-stagger>
-        <div class="fn-persona" style="--fn-stagger-i: 0;">
-            <div class="fn-persona-icon-wrapper">
-                <span class="fn-persona-icon" aria-hidden="true">&#128202;</span>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8" data-stagger>
+        <div class="flex flex-col gap-2" style="--fn-stagger-i: 0;">
+            <div class="w-12 h-12 flex items-center justify-center bg-surface-1 rounded-full text-2xl">
+                <span aria-hidden="true">&#128202;</span>
             </div>
-            <h3>Реалист-аналитик</h3>
-            <p>
+            <h3 class="text-lg m-0">Реалист-аналитик</h3>
+            <p class="text-sm text-text-muted leading-relaxed max-w-[50ch]">
                 Опытный аналитик политических рисков. Мыслит категориями
                 базовых ставок и исторических аналогий. Начинает с вопроса:
                 &laquo;Как часто подобное происходило раньше?&raquo;
             </p>
-            <small class="fn-text-muted">Модель: Claude Opus 4.6</small>
+            <small class="text-text-muted">Модель: Claude Opus 4.6</small>
         </div>
 
-        <div class="fn-persona" style="--fn-stagger-i: 1;">
-            <div class="fn-persona-icon-wrapper">
-                <span class="fn-persona-icon" aria-hidden="true">&#127758;</span>
+        <div class="flex flex-col gap-2" style="--fn-stagger-i: 1;">
+            <div class="w-12 h-12 flex items-center justify-center bg-surface-1 rounded-full text-2xl">
+                <span aria-hidden="true">&#127758;</span>
             </div>
-            <h3>Геополитический стратег</h3>
-            <p>
+            <h3 class="text-lg m-0">Геополитический стратег</h3>
+            <p class="text-sm text-text-muted leading-relaxed max-w-[50ch]">
                 Специалист по международным отношениям. Видит мир через
                 призму силовых балансов и стратегических интересов.
                 Ключевой вопрос: &laquo;Cui bono?&raquo;
             </p>
-            <small class="fn-text-muted">Модель: Claude Opus 4.6</small>
+            <small class="text-text-muted">Модель: Claude Opus 4.6</small>
         </div>
 
-        <div class="fn-persona" style="--fn-stagger-i: 2;">
-            <div class="fn-persona-icon-wrapper">
-                <span class="fn-persona-icon" aria-hidden="true">&#128176;</span>
+        <div class="flex flex-col gap-2" style="--fn-stagger-i: 2;">
+            <div class="w-12 h-12 flex items-center justify-center bg-surface-1 rounded-full text-2xl">
+                <span aria-hidden="true">&#128176;</span>
             </div>
-            <h3>Экономический аналитик</h3>
-            <p>
+            <h3 class="text-lg m-0">Экономический аналитик</h3>
+            <p class="text-sm text-text-muted leading-relaxed max-w-[50ch]">
                 Макроэкономист и рыночный аналитик. Следит за деньгами:
                 потоки капитала, фискальная политика, санкции. Принцип:
                 &laquo;Следуй за деньгами&raquo;.
             </p>
-            <small class="fn-text-muted">Модель: Claude Opus 4.6</small>
+            <small class="text-text-muted">Модель: Claude Opus 4.6</small>
         </div>
 
-        <div class="fn-persona" style="--fn-stagger-i: 3;">
-            <div class="fn-persona-icon-wrapper">
-                <span class="fn-persona-icon" aria-hidden="true">&#128240;</span>
+        <div class="flex flex-col gap-2" style="--fn-stagger-i: 3;">
+            <div class="w-12 h-12 flex items-center justify-center bg-surface-1 rounded-full text-2xl">
+                <span aria-hidden="true">&#128240;</span>
             </div>
-            <h3>Медиа-эксперт</h3>
-            <p>
+            <h3 class="text-lg m-0">Медиа-эксперт</h3>
+            <p class="text-sm text-text-muted leading-relaxed max-w-[50ch]">
                 Бывший редактор крупного агентства. Думает категориями
                 &laquo;что попадёт в выпуск&raquo;: новостная ценность,
                 редакционная логика, медиа-насыщенность.
             </p>
-            <small class="fn-text-muted">Модель: Claude Opus 4.6</small>
+            <small class="text-text-muted">Модель: Claude Opus 4.6</small>
         </div>
 
-        <div class="fn-persona" style="--fn-stagger-i: 4;">
-            <div class="fn-persona-icon-wrapper">
-                <span class="fn-persona-icon" aria-hidden="true">&#128520;</span>
+        <div class="flex flex-col gap-2" style="--fn-stagger-i: 4;">
+            <div class="w-12 h-12 flex items-center justify-center bg-surface-1 rounded-full text-2xl">
+                <span aria-hidden="true">&#128520;</span>
             </div>
-            <h3>Адвокат дьявола</h3>
-            <p>
+            <h3 class="text-lg m-0">Адвокат дьявола</h3>
+            <p class="text-sm text-text-muted leading-relaxed max-w-[50ch]">
                 Систематический контрариан. Его задача -- найти то,
                 что остальные пропустили. Применяет технику pre-mortem:
                 &laquo;Допустим, прогноз провалился -- что пошло не так?&raquo;
             </p>
-            <small class="fn-text-muted">Модель: Claude Opus 4.6</small>
+            <small class="text-text-muted">Модель: Claude Opus 4.6</small>
         </div>
     </div>
 </section>
 
 {# ===== CONFIDENCE SCORING ===== #}
-<section>
-    <h2>Уровни уверенности</h2>
-    <p>
+<section class="mb-10">
+    <h2 class="text-xl mb-4">Уровни уверенности</h2>
+    <p class="text-text-muted mb-4">
         Каждый прогноз получает числовую оценку уверенности
         от 0% до 100%, которая затем переводится в качественную шкалу:
     </p>
-    <table class="fn-table-hover">
-        <thead>
-            <tr>
-                <th scope="col">Диапазон</th>
-                <th scope="col">Уровень</th>
-                <th scope="col">Что это значит</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><span class="fn-badge fn-badge--very-high">80--100%</span></td>
-                <td>Очень высокая</td>
-                <td>Событие почти наверняка произойдёт и будет освещено. Основано на подтверждённых фактах.</td>
-            </tr>
-            <tr>
-                <td><span class="fn-badge fn-badge--high">60--79%</span></td>
-                <td>Высокая</td>
-                <td>Высоковероятное развитие событий. Большинство экспертов согласны.</td>
-            </tr>
-            <tr>
-                <td><span class="fn-badge fn-badge--moderate">40--59%</span></td>
-                <td>Средняя</td>
-                <td>Один из нескольких возможных сценариев. Есть аргументы &laquo;за&raquo; и &laquo;против&raquo;.</td>
-            </tr>
-            <tr>
-                <td><span class="fn-badge fn-badge--low">20--39%</span></td>
-                <td>Низкая</td>
-                <td>Маловероятный, но заслуживающий внимания сценарий. Может реализоваться при определённых условиях.</td>
-            </tr>
-            <tr>
-                <td><span class="fn-badge fn-badge--speculative">0--19%</span></td>
-                <td>Спекулятивно</td>
-                <td>&laquo;Чёрный лебедь&raquo;. Событие было бы неожиданным, но именно такие прогнозы самые ценные, если сбываются.</td>
-            </tr>
-        </tbody>
-    </table>
+    <div class="overflow-x-auto">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Диапазон</th>
+                    <th scope="col">Уровень</th>
+                    <th scope="col">Что это значит</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="hover:bg-surface-1 transition-colors duration-fast">
+                    <td><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-very-high">80--100%</span></td>
+                    <td>Очень высокая</td>
+                    <td>Событие почти наверняка произойдёт и будет освещено. Основано на подтверждённых фактах.</td>
+                </tr>
+                <tr class="hover:bg-surface-1 transition-colors duration-fast">
+                    <td><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-high">60--79%</span></td>
+                    <td>Высокая</td>
+                    <td>Высоковероятное развитие событий. Большинство экспертов согласны.</td>
+                </tr>
+                <tr class="hover:bg-surface-1 transition-colors duration-fast">
+                    <td><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-moderate">40--59%</span></td>
+                    <td>Средняя</td>
+                    <td>Один из нескольких возможных сценариев. Есть аргументы &laquo;за&raquo; и &laquo;против&raquo;.</td>
+                </tr>
+                <tr class="hover:bg-surface-1 transition-colors duration-fast">
+                    <td><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-low">20--39%</span></td>
+                    <td>Низкая</td>
+                    <td>Маловероятный, но заслуживающий внимания сценарий. Может реализоваться при определённых условиях.</td>
+                </tr>
+                <tr class="hover:bg-surface-1 transition-colors duration-fast">
+                    <td><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-speculative">0--19%</span></td>
+                    <td>Спекулятивно</td>
+                    <td>&laquo;Чёрный лебедь&raquo;. Событие было бы неожиданным, но именно такие прогнозы самые ценные, если сбываются.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 </section>
 
 {# ===== PIPELINE STAGES ===== #}
-<section>
-    <h2>Стадии прогнозирования</h2>
-    <p>Полный цикл прогнозирования состоит из 9 стадий:</p>
-    <ol>
+<section class="mb-10">
+    <h2 class="text-xl mb-4">Стадии прогнозирования</h2>
+    <p class="text-text-muted mb-4">Полный цикл прогнозирования состоит из 9 стадий:</p>
+    <ol class="list-decimal pl-6 space-y-3 leading-relaxed">
         <li data-reveal>
             <strong>Сбор данных</strong> -- загрузка новостей из RSS-фидов, поисковых систем,
             архивов целевого издания. Параллельно работают три агента-сборщика.
@@ -171,7 +173,7 @@
         </li>
         <li data-reveal>
             <strong>Анализ траекторий</strong> -- для каждого события строятся
-            сценарии развития и матрица перекрёстных влияний.
+            сценарии развития и матриц�� перекрёстных влияний.
         </li>
         <li data-reveal>
             <strong>Дельфи: раунд 1</strong> -- пять ИИ-экспертов независимо
@@ -194,22 +196,22 @@
             и первых абзацев в стиле целевого издания.
         </li>
         <li data-reveal>
-            <strong>Контроль качества</strong> -- фактическая проверка,
+            <strong>Контрол�� качества</strong> -- фактическая проверка,
             стилистический анализ, дедупликация.
         </li>
     </ol>
-    <p>
+    <p class="text-text-muted mt-4">
         Общее время: 15--30 минут. Стоимость LLM-вызовов: ~$30 за прогноз.
     </p>
 </section>
 
 {# ===== TECH DETAILS ===== #}
-<section>
-    <h2>Технические детали</h2>
-    <p>
+<section class="mb-10">
+    <h2 class="text-xl mb-4">Технические детали</h2>
+    <p class="mb-4">
         Delphi Press работает в двух режимах:
     </p>
-    <ul>
+    <ul class="list-disc pl-6 space-y-2 mb-6">
         <li>
             <strong>Web UI</strong> -- пользователь вводит API-ключ,
             выбирает издание и дату. Система запускает асинхронный пайплайн
@@ -221,11 +223,11 @@
             как субагенты Claude Code, каждый на Claude Opus 4.6.
         </li>
     </ul>
-    <p>
+    <p class="mb-4">
         Техническая архитектура: модульный монолит на Python
         с асинхронным пайплайном.
     </p>
-    <ul>
+    <ul class="list-disc pl-6 space-y-2">
         <li>Backend: FastAPI + ARQ (async task queue)</li>
         <li>LLM: Claude Opus 4.6 через OpenRouter (все 5 экспертов)</li>
         <li>Прогресс: Server-Sent Events (SSE) через Redis pub/sub</li>

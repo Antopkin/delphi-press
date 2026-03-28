@@ -6,7 +6,7 @@
 - **Web UI** — пользователь вводит свои API-ключи (OpenRouter, YandexGPT). JWT-авторизация. Пресеты: Light / Standard / Full.
 - **Claude Code mode** — пользователь клонирует репо, запускает `/predict`. Субагенты Claude Code = 5 персон (Opus 4.6).
 
-**Стек**: Python 3.12+, FastAPI, ARQ (Redis), SQLite/SQLAlchemy 2.0, Pydantic v2, Jinja2 + Pico.css, Docker Compose.
+**Стек**: Python 3.12+, FastAPI, ARQ (Redis), SQLite/SQLAlchemy 2.0, Pydantic v2, Jinja2 + Tailwind CSS v4, Docker Compose.
 **LLM**: OpenRouter (Claude/GPT-4/Gemini) + YandexGPT. Клиент через OpenAI SDK с `base_url`.
 **Auth**: JWT (PyJWT) + bcrypt. API-ключи пользователей: Fernet-шифрование (cryptography).
 **Архитектура**: модульный монолит. Деплой: 4 контейнера (app + worker + redis + nginx).
@@ -60,7 +60,7 @@
 | Продвинутое | `/overdrive` |
 | Настройка | `/teach-impeccable` |
 
-**Стек фронтенда**: Pico.css 2.0 (CDN) + `custom.css` + Newsreader/Source Sans 3/JetBrains Mono (Google Fonts). Спека: `docs/09-frontend.md`.
+**Стек фронтенда**: Tailwind CSS v4.2.2 (PostCSS build, @theme config) + 17 JS-referenced `fn-*` components + Newsreader/Source Sans 3/JetBrains Mono (Google Fonts). Спека: `docs/09-frontend.md`.
 
 ## Доменный глоссарий
 
@@ -80,6 +80,8 @@
 ## Команды
 
 ```bash
+npm run css:build                                   # build CSS: input.css → tailwind.css
+npm run css:dev                                     # watch mode: input.css → tailwind.css
 uv run uvicorn src.main:app --reload --port 8000   # dev server
 uv run arq src.worker.WorkerSettings                # background worker
 uv run pytest tests/ -v                             # tests

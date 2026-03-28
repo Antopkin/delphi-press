@@ -8,11 +8,11 @@
 
         {# === Evidence chain === #}
         {% if headline.evidence_chain %}
-        <div class="fn-evidence">
-            <h4>Цепочка доказательств</h4>
-            <ul>
+        <div>
+            <h4 class="text-xs text-text-muted uppercase tracking-wide mt-4 mb-2 first:mt-0">Цепочка доказательств</h4>
+            <ul class="list-disc pl-6 space-y-2">
                 {% for evidence in headline.evidence_chain %}
-                <li>
+                <li class="text-sm leading-relaxed">
                     <strong>{{ evidence.source }}:</strong>
                     {{ evidence.summary }}
                 </li>
@@ -22,18 +22,18 @@
         {% endif %}
 
         {# === Agent agreement === #}
-        <div class="fn-agreement">
-            <h4>Согласие экспертов</h4>
+        <div>
+            <h4 class="text-xs text-text-muted uppercase tracking-wide mt-4 mb-2">Согласие экспертов</h4>
             {% if headline.agent_agreement == "consensus" %}
-                <p class="fn-agreement-indicator fn-agreement--consensus">
+                <p class="text-[0.95rem] font-semibold text-confidence-very-high py-1">
                     5 из 5 экспертов согласны
                 </p>
             {% elif headline.agent_agreement == "majority" %}
-                <p class="fn-agreement-indicator fn-agreement--majority">
+                <p class="text-[0.95rem] font-semibold text-confidence-high py-1">
                     4 из 5 экспертов согласны
                 </p>
             {% elif headline.agent_agreement == "split" %}
-                <p class="fn-agreement-indicator fn-agreement--split">
+                <p class="text-[0.95rem] font-semibold text-confidence-moderate py-1">
                     Мнения разделились (3 против 2)
                 </p>
             {% endif %}
@@ -41,12 +41,12 @@
 
         {# === Dissenting views === #}
         {% if headline.dissenting_views %}
-        <div class="fn-dissent">
-            <h4>Особые мнения</h4>
+        <div>
+            <h4 class="text-xs text-text-muted uppercase tracking-wide mt-4 mb-2">Особые мнения</h4>
             {% for dv in headline.dissenting_views %}
-            <blockquote class="fn-dissent-item">
+            <blockquote class="border-l-3 border-confidence-low pl-4 py-2 my-2 text-sm not-italic">
                 <p>{{ dv.view }}</p>
-                <footer>
+                <footer class="text-xs text-text-muted mt-1 p-0 border-0">
                     <cite>-- {{ dv.agent }}</cite>
                 </footer>
             </blockquote>
