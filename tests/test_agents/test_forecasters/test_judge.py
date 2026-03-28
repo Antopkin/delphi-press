@@ -197,3 +197,137 @@ class TestJudgeValidation:
         ctx.round2_assessments = [{"some": "data"}]
         ctx.mediator_synthesis = {"some": "data"}
         assert judge.validate_context(ctx) is None
+
+
+# ── Market persona helpers (Phase 4) ────────────────────────────────
+
+
+class TestBuildMarketIndex:
+    """Test market index construction from foresight signals."""
+
+    def test_filters_non_polymarket(self):
+        from src.agents.forecasters.judge import Judge
+
+        signals = [
+            {"source": "gdelt", "title": "News", "probability": 0.5, "volume_usd": 50000},
+            {"source": "polymarket", "title": "Will X?", "probability": 0.6, "volume_usd": 50000},
+        ]
+        index = Judge._build_market_index(signals)
+        assert len(index) == 1
+        assert "will x?" in index
+
+    def test_filters_none_probability(self):
+        from src.agents.forecasters.judge import Judge
+
+        signals = [
+            {"source": "polymarket", "title": "No prob", "probability": None, "volume_usd": 50000},
+        ]
+        assert Judge._build_market_index(signals) == {}
+
+    def test_filters_low_liquidity(self):
+        from src.agents.forecasters.judge import Judge
+
+        signals = [
+            {"source": "polymarket", "title": "Tiny", "probability": 0.5, "volume_usd": 500},
+        ]
+        assert Judge._build_market_index(signals) == {}
+
+    def test_uses_liquidity_field_over_volume(self):
+        from src.agents.forecasters.judge import Judge
+
+        signals = [
+            {
+                "source": "polymarket",
+                "title": "Has liq",
+                "probability": 0.5,
+                "liquidity": 50000,
+                "volume_usd": 500,
+            },
+        ]
+        index = Judge._build_market_index(signals)
+        assert len(index) == 1
+
+    def test_empty_signals(self):
+        from src.agents.forecasters.judge import Judge
+
+        assert Judge._build_market_index([]) == {}
+
+
+class TestMatchMarketToThread:
+    """Test market-to-event matching."""
+
+    def _make_pred(self, prediction: str = "Something will happen", prob: float = 0.5):
+        """Create a mock prediction with needed attributes."""
+        from unittest.mock import MagicMock
+
+        pred = MagicMock()
+        pred.prediction = prediction
+        pred.probability = prob
+        return pred
+
+    def test_tier1_high_similarity(self):
+        from src.agents.forecasters.judge import Judge
+
+        index = {
+            "will bitcoin exceed 100k": {"title": "Will Bitcoin exceed 100k", "probability": 0.6},
+        }
+        preds = {"realist": self._make_pred("Bitcoin will exceed 100k by year end")}
+        result = Judge._match_market_to_thread("bitcoin_price", preds, index)
+        assert result is not None
+        assert result["probability"] == 0.6
+
+    def test_no_match_low_similarity(self):
+        from src.agents.forecasters.judge import Judge
+
+        index = {
+            "will mars colony be established": {"title": "Mars colony", "probability": 0.1},
+        }
+        preds = {"realist": self._make_pred("Central bank will raise rates")}
+        result = Judge._match_market_to_thread("interest_rates", preds, index)
+        assert result is None
+
+    def test_empty_index_returns_none(self):
+        from src.agents.forecasters.judge import Judge
+
+        preds = {"realist": self._make_pred("Something")}
+        assert Judge._match_market_to_thread("event", preds, {}) is None
+
+
+class TestComputeMarketWeight:
+    """Test dynamic market weight computation."""
+
+    def test_high_liquidity_high_weight(self):
+        from src.agents.forecasters.judge import Judge
+
+        market = {"liquidity": 1_000_000, "volatility_7d": 0.0, "distribution_reliable": True}
+        weight = Judge._compute_market_weight(market)
+        # base * 1.0 (full liquidity) * 1.0 (no vol) * 1.0 (reliable)
+        assert weight == 0.15
+
+    def test_low_liquidity_lower_weight(self):
+        from src.agents.forecasters.judge import Judge
+
+        market = {"liquidity": 100, "volatility_7d": 0.0, "distribution_reliable": True}
+        weight = Judge._compute_market_weight(market)
+        assert weight < 0.15
+
+    def test_high_volatility_discounts(self):
+        from src.agents.forecasters.judge import Judge
+
+        base_market = {"liquidity": 500_000, "volatility_7d": 0.0, "distribution_reliable": True}
+        vol_market = {"liquidity": 500_000, "volatility_7d": 0.8, "distribution_reliable": True}
+        assert Judge._compute_market_weight(vol_market) < Judge._compute_market_weight(base_market)
+
+    def test_unreliable_zero_weight(self):
+        from src.agents.forecasters.judge import Judge
+
+        market = {"liquidity": 1_000_000, "volatility_7d": 0.0, "distribution_reliable": False}
+        assert Judge._compute_market_weight(market) == 0.0
+
+    def test_missing_fields_defaults(self):
+        from src.agents.forecasters.judge import Judge
+
+        # No explicit fields — should use defaults safely
+        market = {"volume_usd": 50_000}
+        weight = Judge._compute_market_weight(market)
+        assert weight > 0  # distribution_reliable defaults to True

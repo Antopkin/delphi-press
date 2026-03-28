@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
@@ -37,6 +38,18 @@ UNCERTAINTY_PENALTY = 0.8
 TOP_N_HEADLINES = 7
 WILD_CARD_NEWSWORTHINESS_MIN = 0.7
 MAX_WILD_CARDS = 2
+
+# Market persona (Phase 4)
+MARKET_BASE_WEIGHT = 0.15
+MARKET_MIN_LIQUIDITY = 10_000
+MARKET_MIN_PROBABILITY = 0.10
+MARKET_ALIGNMENT_BONUS = 0.04
+MARKET_ALIGNMENT_THRESHOLD = 0.10
+MARKET_MATCH_TIER1_SCORE = 65
+MARKET_MATCH_TIER2_SCORE = 40
+MARKET_MATCH_TIER2_JACCARD = 0.3
+
+logger = logging.getLogger(__name__)
 
 
 class Judge(BaseAgent):
@@ -96,11 +109,14 @@ class Judge(BaseAgent):
             for pred in assessment.predictions:
                 event_data[pred.event_thread_id][assessment.persona_id] = pred
 
+        # Build market index from foresight signals (Phase 4)
+        market_index = self._build_market_index(getattr(context, "foresight_signals", []))
+
         # Build scored predictions for each event
         scored: list[RankedPrediction] = []
         for event_id, agent_preds in event_data.items():
             probs = [p.probability for p in agent_preds.values()]
-            weights = []
+            weights: list[float] = []
             for pid_str in agent_preds:
                 try:
                     pid = PersonaID(pid_str)
@@ -108,8 +124,29 @@ class Judge(BaseAgent):
                 except (ValueError, KeyError):
                     weights.append(0.20)
 
+            # Market persona injection (Phase 4)
+            market = self._match_market_to_thread(event_id, agent_preds, market_index)
+            market_prob = market.get("probability", 0) if market else 0
+
+            if market and market_prob >= MARKET_MIN_PROBABILITY:
+                market_weight = self._compute_market_weight(market)
+                probs.append(market_prob)
+                weights.append(market_weight)
+
+                # Alignment boost: personas agreeing with market get +0.04
+                for i, pred in enumerate(agent_preds.values()):
+                    if abs(pred.probability - market_prob) < MARKET_ALIGNMENT_THRESHOLD:
+                        weights[i] += MARKET_ALIGNMENT_BONUS
+
+            # Renormalize weights to sum=1.0
+            total_w = sum(weights)
+            if total_w > 0:
+                weights = [w / total_w for w in weights]
+
             raw_prob = self._weighted_median(probs, weights)
-            agreement, spread = self._assess_agreement(probs)
+            agreement, spread = self._assess_agreement(
+                [p.probability for p in agent_preds.values()]
+            )
 
             if agreement == AgreementLevel.CONTESTED:
                 raw_prob *= UNCERTAINTY_PENALTY
@@ -133,6 +170,18 @@ class Judge(BaseAgent):
             reasoning = " | ".join(p.reasoning for p in agent_preds.values())
             evidence = self._collect_evidence(agent_preds)
             dissenting = self._collect_dissent(agent_preds, agreement, raw_prob)
+
+            # Add market evidence (regardless of whether it was used as persona)
+            if market:
+                evidence.append(
+                    {
+                        "source": "polymarket",
+                        "summary": (
+                            f"Market probability: {market_prob:.2f}, "
+                            f"volume: ${market.get('volume_usd', 0):,.0f}"
+                        ),
+                    }
+                )
 
             scored.append(
                 RankedPrediction(
@@ -246,6 +295,100 @@ class Judge(BaseAgent):
         """Средняя новостная ценность."""
         values = [p.newsworthiness for p in agent_preds.values()]
         return sum(values) / len(values) if values else 0.5
+
+    # === Market persona helpers (Phase 4) ===
+
+    @staticmethod
+    def _build_market_index(foresight_signals: list[dict[str, Any]]) -> dict[str, dict]:
+        """Build lookup from Polymarket signals for matching against events.
+
+        Returns: {lowercase_title: signal_dict} filtered by source, probability, liquidity.
+        """
+        index: dict[str, dict] = {}
+        for sig in foresight_signals:
+            if sig.get("source") != "polymarket":
+                continue
+            prob = sig.get("probability")
+            if prob is None:
+                continue
+            liq = sig.get("liquidity", sig.get("volume_usd", 0))
+            if liq < MARKET_MIN_LIQUIDITY:
+                continue
+            title = sig.get("title", "").lower().strip()
+            if title:
+                index[title] = sig
+        return index
+
+    @staticmethod
+    def _match_market_to_thread(
+        event_id: str,
+        agent_preds: dict[str, Any],
+        market_index: dict[str, dict],
+    ) -> dict | None:
+        """Three-tier fuzzy match of event thread to market signal.
+
+        Tier 1: title score >= 65
+        Tier 2: title score >= 40 AND category Jaccard >= 0.3
+        Tier 3: no match
+        """
+        if not market_index:
+            return None
+
+        from rapidfuzz import fuzz
+
+        # Build search text from event_id + prediction texts
+        search_texts = [event_id.replace("_", " ")]
+        for pred in agent_preds.values():
+            if hasattr(pred, "prediction") and pred.prediction:
+                search_texts.append(pred.prediction)
+
+        best_score = 0.0
+        best_market: dict | None = None
+
+        for title, market in market_index.items():
+            for text in search_texts:
+                score = fuzz.token_sort_ratio(text.lower(), title) / 100.0
+                if score > best_score:
+                    best_score = score
+                    best_market = market
+
+        if best_market is None:
+            return None
+
+        # Tier 1: high title similarity
+        if best_score >= MARKET_MATCH_TIER1_SCORE / 100.0:
+            return best_market
+
+        # Tier 2: moderate title + category overlap
+        if best_score >= MARKET_MATCH_TIER2_SCORE / 100.0:
+            market_cats = set(c.lower() for c in best_market.get("categories", []))
+            # Collect event categories from predictions
+            event_cats: set[str] = set()
+            for pred in agent_preds.values():
+                if hasattr(pred, "categories"):
+                    event_cats.update(c.lower() for c in pred.categories)
+            if market_cats and event_cats:
+                jaccard = len(market_cats & event_cats) / len(market_cats | event_cats)
+                if jaccard >= MARKET_MATCH_TIER2_JACCARD:
+                    return best_market
+
+        return None
+
+    @staticmethod
+    def _compute_market_weight(market: dict) -> float:
+        """Dynamic weight for market pseudo-persona.
+
+        base (0.15) × liquidity_factor × volatility_discount × reliability
+        """
+        liq = market.get("liquidity", market.get("volume_usd", 0))
+        liq_factor = max(0.5, min(math.log10(max(liq, 1)) / 6.0, 1.5))
+
+        vol = market.get("volatility_7d", 0.0)
+        vol_discount = max(0.5, 1.0 - vol * 0.5)
+
+        reliable = 1.0 if market.get("distribution_reliable", True) else 0.0
+
+        return MARKET_BASE_WEIGHT * liq_factor * vol_discount * reliable
 
     @staticmethod
     def _collect_evidence(agent_preds: dict[str, Any]) -> list[dict[str, str]]:
