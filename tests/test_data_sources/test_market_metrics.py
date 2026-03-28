@@ -203,29 +203,31 @@ class TestComputeConfidenceInterval:
 class TestComputeMarketMetrics:
     def test_returns_frozen_model(self) -> None:
         prices = [0.5 + 0.01 * i for i in range(20)]
-        m = compute_market_metrics(prices, volume=100_000, bid=0.49, ask=0.51, probability=0.7)
+        m = compute_market_metrics(prices, volume=100_000, probability=0.7, bid=0.49, ask=0.51)
         assert isinstance(m, MarketMetrics)
         with pytest.raises(Exception):
             m.volatility_7d = 999  # type: ignore[misc]
 
     def test_empty_prices(self) -> None:
-        m = compute_market_metrics([], volume=0, bid=0, ask=0, probability=0.5)
+        m = compute_market_metrics([], volume=0, probability=0.5)
         assert m.volatility_7d == 0.0
         assert m.trend_7d == 0.0
         assert m.ci_low is None
         assert m.ci_high is None
         assert m.distribution_reliable is False
         assert m.lw_probability == 0.5
+        assert m.spread is None
+        assert m.uncertainty is None
 
     def test_reliable_when_enough_data(self) -> None:
         prices = [0.5] * 20
-        m = compute_market_metrics(prices, volume=500_000, bid=0.49, ask=0.51, probability=0.5)
+        m = compute_market_metrics(prices, volume=500_000, probability=0.5, bid=0.49, ask=0.51)
         assert m.distribution_reliable is True
         assert m.ci_low is not None
 
     def test_unreliable_when_few_data(self) -> None:
         prices = [0.5] * 5
-        m = compute_market_metrics(prices, volume=500_000, bid=0.49, ask=0.51, probability=0.5)
+        m = compute_market_metrics(prices, volume=500_000, probability=0.5, bid=0.49, ask=0.51)
         assert m.distribution_reliable is False
 
     def test_all_fields_populated(self) -> None:
@@ -246,7 +248,7 @@ class TestComputeMarketMetrics:
             0.72,
             0.75,
         ]
-        m = compute_market_metrics(prices, volume=200_000, bid=0.48, ask=0.52, probability=0.75)
+        m = compute_market_metrics(prices, volume=200_000, probability=0.75, bid=0.48, ask=0.52)
         assert m.volatility_7d >= 0
         assert m.trend_7d > 0  # upward trend
         assert m.spread > 0
@@ -256,9 +258,18 @@ class TestComputeMarketMetrics:
         assert m.ci_high is not None
         assert m.distribution_reliable is True
 
-    def test_zero_bid_ask_safe(self) -> None:
-        """bid=0, ask=0 should not crash."""
+    def test_no_bid_ask_spread_is_none(self) -> None:
+        """Without bid/ask data, spread and uncertainty are None."""
         prices = [0.5] * 20
-        m = compute_market_metrics(prices, volume=100_000, bid=0, ask=0, probability=0.5)
-        assert m.spread == 0.0
-        assert m.uncertainty == 0.0
+        m = compute_market_metrics(prices, volume=100_000, probability=0.5)
+        assert m.spread is None
+        assert m.uncertainty is None
+
+    def test_with_bid_ask_spread_populated(self) -> None:
+        """With bid/ask data, spread and uncertainty are computed."""
+        prices = [0.5] * 20
+        m = compute_market_metrics(prices, volume=100_000, probability=0.5, bid=0.48, ask=0.52)
+        assert m.spread is not None
+        assert m.spread > 0
+        assert m.uncertainty is not None
+        assert m.uncertainty > 0

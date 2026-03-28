@@ -41,8 +41,12 @@ class MarketMetrics(BaseModel):
 
     volatility_7d: float = Field(description="Std of logit-returns over window")
     trend_7d: float = Field(description="EMA(short) - EMA(long) in logit space")
-    spread: float = Field(description="Normalized bid-ask spread")
-    uncertainty: float = Field(description="Sigmoid uncertainty score [0,1]")
+    spread: float | None = Field(
+        default=None, description="Normalized bid-ask spread (None if no bid/ask data)"
+    )
+    uncertainty: float | None = Field(
+        default=None, description="Sigmoid uncertainty score [0,1] (None if no bid/ask data)"
+    )
     lw_probability: float = Field(ge=0.0, le=1.0, description="Liquidity-weighted probability")
     ci_low: float | None = Field(description="Empirical p10 (None if < min_obs)")
     ci_high: float | None = Field(description="Empirical p90 (None if < min_obs)")
@@ -151,22 +155,28 @@ def compute_confidence_interval(
 def compute_market_metrics(
     prices: list[float],
     volume: float,
-    bid: float,
-    ask: float,
     probability: float,
+    *,
+    bid: float | None = None,
+    ask: float | None = None,
 ) -> MarketMetrics:
     """Compute all distribution metrics from market data.
 
     Args:
         prices: chronological price history (floats in [0, 1]).
         volume: total trading volume in USD.
-        bid: best bid price.
-        ask: best ask price.
         probability: current YES probability.
+        bid: best bid price (None if unavailable).
+        ask: best ask price (None if unavailable).
     """
     volatility = compute_volatility(prices)
     trend = compute_trend(prices)
-    spread, uncertainty = compute_spread_metrics(bid, ask)
+
+    spread = None
+    uncertainty = None
+    if bid is not None and ask is not None:
+        spread, uncertainty = compute_spread_metrics(bid, ask)
+
     lw_prob = compute_lw_probability(probability, volume)
     ci_low, ci_high = compute_confidence_interval(prices)
     reliable = ci_low is not None
@@ -174,8 +184,8 @@ def compute_market_metrics(
     return MarketMetrics(
         volatility_7d=round(volatility, 6),
         trend_7d=round(trend, 6),
-        spread=spread,
-        uncertainty=uncertainty,
+        spread=round(spread, 6) if spread is not None else None,
+        uncertainty=round(uncertainty, 6) if uncertainty is not None else None,
         lw_probability=round(lw_prob, 6),
         ci_low=round(ci_low, 6) if ci_low is not None else None,
         ci_high=round(ci_high, 6) if ci_high is not None else None,

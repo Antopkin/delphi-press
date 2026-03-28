@@ -341,3 +341,62 @@ class TestComputeMarketWeight:
         market = {"volume_usd": 50_000}
         weight = Judge._compute_market_weight(market)
         assert weight > 0  # distribution_reliable defaults to True
+
+    def test_very_high_volatility_still_positive(self):
+        """Hyperbolic vol discount never reaches zero (unlike old linear clipping)."""
+        from src.agents.forecasters.judge import Judge
+
+        market = {"liquidity": 1_000_000, "volatility_7d": 5.0, "distribution_reliable": True}
+        weight = Judge._compute_market_weight(market)
+        assert weight > 0
+        # vol=5 → discount = 1/(1+5) ≈ 0.167, much lower than base
+        assert weight < 0.15 * 0.2
+
+    def test_hyperbolic_vol_discount_values(self):
+        """Verify specific hyperbolic discount values."""
+        from src.agents.forecasters.judge import Judge
+
+        base = {"liquidity": 1_000_000, "distribution_reliable": True}
+        # vol=0 → discount=1.0
+        w0 = Judge._compute_market_weight({**base, "volatility_7d": 0.0})
+        # vol=1 → discount=0.5
+        w1 = Judge._compute_market_weight({**base, "volatility_7d": 1.0})
+        assert abs(w1 / w0 - 0.5) < 0.01
+
+    def test_long_horizon_market_lower_weight(self):
+        """Markets ending >180 days out get horizon_factor=0.5."""
+        from datetime import UTC, datetime, timedelta
+
+        from src.agents.forecasters.judge import Judge
+
+        base = {"liquidity": 1_000_000, "volatility_7d": 0.0, "distribution_reliable": True}
+        short = {**base, "end_date": (datetime.now(UTC) + timedelta(days=20)).isoformat()}
+        long = {**base, "end_date": (datetime.now(UTC) + timedelta(days=200)).isoformat()}
+
+        w_short = Judge._compute_market_weight(short)
+        w_long = Judge._compute_market_weight(long)
+        assert w_long < w_short
+        assert abs(w_long / w_short - 0.5) < 0.01  # horizon_factor=0.5
+
+    def test_medium_horizon_market_moderate_weight(self):
+        """Markets ending 90-180 days out get horizon_factor=0.75."""
+        from datetime import UTC, datetime, timedelta
+
+        from src.agents.forecasters.judge import Judge
+
+        base = {"liquidity": 1_000_000, "volatility_7d": 0.0, "distribution_reliable": True}
+        short = {**base, "end_date": (datetime.now(UTC) + timedelta(days=20)).isoformat()}
+        medium = {**base, "end_date": (datetime.now(UTC) + timedelta(days=120)).isoformat()}
+
+        w_short = Judge._compute_market_weight(short)
+        w_medium = Judge._compute_market_weight(medium)
+        assert w_medium < w_short
+        assert abs(w_medium / w_short - 0.75) < 0.01
+
+    def test_no_end_date_horizon_factor_one(self):
+        """Missing end_date → horizon_factor stays 1.0."""
+        from src.agents.forecasters.judge import Judge
+
+        market = {"liquidity": 1_000_000, "volatility_7d": 0.0, "distribution_reliable": True}
+        weight = Judge._compute_market_weight(market)
+        assert weight == 0.15  # no discount

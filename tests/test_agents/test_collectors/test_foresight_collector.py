@@ -508,3 +508,33 @@ async def test_foresight_collector_empty_returns(
     assert result["foresight_events"] == []
     assert result["foresight_signals"] == []
     assert result["sources_used"] == []
+
+
+# ── Mapping: end_date passthrough ──────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_foresight_collector_passes_end_date(
+    agent,
+    make_context,
+    mock_metaculus,
+    mock_polymarket,
+    mock_gdelt,
+):
+    """end_date from raw Polymarket market should be passed through to signal."""
+    mock_metaculus.fetch_questions.return_value = []
+    mock_polymarket.fetch_enriched_markets.return_value = [
+        {
+            "question": "Will X happen?",
+            "slug": "x-happen",
+            "yes_probability": 0.60,
+            "volume": 100000,
+            "categories": [],
+            "end_date": "2026-06-01T00:00:00Z",
+        }
+    ]
+    mock_gdelt.fetch_articles.return_value = []
+
+    result = await agent.execute(make_context())
+    sig = result["foresight_signals"][0]
+    assert sig["end_date"] == "2026-06-01T00:00:00Z"

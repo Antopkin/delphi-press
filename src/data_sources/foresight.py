@@ -19,6 +19,8 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
+from src.utils.retry import retry_with_backoff
+
 logger = logging.getLogger(__name__)
 
 _USER_AGENT = "DelphiPress/1.0 (+https://delphi.antopkin.ru/about)"
@@ -203,7 +205,11 @@ class PolymarketClient:
         }
 
         try:
-            response = await self._client.get("/markets", params=params)
+            response = await retry_with_backoff(
+                lambda: self._client.get("/markets", params=params),
+                max_retries=2,
+                base_delay=1.0,
+            )
             response.raise_for_status()
         except httpx.HTTPError as exc:
             logger.warning("Polymarket API failed: %s", exc)
@@ -301,7 +307,11 @@ class PolymarketClient:
         params = {"token_id": token_id, "interval": interval, "fidelity": fidelity}
         try:
             async with self._semaphore:
-                response = await self._clob_client.get("/prices-history", params=params)
+                response = await retry_with_backoff(
+                    lambda: self._clob_client.get("/prices-history", params=params),
+                    max_retries=2,
+                    base_delay=1.0,
+                )
                 response.raise_for_status()
         except httpx.HTTPError as exc:
             logger.warning("CLOB price history failed for %s: %s", token_id, exc)

@@ -378,17 +378,33 @@ class Judge(BaseAgent):
     def _compute_market_weight(market: dict) -> float:
         """Dynamic weight for market pseudo-persona.
 
-        base (0.15) × liquidity_factor × volatility_discount × reliability
+        base (0.15) × liquidity_factor × volatility_discount × reliability × horizon_factor
         """
         liq = market.get("liquidity", market.get("volume_usd", 0))
         liq_factor = max(0.5, min(math.log10(max(liq, 1)) / 6.0, 1.5))
 
         vol = market.get("volatility_7d", 0.0)
-        vol_discount = max(0.5, 1.0 - vol * 0.5)
+        vol_discount = 1.0 / (1.0 + vol)  # hyperbolic: smooth, no clipping
 
         reliable = 1.0 if market.get("distribution_reliable", True) else 0.0
 
-        return MARKET_BASE_WEIGHT * liq_factor * vol_discount * reliable
+        # Horizon factor: 7-day metrics are more meaningful for short-horizon markets
+        horizon_factor = 1.0
+        end_date_str = market.get("end_date")
+        if end_date_str:
+            try:
+                from datetime import UTC, datetime
+
+                end_dt = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
+                days_to_end = (end_dt - datetime.now(UTC)).days
+                if days_to_end > 180:
+                    horizon_factor = 0.5
+                elif days_to_end > 90:
+                    horizon_factor = 0.75
+            except (ValueError, TypeError):
+                pass
+
+        return MARKET_BASE_WEIGHT * liq_factor * vol_discount * reliable * horizon_factor
 
     @staticmethod
     def _collect_evidence(agent_preds: dict[str, Any]) -> list[dict[str, str]]:
