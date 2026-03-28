@@ -220,7 +220,9 @@ class ForesightCollector(BaseAgent):
         return await self._metaculus.fetch_questions(query, limit=MAX_FORESIGHT_EVENTS)
 
     async def _fetch_polymarket(self, query: str) -> list[dict[str, Any]]:
-        """Fetch Polymarket markets. Exceptions propagate to gather."""
+        """Fetch Polymarket markets, enriched with CLOB price history if available."""
+        if hasattr(self._polymarket, "fetch_enriched_markets"):
+            return await self._polymarket.fetch_enriched_markets(query, limit=30)
         return await self._polymarket.fetch_markets(query, limit=30)
 
     async def _fetch_gdelt(self, query: str, *, language: str = "english") -> list[dict[str, Any]]:
@@ -260,21 +262,46 @@ class ForesightCollector(BaseAgent):
         """Map raw Polymarket markets to foresight_signal dicts.
 
         Each dict follows a SignalRecord-like structure enriched with
-        market-specific fields (probability, volume).
+        market-specific fields (probability, volume, distribution metrics).
         """
         mapped: list[dict[str, Any]] = []
         for market in markets:
             slug = market.get("slug", "")
-            mapped.append(
-                {
-                    "title": market.get("question", ""),
-                    "source": "polymarket",
-                    "source_url": f"https://polymarket.com/market/{slug}" if slug else "",
-                    "probability": market.get("yes_probability"),
-                    "volume_usd": market.get("volume", 0),
-                    "categories": market.get("categories", []),
-                }
-            )
+            entry: dict[str, Any] = {
+                "title": market.get("question", ""),
+                "source": "polymarket",
+                "source_url": f"https://polymarket.com/market/{slug}" if slug else "",
+                "probability": market.get("yes_probability"),
+                "volume_usd": market.get("volume", 0),
+                "categories": market.get("categories", []),
+                "market_id": market.get("id", ""),
+            }
+
+            # Enrichment: compute distribution metrics when price history is available
+            price_history = market.get("price_history", [])
+            if price_history and entry["probability"] is not None:
+                from src.data_sources.market_metrics import compute_market_metrics
+
+                metrics = compute_market_metrics(
+                    prices=price_history,
+                    volume=entry["volume_usd"],
+                    bid=0.0,
+                    ask=0.0,
+                    probability=entry["probability"],
+                )
+                entry.update(
+                    {
+                        "volatility_7d": metrics.volatility_7d,
+                        "trend_7d": metrics.trend_7d,
+                        "lw_probability": metrics.lw_probability,
+                        "ci_low": metrics.ci_low,
+                        "ci_high": metrics.ci_high,
+                        "liquidity": market.get("liquidity", 0),
+                        "distribution_reliable": metrics.distribution_reliable,
+                    }
+                )
+
+            mapped.append(entry)
         return mapped
 
     @staticmethod

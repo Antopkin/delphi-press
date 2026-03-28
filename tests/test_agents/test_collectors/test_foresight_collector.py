@@ -127,7 +127,7 @@ async def test_foresight_collector_success(
 ):
     """All 3 APIs return data -- collector combines them."""
     mock_metaculus.fetch_questions.return_value = make_metaculus_questions(2)
-    mock_polymarket.fetch_markets.return_value = make_polymarket_markets(2)
+    mock_polymarket.fetch_enriched_markets.return_value = make_polymarket_markets(2)
     mock_gdelt.fetch_articles.return_value = make_gdelt_articles(3)
 
     result = await agent.execute(make_context())
@@ -154,7 +154,7 @@ async def test_foresight_collector_partial_failure(
 ):
     """One API fails, others succeed -- collector continues."""
     mock_metaculus.fetch_questions.side_effect = RuntimeError("Metaculus down")
-    mock_polymarket.fetch_markets.return_value = make_polymarket_markets(2)
+    mock_polymarket.fetch_enriched_markets.return_value = make_polymarket_markets(2)
     mock_gdelt.fetch_articles.return_value = make_gdelt_articles(1)
 
     result = await agent.execute(make_context())
@@ -175,7 +175,7 @@ async def test_foresight_collector_polymarket_fails(
 ):
     """Polymarket fails, others succeed."""
     mock_metaculus.fetch_questions.return_value = make_metaculus_questions(3)
-    mock_polymarket.fetch_markets.side_effect = ConnectionError("timeout")
+    mock_polymarket.fetch_enriched_markets.side_effect = ConnectionError("timeout")
     mock_gdelt.fetch_articles.return_value = make_gdelt_articles(2)
 
     result = await agent.execute(make_context())
@@ -200,7 +200,7 @@ async def test_foresight_collector_all_fail(
 ):
     """All APIs fail -- returns empty but success=True (no raise)."""
     mock_metaculus.fetch_questions.side_effect = RuntimeError("down")
-    mock_polymarket.fetch_markets.side_effect = RuntimeError("down")
+    mock_polymarket.fetch_enriched_markets.side_effect = RuntimeError("down")
     mock_gdelt.fetch_articles.side_effect = RuntimeError("down")
 
     result = await agent.execute(make_context())
@@ -222,7 +222,7 @@ async def test_foresight_collector_run_all_fail_still_success(
 ):
     """run() wrapping: even with empty data, agent returns success=True."""
     mock_metaculus.fetch_questions.side_effect = RuntimeError("down")
-    mock_polymarket.fetch_markets.side_effect = RuntimeError("down")
+    mock_polymarket.fetch_enriched_markets.side_effect = RuntimeError("down")
     mock_gdelt.fetch_articles.side_effect = RuntimeError("down")
 
     agent_result = await agent.run(make_context())
@@ -253,7 +253,7 @@ async def test_foresight_collector_maps_metaculus_questions(
             "number_of_forecasters": 456,
         }
     ]
-    mock_polymarket.fetch_markets.return_value = []
+    mock_polymarket.fetch_enriched_markets.return_value = []
     mock_gdelt.fetch_articles.return_value = []
 
     result = await agent.execute(make_context())
@@ -282,7 +282,7 @@ async def test_foresight_collector_maps_polymarket_markets(
 ):
     """Verify Polymarket market mapping structure."""
     mock_metaculus.fetch_questions.return_value = []
-    mock_polymarket.fetch_markets.return_value = [
+    mock_polymarket.fetch_enriched_markets.return_value = [
         {
             "question": "Will BTC exceed 100k?",
             "slug": "btc-100k",
@@ -304,6 +304,91 @@ async def test_foresight_collector_maps_polymarket_markets(
     assert sig["probability"] == 0.42
     assert sig["volume_usd"] == 250000
     assert sig["categories"] == ["crypto"]
+    assert sig["market_id"] == ""  # no id in input dict
+
+
+# ── Mapping: Polymarket enrichment ─────────────────────────────────
+
+
+async def test_foresight_collector_maps_polymarket_with_enrichment(
+    agent,
+    make_context,
+    mock_metaculus,
+    mock_polymarket,
+    mock_gdelt,
+):
+    """Polymarket markets with price_history get distribution metrics."""
+    mock_metaculus.fetch_questions.return_value = []
+    mock_polymarket.fetch_enriched_markets.return_value = [
+        {
+            "id": "m1",
+            "question": "Will BTC exceed 100k?",
+            "slug": "btc-100k",
+            "yes_probability": 0.65,
+            "volume": 500000,
+            "liquidity": 80000,
+            "categories": ["crypto"],
+            "price_history": [
+                0.5,
+                0.52,
+                0.55,
+                0.58,
+                0.6,
+                0.62,
+                0.65,
+                0.63,
+                0.64,
+                0.65,
+                0.64,
+                0.65,
+                0.65,
+                0.65,
+            ],
+        }
+    ]
+    mock_gdelt.fetch_articles.return_value = []
+
+    result = await agent.execute(make_context())
+    signals = result["foresight_signals"]
+
+    assert len(signals) == 1
+    sig = signals[0]
+    assert sig["market_id"] == "m1"
+    assert "volatility_7d" in sig
+    assert "trend_7d" in sig
+    assert "lw_probability" in sig
+    assert "liquidity" in sig
+    assert sig["liquidity"] == 80000
+    assert sig["distribution_reliable"] is True
+    assert sig["ci_low"] is not None
+
+
+async def test_foresight_collector_maps_polymarket_without_price_history(
+    agent,
+    make_context,
+    mock_metaculus,
+    mock_polymarket,
+    mock_gdelt,
+):
+    """Polymarket markets without price_history get only base fields."""
+    mock_metaculus.fetch_questions.return_value = []
+    mock_polymarket.fetch_enriched_markets.return_value = [
+        {
+            "question": "Simple market?",
+            "slug": "simple",
+            "yes_probability": 0.5,
+            "volume": 10000,
+            "categories": [],
+        }
+    ]
+    mock_gdelt.fetch_articles.return_value = []
+
+    result = await agent.execute(make_context())
+    sig = result["foresight_signals"][0]
+
+    assert sig["source"] == "polymarket"
+    assert "volatility_7d" not in sig
+    assert "distribution_reliable" not in sig
 
 
 # ── Mapping: GDELT ──────────────────────────────────────────────────
@@ -318,7 +403,7 @@ async def test_foresight_collector_maps_gdelt_articles(
 ):
     """Verify GDELT article mapping structure."""
     mock_metaculus.fetch_questions.return_value = []
-    mock_polymarket.fetch_markets.return_value = []
+    mock_polymarket.fetch_enriched_markets.return_value = []
     mock_gdelt.fetch_articles.return_value = [
         {
             "title": "Major Summit Begins",
@@ -354,7 +439,7 @@ async def test_foresight_events_capped(
 ):
     """Metaculus results are capped at MAX_FORESIGHT_EVENTS."""
     mock_metaculus.fetch_questions.return_value = make_metaculus_questions(50)
-    mock_polymarket.fetch_markets.return_value = []
+    mock_polymarket.fetch_enriched_markets.return_value = []
     mock_gdelt.fetch_articles.return_value = []
 
     result = await agent.execute(make_context())
@@ -370,7 +455,7 @@ async def test_foresight_signals_capped(
 ):
     """Combined Polymarket + GDELT signals are capped at MAX_FORESIGHT_SIGNALS."""
     mock_metaculus.fetch_questions.return_value = []
-    mock_polymarket.fetch_markets.return_value = make_polymarket_markets(60)
+    mock_polymarket.fetch_enriched_markets.return_value = make_polymarket_markets(60)
     mock_gdelt.fetch_articles.return_value = make_gdelt_articles(60)
 
     result = await agent.execute(make_context())
@@ -415,7 +500,7 @@ async def test_foresight_collector_empty_returns(
 ):
     """APIs succeed but return empty lists -- sources_used is empty."""
     mock_metaculus.fetch_questions.return_value = []
-    mock_polymarket.fetch_markets.return_value = []
+    mock_polymarket.fetch_enriched_markets.return_value = []
     mock_gdelt.fetch_articles.return_value = []
 
     result = await agent.execute(make_context())

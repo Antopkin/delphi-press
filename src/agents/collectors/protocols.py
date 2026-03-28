@@ -120,6 +120,10 @@ class PolymarketClientProto(Protocol):
 
     async def fetch_markets(self, query: str, *, limit: int = 20) -> list[dict[str, Any]]: ...
 
+    async def fetch_enriched_markets(
+        self, query: str, *, limit: int = 20
+    ) -> list[dict[str, Any]]: ...
+
 
 class GdeltClientProto(Protocol):
     """Протокол для GDELT DOC 2.0 API клиента."""
