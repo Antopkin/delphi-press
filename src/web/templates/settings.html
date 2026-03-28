@@ -9,11 +9,11 @@
     <p>Управление API-ключами для запуска прогнозов.</p>
 
     {# ── Existing keys ── #}
-    <h2>Ваши ключи</h2>
+    <h2 class="fn-section-heading">Ваши ключи</h2>
 
     {% if keys %}
     <div class="overflow-auto">
-        <table id="keys-table">
+        <table id="keys-table" class="fn-table-hover">
             <thead>
                 <tr>
                     <th>Провайдер</th>
@@ -40,10 +40,9 @@
                                 type="button">
                             Проверить
                         </button>
-                        <button class="outline fn-delete-btn"
+                        <button class="outline fn-delete-btn fn-btn-danger"
                                 data-key-id="{{ key.id }}"
-                                type="button"
-                                style="color: var(--fn-confidence-speculative);">
+                                type="button">
                             Удалить
                         </button>
                         <small class="fn-validate-result" data-key-id="{{ key.id }}"></small>
@@ -58,7 +57,7 @@
     {% endif %}
 
     {# ── Add key form ── #}
-    <h2>Добавить ключ</h2>
+    <h2 class="fn-section-heading">Добавить ключ</h2>
 
     <form id="add-key-form">
         <div class="grid">
@@ -83,7 +82,7 @@
         <button type="submit" id="add-key-btn">Добавить</button>
 
         <p id="add-key-error" class="fn-form-error" role="alert" hidden></p>
-        <p id="add-key-success" style="color: var(--fn-step-done);" hidden></p>
+        <p id="add-key-success" class="fn-msg-success" hidden></p>
     </form>
 </section>
 {% endblock %}

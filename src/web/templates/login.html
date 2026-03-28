@@ -4,7 +4,11 @@
 {% block title %}Вход -- Delphi Press{% endblock %}
 
 {% block content %}
-<section style="max-width: 420px; margin: 2rem auto;">
+<section class="fn-auth-section">
+    <div class="fn-auth-logo">
+        <a href="/" class="fn-logo"><strong>Delphi Press</strong></a>
+    </div>
+
     <h1>Вход</h1>
 
     {% if error %}
@@ -25,7 +29,7 @@
         <button type="submit">Войти</button>
     </form>
 
-    <p style="text-align: center; margin-top: 1rem;">
+    <p class="fn-text-center">
         <small>Нет аккаунта? <a href="/register">Зарегистрироваться</a></small>
     </p>
 </section>

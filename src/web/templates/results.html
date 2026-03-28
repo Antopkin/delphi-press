@@ -9,29 +9,31 @@
 <section>
     <hgroup>
         <h1>Прогноз для {{ prediction.outlet_name }}</h1>
-        <p>
-            Дата прогноза: <strong>{{ prediction.target_date.strftime('%d.%m.%Y') }}</strong>
-            {% if prediction.total_duration_ms %}
-            &middot;
-            Выполнен за {{ (prediction.total_duration_ms / 1000) | round(0) | int }} сек.
-            {% endif %}
-            {% if prediction.total_llm_cost_usd and prediction.total_llm_cost_usd > 0 %}
-                &middot;
-                Стоимость: ${{ prediction.total_llm_cost_usd | round(2) }}
-            {% endif %}
-        </p>
     </hgroup>
+
+    {# Meta chips row #}
+    <div class="fn-meta-chips">
+        <span class="fn-meta-chip">{{ prediction.target_date.strftime('%d.%m.%Y') }}</span>
+        {% if prediction.total_duration_ms %}
+        <span class="fn-meta-chip">{{ (prediction.total_duration_ms / 1000) | round(0) | int }} сек.</span>
+        {% endif %}
+        {% if prediction.total_llm_cost_usd and prediction.total_llm_cost_usd > 0 %}
+        <span class="fn-meta-chip fn-tabular-nums">${{ prediction.total_llm_cost_usd | round(2) }}</span>
+        {% endif %}
+    </div>
 </section>
 
 {# ===== HEADLINE CARDS ===== #}
-<section>
+<section data-stagger>
     {% for headline in prediction.headlines %}
+        <div style="--fn-stagger-i: {{ loop.index0 }}">
         {% include "partials/headline_card.html" %}
+        </div>
     {% endfor %}
 </section>
 
 {# ===== ACTIONS ===== #}
-<section style="text-align: center;">
+<section class="fn-text-center">
     <a href="/" role="button">Новый прогноз</a>
 </section>
 

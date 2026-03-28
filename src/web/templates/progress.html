@@ -18,15 +18,15 @@
 <section>
     <progress id="progress-bar" value="0" max="100"></progress>
     <div class="fn-progress-meta">
-        <span id="progress-percent">0%</span>
-        <span id="progress-elapsed"></span>
+        <span id="progress-percent" class="fn-tabular-nums">0%</span>
+        <span id="progress-elapsed" class="fn-tabular-nums"></span>
     </div>
 </section>
 
 {# ===== STEP LIST ===== #}
 <section>
     <article>
-        <ul id="step-list" class="fn-step-list">
+        <ul id="step-list" class="fn-step-list fn-timeline">
             <li class="fn-step fn-step--pending" data-stage="collection">
                 <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
                 <div class="fn-step-content">
@@ -106,13 +106,13 @@
 {# ===== NARRATIVE MESSAGE ===== #}
 <section>
     <article id="narrative-area" class="fn-narrative" hidden>
-        <p id="narrative-message"></p>
+        <p id="narrative-message" class="fn-narrative-serif"></p>
     </article>
 </section>
 
 {# ===== ERROR DISPLAY (hidden by default) ===== #}
 <section id="error-section" hidden>
-    <article class="fn-error-card">
+    <article class="fn-error-card fn-error-entrance">
         <header>
             <h3>Произошла ошибка</h3>
         </header>

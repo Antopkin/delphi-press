@@ -1,36 +1,42 @@
 {# src/web/templates/partials/headline_card.html
    Expects: headline (Headline ORM), loop.index (from {% for %}) #}
 
-<article class="fn-headline-card">
+<article class="fn-headline-card {% if loop.index == 1 %}fn-headline-card--hero{% else %}fn-headline-card--secondary{% endif %}">
     <header>
         <div class="fn-headline-header">
-            <span class="fn-rank">#{{ headline.rank }}</span>
+            <span class="fn-rank-serif">#{{ headline.rank }}</span>
 
             {# Confidence badge -- color-coded #}
             {% set conf = headline.confidence %}
             {% if conf >= 0.8 %}
                 {% set badge_class = "fn-badge--very-high" %}
                 {% set badge_label = "Очень высокая" %}
+                {% set confidence_level = "very-high" %}
             {% elif conf >= 0.6 %}
                 {% set badge_class = "fn-badge--high" %}
                 {% set badge_label = "Высокая" %}
+                {% set confidence_level = "high" %}
             {% elif conf >= 0.4 %}
                 {% set badge_class = "fn-badge--moderate" %}
                 {% set badge_label = "Средняя" %}
+                {% set confidence_level = "moderate" %}
             {% elif conf >= 0.2 %}
                 {% set badge_class = "fn-badge--low" %}
                 {% set badge_label = "Низкая" %}
+                {% set confidence_level = "low" %}
             {% else %}
                 {% set badge_class = "fn-badge--speculative" %}
                 {% set badge_label = "Спекулятивно" %}
+                {% set confidence_level = "speculative" %}
             {% endif %}
 
             <span class="fn-badge {{ badge_class }}">
+                <span class="fn-confidence-dot fn-confidence-dot--{{ confidence_level }}"></span>
                 {{ (conf * 100) | round(0) | int }}% -- {{ badge_label }}
             </span>
 
             {# Category tag #}
-            <span class="fn-category">{{ headline.category }}</span>
+            <span class="fn-category fn-small-caps">{{ headline.category }}</span>
         </div>
     </header>
 
@@ -38,7 +44,7 @@
     <h3 class="fn-headline-text">{{ headline.headline_text }}</h3>
 
     {# First paragraph preview #}
-    <p class="fn-first-paragraph">{{ headline.first_paragraph }}</p>
+    <p class="fn-first-paragraph fn-readable-width">{{ headline.first_paragraph }}</p>
 
     {# Brief reasoning summary #}
     <p class="fn-reasoning-summary">

@@ -15,12 +15,12 @@
 {# ===== DELPHI METHOD ===== #}
 <section>
     <h2>Метод Дельфи</h2>
-    <p>
+    <blockquote class="fn-pull-quote">
         В основе Delphi Press лежит
         <strong>метод Дельфи</strong> -- проверенная методика
         группового прогнозирования, разработанная корпорацией RAND
         в 1960-х годах.
-    </p>
+    </blockquote>
     <p>
         Суть метода: несколько экспертов <em>независимо</em> оценивают
         ситуацию, затем знакомятся с аргументами друг друга
@@ -43,76 +43,71 @@
 <section>
     <h2>Пять экспертов</h2>
 
-    <div class="grid">
-        <article>
-            <header>
-                <div class="fn-persona-icon" aria-hidden="true">&#128202;</div>
-                <h3>Реалист-аналитик</h3>
-            </header>
+    <div class="fn-persona-grid" data-stagger>
+        <div class="fn-persona" style="--fn-stagger-i: 0;">
+            <div class="fn-persona-icon-wrapper">
+                <span class="fn-persona-icon" aria-hidden="true">&#128202;</span>
+            </div>
+            <h3>Реалист-аналитик</h3>
             <p>
                 Опытный аналитик политических рисков. Мыслит категориями
                 базовых ставок и исторических аналогий. Начинает с вопроса:
                 &laquo;Как часто подобное происходило раньше?&raquo;
             </p>
-            <footer><small>Модель: Claude Opus 4.6</small></footer>
-        </article>
+            <small class="fn-text-muted">Модель: Claude Opus 4.6</small>
+        </div>
 
-        <article>
-            <header>
-                <div class="fn-persona-icon" aria-hidden="true">&#127758;</div>
-                <h3>Геополитический стратег</h3>
-            </header>
+        <div class="fn-persona" style="--fn-stagger-i: 1;">
+            <div class="fn-persona-icon-wrapper">
+                <span class="fn-persona-icon" aria-hidden="true">&#127758;</span>
+            </div>
+            <h3>Геополитический стратег</h3>
             <p>
                 Специалист по международным отношениям. Видит мир через
                 призму силовых балансов и стратегических интересов.
                 Ключевой вопрос: &laquo;Cui bono?&raquo;
             </p>
-            <footer><small>Модель: Claude Opus 4.6</small></footer>
-        </article>
-    </div>
+            <small class="fn-text-muted">Модель: Claude Opus 4.6</small>
+        </div>
 
-    <div class="grid">
-        <article>
-            <header>
-                <div class="fn-persona-icon" aria-hidden="true">&#128176;</div>
-                <h3>Экономический аналитик</h3>
-            </header>
+        <div class="fn-persona" style="--fn-stagger-i: 2;">
+            <div class="fn-persona-icon-wrapper">
+                <span class="fn-persona-icon" aria-hidden="true">&#128176;</span>
+            </div>
+            <h3>Экономический аналитик</h3>
             <p>
                 Макроэкономист и рыночный аналитик. Следит за деньгами:
                 потоки капитала, фискальная политика, санкции. Принцип:
                 &laquo;Следуй за деньгами&raquo;.
             </p>
-            <footer><small>Модель: Claude Opus 4.6</small></footer>
-        </article>
+            <small class="fn-text-muted">Модель: Claude Opus 4.6</small>
+        </div>
 
-        <article>
-            <header>
-                <div class="fn-persona-icon" aria-hidden="true">&#128240;</div>
-                <h3>Медиа-эксперт</h3>
-            </header>
+        <div class="fn-persona" style="--fn-stagger-i: 3;">
+            <div class="fn-persona-icon-wrapper">
+                <span class="fn-persona-icon" aria-hidden="true">&#128240;</span>
+            </div>
+            <h3>Медиа-эксперт</h3>
             <p>
                 Бывший редактор крупного агентства. Думает категориями
                 &laquo;что попадёт в выпуск&raquo;: новостная ценность,
                 редакционная логика, медиа-насыщенность.
             </p>
-            <footer><small>Модель: Claude Opus 4.6</small></footer>
-        </article>
-    </div>
+            <small class="fn-text-muted">Модель: Claude Opus 4.6</small>
+        </div>
 
-    <div class="grid">
-        <article>
-            <header>
-                <div class="fn-persona-icon" aria-hidden="true">&#128520;</div>
-                <h3>Адвокат дьявола</h3>
-            </header>
+        <div class="fn-persona" style="--fn-stagger-i: 4;">
+            <div class="fn-persona-icon-wrapper">
+                <span class="fn-persona-icon" aria-hidden="true">&#128520;</span>
+            </div>
+            <h3>Адвокат дьявола</h3>
             <p>
                 Систематический контрариан. Его задача -- найти то,
                 что остальные пропустили. Применяет технику pre-mortem:
                 &laquo;Допустим, прогноз провалился -- что пошло не так?&raquo;
             </p>
-            <footer><small>Модель: Claude Opus 4.6</small></footer>
-        </article>
-        <div>{# Empty grid cell for alignment #}</div>
+            <small class="fn-text-muted">Модель: Claude Opus 4.6</small>
+        </div>
     </div>
 </section>
 
@@ -123,7 +118,7 @@
         Каждый прогноз получает числовую оценку уверенности
         от 0% до 100%, которая затем переводится в качественную шкалу:
     </p>
-    <table>
+    <table class="fn-table-hover">
         <thead>
             <tr>
                 <th scope="col">Диапазон</th>
@@ -166,39 +161,39 @@
     <h2>Стадии прогнозирования</h2>
     <p>Полный цикл прогнозирования состоит из 9 стадий:</p>
     <ol>
-        <li>
+        <li data-reveal>
             <strong>Сбор данных</strong> -- загрузка новостей из RSS-фидов, поисковых систем,
             архивов целевого издания. Параллельно работают три агента-сборщика.
         </li>
-        <li>
+        <li data-reveal>
             <strong>Идентификация событий</strong> -- кластеризация новостных сигналов
             в события, определение ключевых трендов.
         </li>
-        <li>
+        <li data-reveal>
             <strong>Анализ траекторий</strong> -- для каждого события строятся
             сценарии развития и матрица перекрёстных влияний.
         </li>
-        <li>
+        <li data-reveal>
             <strong>Дельфи: раунд 1</strong> -- пять ИИ-экспертов независимо
             оценивают, что произойдёт и как это будет освещено.
         </li>
-        <li>
+        <li data-reveal>
             <strong>Дельфи: раунд 2</strong> -- медиатор выявляет расхождения,
             эксперты пересматривают оценки с учётом аргументов коллег.
         </li>
-        <li>
+        <li data-reveal>
             <strong>Консенсус</strong> -- агрегация оценок, калибровка
             вероятностей, ранжирование прогнозов.
         </li>
-        <li>
+        <li data-reveal>
             <strong>Анализ фрейминга</strong> -- как именно целевое издание
             подаст каждое событие (угол, тон, акценты).
         </li>
-        <li>
+        <li data-reveal>
             <strong>Генерация заголовков</strong> -- создание заголовков
             и первых абзацев в стиле целевого издания.
         </li>
-        <li>
+        <li data-reveal>
             <strong>Контроль качества</strong> -- фактическая проверка,
             стилистический анализ, дедупликация.
         </li>
@@ -239,4 +234,8 @@
     </ul>
 </section>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/reveal.js') }}"></script>
 {% endblock %}

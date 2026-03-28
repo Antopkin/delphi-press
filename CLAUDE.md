@@ -38,6 +38,30 @@
 - `tests/fixtures/mock_llm.py` → MockLLMClient для E2E тестов
 - `.claude/skills/predict/` → Claude Code predict skill (сессия 12)
 
+## Дизайн-система (Impeccable)
+
+Проект использует [Impeccable](https://github.com/pbakaus/impeccable) — систему дизайн-скиллов для Claude Code (21 скилл в `.claude/skills/`).
+
+**Первый запуск**: выполни `/teach-impeccable` для настройки дизайн-контекста проекта. Результат сохраняется в `.impeccable.md`.
+
+**Основной скилл**: `/frontend-design` — активируется при работе с `src/web/`. Содержит 7 справочных модулей (типографика, цвет, пространство, анимация, взаимодействие, адаптивность, UX-тексты).
+
+**Рабочие команды** (20 стиринг-команд):
+
+| Категория | Команды |
+|---|---|
+| Аудит и ревью | `/audit`, `/critique`, `/polish` |
+| Типографика и цвет | `/typeset`, `/colorize` |
+| Лейаут и пространство | `/arrange`, `/adapt` |
+| Выразительность | `/bolder`, `/quieter`, `/delight` |
+| Движение и взаимодействие | `/animate`, `/onboard` |
+| Оптимизация и упрощение | `/optimize`, `/harden`, `/distill`, `/clarify` |
+| Рефакторинг | `/extract`, `/normalize` |
+| Продвинутое | `/overdrive` |
+| Настройка | `/teach-impeccable` |
+
+**Стек фронтенда**: Pico.css 2.0 (CDN) + `custom.css` + Newsreader/Source Sans 3/JetBrains Mono (Google Fonts). Спека: `docs/09-frontend.md`.
+
 ## Доменный глоссарий
 
 **Перед работой с кодом — прочитай `GLOSSARY.md`.** Определения всех доменных терминов (медиация, событийная нить, фрейминг и др.) для предотвращения семантического дрифта.

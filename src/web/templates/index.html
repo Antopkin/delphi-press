@@ -19,36 +19,32 @@
 
 {# ===== HOW IT WORKS ===== #}
 <section>
-    <div class="grid">
-        <div>
-            <hgroup>
-                <h3>1. Выберите СМИ</h3>
-                <p>Укажите издание: ТАСС, РБК, BBC Russian, Незыгарь или любое другое</p>
-            </hgroup>
+    <div class="fn-steps-flow" data-stagger>
+        <div class="fn-flow-step" style="--fn-stagger-i: 0;">
+            <span class="fn-flow-number">1</span>
+            <strong>Выберите СМИ</strong>
+            <small>Укажите издание: ТАСС, РБК, BBC Russian, Незыгарь или любое другое</small>
         </div>
-        <div>
-            <hgroup>
-                <h3>2. Укажите дату</h3>
-                <p>На какой день нужен прогноз -- от завтра до +30 дней</p>
-            </hgroup>
+        <div class="fn-flow-connector" aria-hidden="true"></div>
+        <div class="fn-flow-step" style="--fn-stagger-i: 1;">
+            <span class="fn-flow-number">2</span>
+            <strong>Укажите дату</strong>
+            <small>На какой день нужен прогноз -- от завтра до +30 дней</small>
         </div>
-        <div>
-            <hgroup>
-                <h3>3. Получите прогноз</h3>
-                <p>Система соберёт данные, проведёт экспертный анализ и выдаст заголовки с обоснованиями</p>
-            </hgroup>
+        <div class="fn-flow-connector" aria-hidden="true"></div>
+        <div class="fn-flow-step" style="--fn-stagger-i: 2;">
+            <span class="fn-flow-number">3</span>
+            <strong>Получите прогноз</strong>
+            <small>Система соберёт данные, проведёт экспертный анализ и выдаст заголовки с обоснованиями</small>
         </div>
     </div>
 </section>
 
 {# ===== PREDICTION FORM ===== #}
 <section>
-    <article>
-        <header>
-            <h2>Новый прогноз</h2>
-        </header>
+    <h2>Новый прогноз</h2>
 
-        <form id="prediction-form" action="/api/v1/predictions" method="post">
+    <form id="prediction-form" action="/api/v1/predictions" method="post">
 
             {# -- Outlet field with autocomplete -- #}
             <label for="outlet">
@@ -126,7 +122,6 @@
         {# -- Error display area -- #}
         <div id="form-error" class="fn-form-error" hidden role="alert"></div>
 
-    </article>
 </section>
 
 {# ===== MY / RECENT PREDICTIONS ===== #}
@@ -134,7 +129,7 @@
 <section>
     <h2>Мои прогнозы</h2>
     <div class="overflow-auto">
-        <table>
+        <table class="fn-table-hover">
             <thead>
                 <tr>
                     <th scope="col">СМИ</th>
@@ -144,9 +139,9 @@
                     <th scope="col"></th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody data-stagger>
                 {% for pred in recent_predictions %}
-                <tr>
+                <tr style="--fn-stagger-i: {{ loop.index0 }}">
                     <td>{{ pred.outlet_name }}</td>
                     <td>{{ pred.target_date.strftime('%d.%m.%Y') }}</td>
                     <td>
@@ -185,7 +180,7 @@
     </div>
 </section>
 {% elif not current_user %}
-<section style="text-align: center;">
+<section class="fn-text-center">
     <p>
         <a href="/register">Зарегистрируйтесь</a>, чтобы сохранять и отслеживать свои прогнозы.
     </p>

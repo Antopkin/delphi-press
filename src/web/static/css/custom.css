@@ -1,83 +1,384 @@
 /**
- * src/web/static/css/custom.css
+ * src/web/static/css/custom.css — Delphi Press design system
  *
- * Project-specific styles for Delphi Press.
- * Pico.css handles base typography, forms, buttons, and layout.
- * This file only styles custom components:
- *   - Confidence badges
- *   - Progress step indicators
- *   - Headline cards
- *   - Autocomplete dropdown
- *   - Animations
- *   - Mobile adjustments
+ * Pico.css 2.0 handles base styles (forms, tables, buttons, layout).
+ * This file adds the project design system and custom components.
+ *
+ * Conventions:
+ *   - All custom classes prefixed `fn-`
+ *   - Modifiers use BEM-like `--`: fn-badge--success
+ *   - Colors via CSS variables: --fn-* (project) and --pico-* (overrides)
+ *
+ * Sections:
+ *   1.  CSS Custom Properties (:root)
+ *   2.  Typography overrides
+ *   3.  Focus & interaction states
+ *   4.  Logo & navigation
+ *   5.  Hero section
+ *   6.  Badges (confidence, status)
+ *   7.  Headline cards
+ *   8.  Reasoning block
+ *   9.  Progress: step list (vertical timeline)
+ *  10.  Progress: bar, meta, narrative
+ *  11.  Error card
+ *  12.  Autocomplete dropdown
+ *  13.  Form: error display, auth section
+ *  14.  Preset selection (segmented control)
+ *  15.  About page: personas, pipeline timeline
+ *  16.  Animations & keyframes
+ *  17.  Scroll-reveal & stagger
+ *  18.  Button & link microinteractions
+ *  19.  Mobile adjustments
+ *  20.  Utilities
  */
 
 /* ===================================================================
-   CSS CUSTOM PROPERTIES
+   1. CSS CUSTOM PROPERTIES
    =================================================================== */
 
 :root {
+  /* ---- Typography ---- */
+  --fn-font-heading: "Newsreader", "Georgia", serif;
+  --fn-font-body: "Source Sans 3", "Segoe UI", sans-serif;
+  --fn-font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  /* Type scale (perfect fourth, 1.333) */
+  --fn-text-xs:   0.75rem;   /* 12px — captions, meta */
+  --fn-text-sm:   0.875rem;  /* 14px — secondary UI */
+  --fn-text-base: 1rem;      /* 16px — body */
+  --fn-text-lg:   1.333rem;  /* ~21px — subheadings */
+  --fn-text-xl:   1.777rem;  /* ~28px — section titles */
+  --fn-text-2xl:  2.369rem;  /* ~38px — page titles */
+
+  /* ---- Color: OKLCH with blue-tinted neutrals (hue 250) ---- */
+
   /* Primary (override Pico) */
   --pico-primary: #2563eb;
   --pico-primary-hover: #1d4ed8;
   --pico-primary-focus: rgba(37, 99, 235, 0.25);
 
-  /* Confidence colors */
-  --fn-confidence-very-high: #16a34a;
-  --fn-confidence-high: #2563eb;
-  --fn-confidence-moderate: #d97706;
-  --fn-confidence-low: #ea580c;
-  --fn-confidence-speculative: #dc2626;
+  /* Surfaces (blue-tinted, not pure gray) */
+  --fn-surface-0: oklch(99% 0.005 250);   /* page bg */
+  --fn-surface-1: oklch(96.5% 0.008 250); /* card/section bg */
+  --fn-surface-2: oklch(93% 0.010 250);   /* hover bg */
+  --fn-border:    oklch(88% 0.012 250);    /* borders */
 
-  /* Card */
-  --fn-card-bg: #f8fafc;
-  --fn-card-border: #e2e8f0;
+  /* Text (blue-tinted) */
+  --fn-text:        oklch(20% 0.015 250);
+  --fn-text-heading: oklch(15% 0.020 250);
+  --fn-text-muted:  oklch(55% 0.015 250);
 
-  /* Steps */
-  --fn-step-done: #16a34a;
-  --fn-step-active: #2563eb;
-  --fn-step-pending: #94a3b8;
+  /* Confidence semantic colors */
+  --fn-confidence-very-high: oklch(58% 0.17 145);  /* green */
+  --fn-confidence-high:      oklch(55% 0.20 250);  /* blue */
+  --fn-confidence-moderate:  oklch(62% 0.18 75);   /* amber */
+  --fn-confidence-low:       oklch(58% 0.19 45);   /* orange */
+  --fn-confidence-speculative: oklch(52% 0.20 25); /* red */
+
+  /* Hex fallbacks for older browsers (used in @supports checks) */
+  --fn-confidence-very-high-hex: #16a34a;
+  --fn-confidence-high-hex:      #2563eb;
+  --fn-confidence-moderate-hex:  #d97706;
+  --fn-confidence-low-hex:       #ea580c;
+  --fn-confidence-speculative-hex: #dc2626;
+
+  /* Card (aliases for backwards compat with existing templates) */
+  --fn-card-bg: oklch(96.5% 0.008 250);
+  --fn-card-border: oklch(88% 0.012 250);
+
+  /* Step states */
+  --fn-step-done:    oklch(58% 0.17 145);
+  --fn-step-active:  oklch(55% 0.20 250);
+  --fn-step-pending: oklch(65% 0.015 250);
+
+  /* ---- Spacing scale (4pt base) ---- */
+  --fn-space-1:  0.25rem;   /* 4px */
+  --fn-space-2:  0.5rem;    /* 8px */
+  --fn-space-3:  0.75rem;   /* 12px */
+  --fn-space-4:  1rem;      /* 16px */
+  --fn-space-6:  1.5rem;    /* 24px */
+  --fn-space-8:  2rem;      /* 32px */
+  --fn-space-12: 3rem;      /* 48px */
+  --fn-space-16: 4rem;      /* 64px */
+  --fn-space-24: 6rem;      /* 96px */
+
+  /* ---- Motion ---- */
+  --fn-ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --fn-ease-out-expo:  cubic-bezier(0.16, 1, 0.3, 1);
+  --fn-ease-in-quart:  cubic-bezier(0.7, 0, 0.84, 0);
+  --fn-ease-in-out:    cubic-bezier(0.65, 0, 0.35, 1);
+
+  --fn-duration-instant: 100ms;
+  --fn-duration-fast:    200ms;
+  --fn-duration-normal:  300ms;
+  --fn-duration-slow:    500ms;
+
+  /* ---- Radius ---- */
+  --fn-radius-sm: 0.25rem;
+  --fn-radius-md: 0.5rem;
+  --fn-radius-lg: 0.75rem;
+  --fn-radius-full: 9999px;
 }
 
-
-/* ===================================================================
-   LOGO
-   =================================================================== */
-
-.fn-logo {
-  text-decoration: none;
-}
-
-
-/* ===================================================================
-   HERO SECTION
-   =================================================================== */
-
-.fn-hero {
-  text-align: center;
-  padding: 2rem 0 1rem;
-}
-
-.fn-hero h1 {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.fn-hero p {
-  max-width: 600px;
-  margin: 0 auto;
-  color: var(--pico-muted-color);
-}
-
-@media (max-width: 768px) {
-  .fn-hero h1 {
-    font-size: 1.75rem;
+/* Reduced motion: zero out decorative durations */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fn-duration-instant: 0ms;
+    --fn-duration-fast:    0ms;
+    --fn-duration-normal:  0ms;
+    --fn-duration-slow:    0ms;
   }
 }
 
 
 /* ===================================================================
-   BADGES (confidence, status)
+   2. TYPOGRAPHY OVERRIDES
+   =================================================================== */
+
+body {
+  font-family: var(--fn-font-body);
+  color: var(--fn-text);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--fn-font-heading);
+  color: var(--fn-text-heading);
+}
+
+code, pre, kbd, samp {
+  font-family: var(--fn-font-mono);
+}
+
+/* Tabular figures for numbers that should align */
+.fn-tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* ===================================================================
+   3. FOCUS & INTERACTION STATES
+   =================================================================== */
+
+:focus-visible {
+  outline: 2px solid var(--pico-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+
+/* ===================================================================
+   4. LOGO & NAVIGATION
+   =================================================================== */
+
+.fn-logo {
+  text-decoration: none;
+  font-family: var(--fn-font-heading);
+}
+
+/* Nav bar styling */
+nav.fn-nav {
+  border-bottom: 1px solid var(--fn-border);
+  margin-bottom: var(--fn-space-8);
+}
+
+/* Nav link hover underline animation */
+nav a:not(.fn-logo) {
+  position: relative;
+  text-decoration: none;
+}
+
+nav a:not(.fn-logo)::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--pico-primary);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--fn-duration-normal) var(--fn-ease-out-quart);
+}
+
+nav a:not(.fn-logo):hover::after,
+nav a:not(.fn-logo).fn-nav-active::after {
+  transform: scaleX(1);
+}
+
+/* Mobile hamburger nav */
+.fn-mobile-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .fn-desktop-nav {
+    display: none;
+  }
+  .fn-mobile-nav {
+    display: block;
+  }
+  .fn-mobile-nav summary {
+    cursor: pointer;
+    list-style: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    padding: var(--fn-space-2);
+  }
+  .fn-mobile-nav summary::-webkit-details-marker {
+    display: none;
+  }
+  .fn-mobile-nav ul {
+    padding: var(--fn-space-4) 0;
+  }
+  .fn-mobile-nav li {
+    padding: var(--fn-space-2) 0;
+  }
+}
+
+/* Sticky footer layout */
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+body > main {
+  flex: 1;
+}
+
+/* Footer styling */
+.fn-footer {
+  border-top: 1px solid var(--fn-border);
+  padding-top: var(--fn-space-6);
+  margin-top: var(--fn-space-12);
+  color: var(--fn-text-muted);
+}
+
+.fn-footer-grid {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--fn-space-4);
+}
+
+.fn-footer-right {
+  text-align: right;
+}
+
+.fn-footer a {
+  text-decoration: none;
+}
+
+.fn-footer svg {
+  vertical-align: text-bottom;
+  margin-right: 0.2em;
+}
+
+/* Page entrance animation */
+main {
+  animation: fn-fade-in-up var(--fn-duration-slow) var(--fn-ease-out-expo);
+}
+
+
+/* ===================================================================
+   5. HERO SECTION
+   =================================================================== */
+
+.fn-hero {
+  padding: var(--fn-space-12) 0 var(--fn-space-8);
+}
+
+.fn-hero h1 {
+  font-family: var(--fn-font-heading);
+  font-size: clamp(1.75rem, 4vw + 1rem, var(--fn-text-2xl));
+  line-height: 1.2;
+  margin-bottom: var(--fn-space-3);
+  animation: fn-fade-in-up var(--fn-duration-slow) var(--fn-ease-out-expo);
+}
+
+.fn-hero p {
+  max-width: 600px;
+  color: var(--fn-text-muted);
+  font-size: var(--fn-text-lg);
+  line-height: 1.5;
+  animation: fn-fade-in-up var(--fn-duration-slow) var(--fn-ease-out-expo);
+  animation-delay: 150ms;
+  animation-fill-mode: both;
+}
+
+
+/* ===================================================================
+   5b. HOW IT WORKS: HORIZONTAL NUMBERED FLOW
+   =================================================================== */
+
+.fn-steps-flow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--fn-space-4);
+  padding: var(--fn-space-8) 0;
+}
+
+.fn-flow-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fn-space-2);
+}
+
+.fn-flow-number {
+  font-family: var(--fn-font-heading);
+  font-size: var(--fn-text-xl);
+  color: var(--fn-text-muted);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.fn-flow-step strong {
+  font-size: var(--fn-text-base);
+}
+
+.fn-flow-step small {
+  color: var(--fn-text-muted);
+  font-size: var(--fn-text-sm);
+  line-height: 1.5;
+}
+
+.fn-flow-connector {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2px;
+  background: var(--fn-border);
+  margin-top: 1rem;
+}
+
+/* ===================================================================
+   5c. TABLE ROW HOVER
+   =================================================================== */
+
+.fn-table-hover tbody tr {
+  transition: background-color var(--fn-duration-fast) var(--fn-ease-out-quart);
+}
+
+.fn-table-hover tbody tr:hover {
+  background-color: var(--fn-surface-1);
+}
+
+@media (max-width: 768px) {
+  .fn-steps-flow {
+    flex-direction: column;
+  }
+  .fn-flow-connector {
+    width: 2px;
+    height: 1.5rem;
+    margin-left: 0.75rem;
+    margin-top: 0;
+  }
+}
+
+
+/* ===================================================================
+   6. BADGES (confidence, status)
    =================================================================== */
 
 .fn-badge {
@@ -127,7 +428,7 @@
 
 
 /* ===================================================================
-   HEADLINE CARDS
+   7. HEADLINE CARDS
    =================================================================== */
 
 .fn-headline-card {
@@ -190,7 +491,7 @@
 
 
 /* ===================================================================
-   REASONING BLOCK (expandable <details>)
+   8. REASONING BLOCK (expandable <details>)
    =================================================================== */
 
 .fn-reasoning-block {
@@ -273,7 +574,7 @@
 
 
 /* ===================================================================
-   PROGRESS PAGE: STEP LIST
+   9. PROGRESS PAGE: STEP LIST (vertical timeline)
    =================================================================== */
 
 .fn-step-list {
@@ -349,9 +650,56 @@
   color: inherit;
 }
 
+/* Vertical timeline connecting line */
+.fn-timeline {
+  position: relative;
+  padding-left: var(--fn-space-8);
+}
+
+.fn-timeline::before {
+  content: "";
+  position: absolute;
+  left: 0.75rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--fn-border);
+}
+
+.fn-timeline .fn-step {
+  position: relative;
+  border-bottom: none;
+  padding: var(--fn-space-3) 0;
+}
+
+.fn-timeline .fn-step-icon {
+  position: absolute;
+  left: calc(-1 * var(--fn-space-8) + 0.25rem);
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fn-surface-0);
+  z-index: 1;
+  font-size: 0.9rem;
+}
+
+/* Done step: green connecting line segment */
+.fn-timeline .fn-step--done .fn-step-icon {
+  color: var(--fn-step-done);
+}
+
+/* Active step: enhanced pulse */
+.fn-timeline .fn-step--active .fn-step-icon {
+  color: var(--fn-step-active);
+  animation: fn-pulse 1.5s var(--fn-ease-out-expo) infinite;
+}
+
 
 /* ===================================================================
-   PROGRESS PAGE: META & NARRATIVE
+   10. PROGRESS PAGE: META & NARRATIVE
    =================================================================== */
 
 .fn-progress-meta {
@@ -368,18 +716,37 @@
   color: var(--pico-muted-color);
 }
 
+/* Narrative serif styling */
+.fn-narrative-serif {
+  font-family: var(--fn-font-heading);
+  font-style: italic;
+  color: var(--fn-text-muted);
+  text-align: center;
+  animation: fn-fade-in var(--fn-duration-normal) var(--fn-ease-out-expo);
+}
+
+/* Completion success flash */
+.fn-progress-complete {
+  animation: fn-scale-in var(--fn-duration-normal) var(--fn-ease-out-expo);
+}
+
 
 /* ===================================================================
-   PROGRESS PAGE: ERROR CARD
+   11. ERROR CARD
    =================================================================== */
 
 .fn-error-card {
   border-left: 4px solid var(--fn-confidence-speculative);
 }
 
+/* Error entrance animation */
+.fn-error-entrance {
+  animation: fn-fade-in-up var(--fn-duration-normal) var(--fn-ease-out-expo);
+}
+
 
 /* ===================================================================
-   FORM: AUTOCOMPLETE DROPDOWN
+   12. AUTOCOMPLETE DROPDOWN
    =================================================================== */
 
 .fn-autocomplete-wrapper {
@@ -428,7 +795,7 @@
 
 
 /* ===================================================================
-   FORM: ERROR DISPLAY
+   13. FORM: ERROR DISPLAY
    =================================================================== */
 
 .fn-form-error {
@@ -443,8 +810,57 @@
 
 
 /* ===================================================================
-   ABOUT PAGE: PERSONA ICONS
+   15. ABOUT PAGE: PULL QUOTE, PERSONA GRID, PERSONA ICONS
    =================================================================== */
+
+/* Pull quote */
+.fn-pull-quote {
+  font-family: var(--fn-font-heading);
+  font-style: italic;
+  font-size: var(--fn-text-lg);
+  border-left: 3px solid var(--pico-primary);
+  padding-left: var(--fn-space-6);
+  margin: var(--fn-space-8) 0;
+  color: var(--fn-text-muted);
+}
+
+/* Persona grid: auto-fit responsive */
+.fn-persona-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--fn-space-8);
+  margin: var(--fn-space-8) 0;
+}
+
+.fn-persona {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fn-space-2);
+}
+
+.fn-persona h3 {
+  font-family: var(--fn-font-heading);
+  font-size: var(--fn-text-lg);
+  margin: 0;
+}
+
+.fn-persona p {
+  font-size: var(--fn-text-sm);
+  line-height: 1.6;
+  color: var(--fn-text-muted);
+  max-width: 50ch;
+}
+
+.fn-persona-icon-wrapper {
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fn-surface-1);
+  border-radius: 50%;
+  font-size: 1.5rem;
+}
 
 .fn-persona-icon {
   font-size: 2rem;
@@ -453,16 +869,101 @@
 
 
 /* ===================================================================
-   ANIMATIONS
+   16. ANIMATIONS & KEYFRAMES
    =================================================================== */
 
+@keyframes fn-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fn-fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fn-slide-in-left {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fn-scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fn-shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
 @keyframes fn-pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+@keyframes fn-shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-4px); }
+  75%      { transform: translateX(4px); }
+}
+
+
+/* ===================================================================
+   17. SCROLL-REVEAL & STAGGER
+   =================================================================== */
+
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+[data-reveal].fn-revealed {
+  animation: fn-fade-in-up var(--fn-duration-slow) var(--fn-ease-out-expo) forwards;
+}
+
+/* Stagger children: set --i via JS or inline style */
+[data-stagger] > * {
+  opacity: 0;
+  animation: fn-fade-in-up var(--fn-duration-slow) var(--fn-ease-out-expo) forwards;
+  animation-delay: calc(var(--fn-stagger-i, 0) * 80ms);
+}
+
+
+/* ===================================================================
+   18. BUTTON & LINK MICROINTERACTIONS
+   =================================================================== */
+
+button,
+[role="button"],
+input[type="submit"] {
+  transition: transform var(--fn-duration-instant) var(--fn-ease-out-quart),
+              background-color var(--fn-duration-fast) var(--fn-ease-out-quart),
+              box-shadow var(--fn-duration-fast) var(--fn-ease-out-quart);
+}
+
+button:hover,
+[role="button"]:hover,
+input[type="submit"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px oklch(20% 0.02 250 / 12%);
+}
+
+button:active,
+[role="button"]:active,
+input[type="submit"]:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: none;
+}
+
+/* Form field focus animation */
+input:not([type="radio"]):not([type="checkbox"]):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--pico-primary);
+  box-shadow: 0 0 0 3px var(--pico-primary-focus);
+  transition: border-color var(--fn-duration-fast) var(--fn-ease-out-quart),
+              box-shadow var(--fn-duration-fast) var(--fn-ease-out-quart);
 }
 
 /* Smooth progress bar transition */
@@ -473,33 +974,33 @@ progress {
 /* WebKit progress bar coloring */
 progress::-webkit-progress-bar {
   background-color: var(--fn-card-bg);
-  border-radius: 0.25rem;
+  border-radius: var(--fn-radius-sm);
 }
 
 progress::-webkit-progress-value {
   background-color: var(--pico-primary);
-  border-radius: 0.25rem;
+  border-radius: var(--fn-radius-sm);
   transition: width 0.5s ease;
 }
 
 /* Firefox progress bar */
 progress::-moz-progress-bar {
   background-color: var(--pico-primary);
-  border-radius: 0.25rem;
+  border-radius: var(--fn-radius-sm);
 }
 
 
 /* ===================================================================
-   MOBILE ADJUSTMENTS
+   19. MOBILE ADJUSTMENTS
    =================================================================== */
 
 @media (max-width: 576px) {
   .fn-headline-card {
-    padding: 1rem;
+    padding: var(--fn-space-4);
   }
 
   .fn-headline-header {
-    gap: 0.5rem;
+    gap: var(--fn-space-2);
   }
 
   .fn-headline-text {
@@ -507,33 +1008,28 @@ progress::-moz-progress-bar {
   }
 
   .fn-step {
-    gap: 0.75rem;
+    gap: var(--fn-space-3);
   }
 
   .fn-step-content small {
-    display: none; /* Hide description text on very small screens */
+    display: none;
   }
 
   .fn-step-duration {
-    font-size: 0.75rem;
-  }
-
-  /* Stack persona cards vertically */
-  .grid {
-    grid-template-columns: 1fr;
+    font-size: var(--fn-text-xs);
   }
 }
 
 @media (max-width: 768px) {
   .fn-progress-meta {
     flex-direction: column;
-    gap: 0.25rem;
+    gap: var(--fn-space-1);
   }
 }
 
 
 /* ===================================================================
-   UTILITY: overflow for tables on mobile
+   20. UTILITIES
    =================================================================== */
 
 .overflow-auto {
@@ -541,9 +1037,71 @@ progress::-moz-progress-bar {
   -webkit-overflow-scrolling: touch;
 }
 
+.fn-text-center {
+  text-align: center;
+}
+
+.fn-text-muted {
+  color: var(--fn-text-muted);
+}
+
+.fn-mx-auto {
+  margin-inline: auto;
+}
+
+.fn-max-w-form {
+  max-inline-size: 420px;
+  margin-inline: auto;
+}
+
+/* Auth section wrapper (replaces inline styles on login/register) */
+.fn-auth-section {
+  max-inline-size: 420px;
+  margin-inline: auto;
+  padding-top: var(--fn-space-8);
+  animation: fn-fade-in-up var(--fn-duration-slow) var(--fn-ease-out-expo);
+}
+
+/* Auth page logo */
+.fn-auth-logo {
+  text-align: center;
+  margin-bottom: var(--fn-space-6);
+}
+
+.fn-auth-logo a {
+  font-family: var(--fn-font-heading);
+  font-size: var(--fn-text-xl);
+  text-decoration: none;
+}
+
+/* Section headings (settings) */
+.fn-section-heading {
+  font-family: var(--fn-font-heading);
+  color: var(--fn-text-heading);
+}
+
+/* Danger button (settings delete) */
+.fn-btn-danger {
+  color: var(--fn-confidence-speculative);
+}
+
+.fn-btn-danger:hover {
+  color: var(--fn-confidence-speculative);
+  opacity: 0.8;
+}
+
+/* Success/error message classes */
+.fn-msg-success {
+  color: var(--fn-confidence-very-high);
+}
+
+.fn-msg-error {
+  color: var(--fn-confidence-speculative);
+}
+
 
 /* ===================================================================
-   PRESET SELECTION CARDS
+   14. PRESET SELECTION (segmented control)
    =================================================================== */
 
 .fn-preset-group {
@@ -611,4 +1169,106 @@ progress::-moz-progress-bar {
     grid-template-columns: 1fr;
     gap: 0.75rem;
   }
+}
+
+
+/* ===================================================================
+   21. HEADLINE CARD VARIANTS (de-carded redesign)
+   =================================================================== */
+
+/* Hero headline (#1) — no card, generous whitespace */
+.fn-headline-card--hero {
+  background: none;
+  border: none;
+  padding: var(--fn-space-8) 0;
+  margin-bottom: var(--fn-space-8);
+}
+
+.fn-headline-card--hero .fn-headline-text {
+  font-size: var(--fn-text-xl);
+  font-family: var(--fn-font-heading);
+}
+
+/* Secondary headlines (#2+) — top border separator */
+.fn-headline-card--secondary {
+  background: none;
+  border: none;
+  border-top: 1px solid var(--fn-border);
+  border-radius: 0;
+  padding: var(--fn-space-6) 0;
+  margin-bottom: 0;
+}
+
+/* Serif rank numeral */
+.fn-rank-serif {
+  font-family: var(--fn-font-heading);
+  font-size: var(--fn-text-xl);
+  color: var(--fn-text-muted);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Confidence dot indicator */
+.fn-confidence-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: var(--fn-space-1);
+  vertical-align: middle;
+}
+
+.fn-confidence-dot--very-high { background: var(--fn-confidence-very-high); }
+.fn-confidence-dot--high { background: var(--fn-confidence-high); }
+.fn-confidence-dot--moderate { background: var(--fn-confidence-moderate); }
+.fn-confidence-dot--low { background: var(--fn-confidence-low); }
+.fn-confidence-dot--speculative { background: var(--fn-confidence-speculative); }
+
+/* Small caps for categories */
+.fn-small-caps {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.05em;
+}
+
+/* Readable width (65ch optimal line length) */
+.fn-readable-width {
+  max-width: 65ch;
+}
+
+/* Meta chips */
+.fn-meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fn-space-2);
+  margin-bottom: var(--fn-space-6);
+}
+
+.fn-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fn-space-1);
+  padding: var(--fn-space-1) var(--fn-space-3);
+  background: var(--fn-surface-1);
+  border-radius: var(--fn-radius-full);
+  font-size: var(--fn-text-sm);
+  color: var(--fn-text-muted);
+}
+
+/* Animated reasoning block expansion */
+.fn-reasoning-animated {
+  overflow: hidden;
+}
+
+.fn-reasoning-animated > .fn-reasoning-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--fn-duration-normal) var(--fn-ease-out-quart);
+}
+
+.fn-reasoning-animated[open] > .fn-reasoning-content {
+  grid-template-rows: 1fr;
+}
+
+.fn-reasoning-animated > .fn-reasoning-content > * {
+  overflow: hidden;
 }
