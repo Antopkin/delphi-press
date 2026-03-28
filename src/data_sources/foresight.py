@@ -164,7 +164,7 @@ class PolymarketClient:
         params = {
             "active": "true",
             "closed": "false",
-            "order": "volume_24hr",
+            "order": "volume24hr",
             "ascending": "false",
             "limit": limit,
         }
@@ -326,6 +326,15 @@ class GdeltDocClient:
 
         self._last_request_time = time.monotonic()
 
+        # GDELT returns HTML (not JSON) for invalid queries (e.g. Cyrillic text)
+        content_type = response.headers.get("content-type", "")
+        if "text/html" in content_type:
+            logger.warning(
+                "GDELT returned HTML instead of JSON (bad query?): %s",
+                response.text[:200],
+            )
+            return []
+
         try:
             data = response.json()
         except (json.JSONDecodeError, ValueError) as exc:
@@ -333,7 +342,7 @@ class GdeltDocClient:
             return []
 
         results: list[dict] = []
-        for article in data.get("articles", []):
+        for article in data.get("articles") or []:
             # Parse seendate: "20260328T143000Z" -> datetime
             seen_dt = None
             raw_date = article.get("seendate", "")
