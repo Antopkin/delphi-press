@@ -25,6 +25,7 @@ from trafilatura.spider import extract_links
 
 from src.agents.collectors.protocols import ScrapedArticle
 from src.utils.retry import retry_with_backoff
+from src.utils.url_validator import SSRFBlockedError, validate_url_safe
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,12 @@ class TrafilaturaScraper:
 
     async def _fetch_page(self, url: str) -> str | None:
         """Fetch a single page with rate limiting. Returns HTML or None."""
+        try:
+            validate_url_safe(url)
+        except SSRFBlockedError as exc:
+            logger.warning("SSRF blocked: %s", exc)
+            return None
+
         domain = urlparse(url).hostname or ""
         domain_sem = self._domain_semaphores.setdefault(domain, asyncio.Semaphore(1))
 
