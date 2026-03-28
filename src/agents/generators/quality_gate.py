@@ -103,8 +103,17 @@ class QualityGate(BaseAgent):
         profile: OutletProfile | None,
     ) -> QualityScore:
         """Score a single headline: factual + style checks."""
-        factual = await self._check_factual(headline, prediction)
-        style = await self._check_style(headline, profile)
+        from src.llm.prompts.base import PromptParseError
+
+        try:
+            factual = await self._check_factual(headline, prediction)
+        except (PromptParseError, Exception):
+            factual = CheckResult(score=3, feedback="factual check parse error — neutral score")
+
+        try:
+            style = await self._check_style(headline, profile)
+        except (PromptParseError, Exception):
+            style = CheckResult(score=3, feedback="style check parse error — neutral score")
 
         return QualityScore(
             headline_id=headline.id,
