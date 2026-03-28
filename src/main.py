@@ -53,18 +53,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     redis_conn = aioredis.from_url(settings.redis_url, decode_responses=True)
 
     # ARQ pool
-    redis_host = "redis"
-    redis_port = 6379
-    url = settings.redis_url
-    if "://" in url:
-        netloc = url.split("://", 1)[1]
-        if ":" in netloc:
-            redis_host, port_str = netloc.split(":", 1)
-            redis_port = int(port_str.split("/")[0])
-        else:
-            redis_host = netloc.split("/")[0]
+    from urllib.parse import urlparse
 
-    arq_pool = await create_pool(RedisSettings(host=redis_host, port=redis_port))
+    parsed_redis = urlparse(settings.redis_url)
+    arq_pool = await create_pool(
+        RedisSettings(
+            host=parsed_redis.hostname or "redis",
+            port=parsed_redis.port or 6379,
+            password=parsed_redis.password,
+            database=int(parsed_redis.path.lstrip("/") or 0),
+        )
+    )
 
     # KeyVault
     from src.security.encryption import KeyVault

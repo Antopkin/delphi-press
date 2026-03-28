@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Delphi Press — Quick Deploy on Ubuntu VPS
-# Usage: curl -sSL <raw-url> | bash
-# Or: ssh deploy@YOUR_VPS && bash scripts/deploy.sh
+# Delphi Press — Quick Deploy on Debian/Ubuntu VPS
+# Usage: ssh deploy@YOUR_VPS && bash scripts/deploy.sh
 set -euo pipefail
 
 REPO_URL="https://github.com/Antopkin/delphi-press.git"
@@ -32,12 +31,19 @@ fi
 # 3. Setup .env
 if [ ! -f .env ]; then
     cp .env.example .env
+
     # Generate SECRET_KEY
     SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))" 2>/dev/null || openssl rand -base64 48)
     sed -i "s/^SECRET_KEY=.*/SECRET_KEY=$SECRET_KEY/" .env
+
     # Generate REDIS_PASSWORD
     REDIS_PASS=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))" 2>/dev/null || openssl rand -base64 32)
     sed -i "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=$REDIS_PASS/" .env
+
+    # Generate FERNET_KEY
+    FERNET_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || echo "GENERATE_ME_MANUALLY")
+    sed -i "s/^FERNET_KEY=.*/FERNET_KEY=$FERNET_KEY/" .env
+
     echo ""
     echo ">>> .env created with generated secrets."
     echo ">>> Edit .env to add API keys:"
@@ -61,6 +67,6 @@ echo "Services: $(docker compose ps --format '{{.Name}}: {{.Status}}' | tr '\n' 
 echo ""
 echo "Next steps:"
 echo "  1. Edit .env with your API keys: nano $APP_DIR/.env"
-echo "  2. Setup SSL: see docs/10-deployment.md"
-echo "  3. Restart after .env changes: docker compose restart"
-echo "  4. View logs: docker compose logs -f --tail=50"
+echo "  2. Restart after .env changes: docker compose restart"
+echo "  3. View logs: docker compose logs -f --tail=50"
+echo "  4. Check health: curl -s https://delphi.antopkin.ru/api/v1/health"

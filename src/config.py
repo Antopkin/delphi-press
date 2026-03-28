@@ -50,7 +50,7 @@ class Settings(LLMConfig):
     # === Database ===
 
     database_url: str = Field(
-        default="sqlite+aiosqlite:///data/foresighting.db",
+        default="sqlite+aiosqlite:///data/delphi_press.db",
         description="Async SQLAlchemy connection string.",
     )
 

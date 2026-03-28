@@ -252,20 +252,18 @@ class WorkerSettings:
 
     @staticmethod
     def redis_settings() -> RedisSettings:
+        from urllib.parse import urlparse
+
         from src.config import get_settings
 
         settings = get_settings()
-        url = settings.redis_url
-        host = "redis"
-        port = 6379
-        if "://" in url:
-            netloc = url.split("://", 1)[1]
-            if ":" in netloc:
-                host, port_str = netloc.split(":", 1)
-                port = int(port_str.split("/")[0])
-            else:
-                host = netloc.split("/")[0]
-        return RedisSettings(host=host, port=port)
+        parsed = urlparse(settings.redis_url)
+        return RedisSettings(
+            host=parsed.hostname or "redis",
+            port=parsed.port or 6379,
+            password=parsed.password,
+            database=int(parsed.path.lstrip("/") or 0),
+        )
 
     max_jobs = 10
     job_timeout = 1800

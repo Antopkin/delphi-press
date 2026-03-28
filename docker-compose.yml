@@ -114,8 +114,8 @@ services:
       - frontend
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - certbot_certs:/etc/letsencrypt:ro
-      - certbot_www:/var/www/certbot:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./src/web/static:/var/www/static:ro
     deploy:
       resources:
         limits:
@@ -130,8 +130,6 @@ services:
 volumes:
   redis_data:
   sqlite_data:
-  certbot_certs:
-  certbot_www:
 
 networks:
   backend:
