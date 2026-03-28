@@ -66,12 +66,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     arq_pool = await create_pool(RedisSettings(host=redis_host, port=redis_port))
 
+    # KeyVault
+    from src.security.encryption import KeyVault
+
+    key_vault = KeyVault(settings.fernet_key)
+
     # Store in app.state
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = session_factory
     app.state.redis = redis_conn
     app.state.arq_pool = arq_pool
+    app.state.key_vault = key_vault
     app.state.start_time = time.monotonic()
 
     logger.info("Application started successfully")

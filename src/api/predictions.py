@@ -17,11 +17,12 @@ import logging
 import uuid
 from datetime import UTC, date, datetime
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from src.db.models import PredictionStatus
+from src.api.dependencies import get_current_user
+from src.db.models import PredictionStatus, User
 
 logger = logging.getLogger("api.predictions")
 
@@ -34,6 +35,7 @@ router = APIRouter(prefix="/predictions")
 class CreatePredictionRequest(BaseModel):
     outlet: str = Field(..., min_length=1, max_length=200)
     target_date: date = Field(...)
+    preset: str = Field(default="full")
 
 
 class CreatePredictionResponse(BaseModel):
@@ -113,6 +115,7 @@ class PredictionListResponse(BaseModel):
 async def create_prediction(
     body: CreatePredictionRequest,
     request: Request,
+    user: User | None = Depends(get_current_user),
 ) -> CreatePredictionResponse:
     """Создать новый прогноз и поставить в очередь ARQ."""
     from src.db.engine import get_session
@@ -143,6 +146,8 @@ async def create_prediction(
             outlet_normalized=normalized,
             target_date=body.target_date,
             pipeline_config=pipeline_config,
+            user_id=user.id if user else None,
+            preset=body.preset,
         )
         await session.commit()
 

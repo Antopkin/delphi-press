@@ -92,6 +92,14 @@ class Settings(LLMConfig):
     static_dir: Path = Field(default=Path("src/web/static"))
     templates_dir: Path = Field(default=Path("src/web/templates"))
 
+    # === Security / Auth ===
+
+    jwt_expire_days: int = Field(default=7, ge=1, le=365)
+    fernet_key: str = Field(
+        default="3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o=",
+        description="Fernet encryption key for user API keys (base64, 32 bytes).",
+    )
+
     # === CORS ===
 
     cors_origins: list[str] = Field(default=["*"])

@@ -144,3 +144,92 @@ def test_outlet_normalized_name_is_unique():
 
     col = Outlet.__table__.c.normalized_name
     assert col.unique is True
+
+
+# ── User / UserAPIKey models ──────────────────────────────────────
+
+
+def test_user_has_expected_columns():
+    from src.db.models import User
+
+    cols = {c.name for c in User.__table__.columns}
+    required = {"id", "email", "hashed_password", "is_active", "created_at"}
+    assert required.issubset(cols)
+
+
+def test_user_email_is_unique():
+    from src.db.models import User
+
+    col = User.__table__.c.email
+    assert col.unique is True
+
+
+def test_user_has_api_keys_relationship():
+    from src.db.models import User
+
+    assert "api_keys" in User.__mapper__.relationships
+
+
+def test_user_has_predictions_relationship():
+    from src.db.models import User
+
+    assert "predictions" in User.__mapper__.relationships
+
+
+def test_user_api_key_has_expected_columns():
+    from src.db.models import UserAPIKey
+
+    cols = {c.name for c in UserAPIKey.__table__.columns}
+    required = {
+        "id",
+        "user_id",
+        "provider",
+        "encrypted_key",
+        "label",
+        "is_active",
+        "created_at",
+        "last_used_at",
+    }
+    assert required.issubset(cols)
+
+
+def test_user_api_key_has_user_relationship():
+    from src.db.models import UserAPIKey
+
+    assert "user" in UserAPIKey.__mapper__.relationships
+
+
+def test_user_api_key_has_unique_constraint_user_provider():
+    from src.db.models import UserAPIKey
+
+    constraints = [c for c in UserAPIKey.__table__.constraints if hasattr(c, "columns")]
+    unique_cols = set()
+    for c in constraints:
+        col_names = {col.name for col in c.columns}
+        if "user_id" in col_names and "provider" in col_names:
+            unique_cols = col_names
+    assert unique_cols == {"user_id", "provider"}
+
+
+# ── Prediction user link ──────────────────────────────────────────
+
+
+def test_prediction_has_user_id_column():
+    from src.db.models import Prediction
+
+    cols = {c.name for c in Prediction.__table__.columns}
+    assert "user_id" in cols
+    assert "preset" in cols
+
+
+def test_prediction_user_id_is_nullable():
+    from src.db.models import Prediction
+
+    col = Prediction.__table__.c.user_id
+    assert col.nullable is True
+
+
+def test_prediction_has_user_relationship():
+    from src.db.models import Prediction
+
+    assert "user" in Prediction.__mapper__.relationships

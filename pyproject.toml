@@ -20,6 +20,10 @@ dependencies = [
     "arq>=0.26",
     "sse-starlette>=2.0",
     "redis[hiredis]>=5.0",
+    "cryptography>=43.0",
+    "PyJWT>=2.9",
+    "bcrypt>=4.2",
+    "email-validator>=2.0",
 ]
 
 [project.optional-dependencies]

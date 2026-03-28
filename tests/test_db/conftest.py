@@ -90,6 +90,21 @@ def make_headline_data():
 
 
 @pytest.fixture
+def make_user_data():
+    def _factory(**overrides):
+        defaults = {
+            "id": str(uuid.uuid4()),
+            "email": f"test-{uuid.uuid4().hex[:8]}@example.com",
+            "hashed_password": "$2b$12$LJ3m4ys3Lz0QGxqIqT7F8eKvYt2.Zx3tXo.VIRmX9k3ZKXyK1rXi",
+            "is_active": True,
+        }
+        defaults.update(overrides)
+        return defaults
+
+    return _factory
+
+
+@pytest.fixture
 def make_step_data():
     def _factory(**overrides):
         defaults = {

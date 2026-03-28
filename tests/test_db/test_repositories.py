@@ -1,10 +1,11 @@
-"""Tests for src.db.repositories — PredictionRepository, OutletRepository."""
+"""Tests for src.db.repositories — PredictionRepository, OutletRepository, UserRepository."""
 
 from __future__ import annotations
 
 import uuid
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from src.db.models import PredictionStatus
 
@@ -265,3 +266,186 @@ class TestOutletUpsert:
         await test_session.commit()
 
         assert updated.website_url == "https://bbc.com/russian"
+
+
+# ── UserRepository ─────────────────────────────────────────────────
+
+
+class TestUserCreate:
+    async def test_create_user_returns_user(self, test_session, make_user_data):
+        from src.db.repositories import UserRepository
+
+        repo = UserRepository(test_session)
+        data = make_user_data()
+        user = await repo.create(
+            id=data["id"], email=data["email"], hashed_password=data["hashed_password"]
+        )
+        await test_session.commit()
+
+        assert user.id == data["id"]
+        assert user.email == data["email"]
+        assert user.is_active is True
+
+    async def test_create_user_duplicate_email_raises(self, test_session, make_user_data):
+        from src.db.repositories import UserRepository
+
+        repo = UserRepository(test_session)
+        data = make_user_data()
+        await repo.create(
+            id=data["id"], email=data["email"], hashed_password=data["hashed_password"]
+        )
+        await test_session.commit()
+
+        with pytest.raises(IntegrityError):
+            await repo.create(
+                id=str(uuid.uuid4()),
+                email=data["email"],
+                hashed_password="other-hash",
+            )
+            await test_session.flush()
+
+
+class TestUserGetByEmail:
+    async def test_get_by_email_found(self, test_session, make_user_data):
+        from src.db.repositories import UserRepository
+
+        repo = UserRepository(test_session)
+        data = make_user_data()
+        await repo.create(
+            id=data["id"], email=data["email"], hashed_password=data["hashed_password"]
+        )
+        await test_session.commit()
+
+        user = await repo.get_by_email(data["email"])
+        assert user is not None
+        assert user.id == data["id"]
+
+    async def test_get_by_email_not_found(self, test_session):
+        from src.db.repositories import UserRepository
+
+        repo = UserRepository(test_session)
+        assert await repo.get_by_email("nobody@example.com") is None
+
+
+class TestUserGetById:
+    async def test_get_by_id_found(self, test_session, make_user_data):
+        from src.db.repositories import UserRepository
+
+        repo = UserRepository(test_session)
+        data = make_user_data()
+        await repo.create(
+            id=data["id"], email=data["email"], hashed_password=data["hashed_password"]
+        )
+        await test_session.commit()
+
+        user = await repo.get_by_id(data["id"])
+        assert user is not None
+        assert user.email == data["email"]
+
+    async def test_get_by_id_not_found(self, test_session):
+        from src.db.repositories import UserRepository
+
+        repo = UserRepository(test_session)
+        assert await repo.get_by_id("nonexistent") is None
+
+
+class TestUserAPIKeyCreate:
+    async def test_create_api_key(self, test_session, make_user_data):
+        from src.db.repositories import UserRepository
+
+        repo = UserRepository(test_session)
+        data = make_user_data()
+        await repo.create(
+            id=data["id"], email=data["email"], hashed_password=data["hashed_password"]
+        )
+        await test_session.commit()
+
+        key = await repo.create_api_key(
+            user_id=data["id"],
+            provider="openrouter",
+            encrypted_key="encrypted-value",
+            label="My Key",
+        )
+        await test_session.commit()
+
+        assert key.provider == "openrouter"
+        assert key.user_id == data["id"]
+        assert key.label == "My Key"
+
+    async def test_create_duplicate_provider_raises(self, test_session, make_user_data):
+        from src.db.repositories import UserRepository
+
+        repo = UserRepository(test_session)
+        data = make_user_data()
+        await repo.create(
+            id=data["id"], email=data["email"], hashed_password=data["hashed_password"]
+        )
+        await test_session.commit()
+
+        await repo.create_api_key(user_id=data["id"], provider="openrouter", encrypted_key="enc1")
+        await test_session.commit()
+
+        with pytest.raises(IntegrityError):
+            await repo.create_api_key(
+                user_id=data["id"], provider="openrouter", encrypted_key="enc2"
+            )
+            await test_session.flush()
+
+
+class TestUserAPIKeyList:
+    async def test_list_keys_returns_user_keys(self, test_session, make_user_data):
+        from src.db.repositories import UserRepository
+
+        repo = UserRepository(test_session)
+        data = make_user_data()
+        await repo.create(
+            id=data["id"], email=data["email"], hashed_password=data["hashed_password"]
+        )
+        await repo.create_api_key(user_id=data["id"], provider="openrouter", encrypted_key="enc")
+        await test_session.commit()
+
+        keys = await repo.get_api_keys(data["id"])
+        assert len(keys) == 1
+        assert keys[0].provider == "openrouter"
+
+    async def test_list_keys_empty(self, test_session, make_user_data):
+        from src.db.repositories import UserRepository
+
+        repo = UserRepository(test_session)
+        data = make_user_data()
+        await repo.create(
+            id=data["id"], email=data["email"], hashed_password=data["hashed_password"]
+        )
+        await test_session.commit()
+
+        keys = await repo.get_api_keys(data["id"])
+        assert keys == []
+
+
+class TestUserAPIKeyDelete:
+    async def test_delete_key_removes_it(self, test_session, make_user_data):
+        from src.db.repositories import UserRepository
+
+        repo = UserRepository(test_session)
+        data = make_user_data()
+        await repo.create(
+            id=data["id"], email=data["email"], hashed_password=data["hashed_password"]
+        )
+        key = await repo.create_api_key(
+            user_id=data["id"], provider="openrouter", encrypted_key="enc"
+        )
+        await test_session.commit()
+
+        deleted = await repo.delete_api_key(key.id, data["id"])
+        await test_session.commit()
+
+        assert deleted is True
+        keys = await repo.get_api_keys(data["id"])
+        assert keys == []
+
+    async def test_delete_nonexistent_returns_false(self, test_session, make_user_data):
+        from src.db.repositories import UserRepository
+
+        repo = UserRepository(test_session)
+        deleted = await repo.delete_api_key(9999, "no-user")
+        assert deleted is False

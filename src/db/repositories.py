@@ -23,6 +23,8 @@ from src.db.models import (
     PipelineStepStatus,
     Prediction,
     PredictionStatus,
+    User,
+    UserAPIKey,
 )
 
 logger = logging.getLogger("db.repositories")
@@ -42,6 +44,8 @@ class PredictionRepository:
         outlet_normalized: str,
         target_date: Any,
         pipeline_config: dict[str, Any] | None = None,
+        user_id: str | None = None,
+        preset: str = "full",
     ) -> Prediction:
         """Создание нового прогноза."""
         prediction = Prediction(
@@ -51,6 +55,8 @@ class PredictionRepository:
             target_date=target_date,
             status=PredictionStatus.PENDING,
             pipeline_config=pipeline_config,
+            user_id=user_id,
+            preset=preset,
         )
         self.session.add(prediction)
         await self.session.flush()
@@ -222,3 +228,81 @@ class OutletRepository:
         await self.session.flush()
         logger.info("Created outlet '%s'", normalized)
         return outlet
+
+
+class UserRepository:
+    """CRUD-операции для пользователей и их API-ключей."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def create(
+        self,
+        *,
+        id: str,
+        email: str,
+        hashed_password: str,
+    ) -> User:
+        """Создание нового пользователя."""
+        user = User(id=id, email=email, hashed_password=hashed_password)
+        self.session.add(user)
+        await self.session.flush()
+        logger.info("Created user %s (%s)", id, email)
+        return user
+
+    async def get_by_email(self, email: str) -> User | None:
+        """Поиск пользователя по email."""
+        result = await self.session.execute(select(User).where(User.email == email))
+        return result.scalar_one_or_none()
+
+    async def get_by_id(self, user_id: str) -> User | None:
+        """Поиск пользователя по ID."""
+        result = await self.session.execute(select(User).where(User.id == user_id))
+        return result.scalar_one_or_none()
+
+    async def create_api_key(
+        self,
+        *,
+        user_id: str,
+        provider: str,
+        encrypted_key: str,
+        label: str = "",
+    ) -> UserAPIKey:
+        """Добавление зашифрованного API-ключа."""
+        key = UserAPIKey(
+            user_id=user_id,
+            provider=provider,
+            encrypted_key=encrypted_key,
+            label=label,
+        )
+        self.session.add(key)
+        await self.session.flush()
+        logger.info("Created API key for user %s, provider %s", user_id, provider)
+        return key
+
+    async def get_api_keys(self, user_id: str) -> Sequence[UserAPIKey]:
+        """Список API-ключей пользователя."""
+        result = await self.session.execute(
+            select(UserAPIKey).where(UserAPIKey.user_id == user_id).order_by(UserAPIKey.created_at)
+        )
+        return list(result.scalars().all())
+
+    async def get_api_key_by_id(self, key_id: int, user_id: str) -> UserAPIKey | None:
+        """Получение ключа по ID (с проверкой владельца)."""
+        result = await self.session.execute(
+            select(UserAPIKey).where(
+                UserAPIKey.id == key_id,
+                UserAPIKey.user_id == user_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def delete_api_key(self, key_id: int, user_id: str) -> bool:
+        """Удаление ключа. Возвращает True если ключ найден и удалён."""
+        key = await self.get_api_key_by_id(key_id, user_id)
+        if key is None:
+            return False
+        await self.session.delete(key)
+        await self.session.flush()
+        logger.info("Deleted API key %d for user %s", key_id, user_id)
+        return True

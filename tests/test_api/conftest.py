@@ -125,12 +125,16 @@ async def test_app(test_engine, fake_redis, fake_arq_pool):
     app = FastAPI()
     app.include_router(api_router)
 
-    app.state.settings = Settings()
+    from src.security.encryption import KeyVault
+
+    settings = Settings()
+    app.state.settings = settings
     app.state.engine = test_engine
     app.state.session_factory = create_session_factory(test_engine)
     app.state.redis = fake_redis
     app.state.arq_pool = fake_arq_pool
     app.state.start_time = time.monotonic()
+    app.state.key_vault = KeyVault(settings.fernet_key)
 
     return app
 

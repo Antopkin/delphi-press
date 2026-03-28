@@ -119,6 +119,32 @@ def test_settings_database_url_rejects_invalid():
         Settings(database_url="mysql://localhost/db")
 
 
+# ── Security fields ─────────────────────────────────────────────────
+
+
+def test_settings_jwt_expire_days_default():
+    from src.config import Settings
+
+    s = Settings()
+    assert s.jwt_expire_days == 7
+
+
+def test_settings_fernet_key_has_dev_default():
+    from src.config import Settings
+
+    s = Settings()
+    assert len(s.fernet_key) > 0
+
+
+def test_settings_fernet_key_is_valid_fernet():
+    from cryptography.fernet import Fernet
+
+    from src.config import Settings
+
+    s = Settings()
+    Fernet(s.fernet_key.encode())
+
+
 # ── Singleton ───────────────────────────────────────────────────────
 
 
