@@ -506,6 +506,11 @@ async def startup(ctx: dict[str, Any]) -> None:
     from src.db.engine import create_engine, create_session_factory, init_db
 
     settings = get_settings()
+
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level),
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
     engine = create_engine(settings)
     await init_db(engine)
 
