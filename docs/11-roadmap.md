@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-29. Production deployed. Обновлено: 2026-03-29 (v0.5.2 delphi parse-error fix).
+> Статус на 2026-03-29. Production deployed. Обновлено: 2026-03-29 (v0.6.0 market eval + correlation).
 
 ---
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **846 тестов** зелёные. Hardening (retry, SSRF, cron, monitoring) завершён. Foresight bugfix v0.5.1: Metaculus API migration, cache key fix, CLOB param fix. Delphi parse-error fix v0.5.2: personas PromptParseError fallback, orchestrator quorum 4→3.
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **902 теста** зелёных. Hardening (retry, SSRF, cron, monitoring) завершён. Foresight bugfix v0.5.1: Metaculus API migration, cache key fix, CLOB param fix. Delphi parse-error fix v0.5.2: personas PromptParseError fallback, orchestrator quorum 4→3. Market eval v0.6.0: resolved markets API, historical price, market_brier_comparison, news↔market correlation (Spearman/Granger).
 
 ### Реализованные компоненты
 
@@ -29,9 +29,12 @@
 | **Frontend** | Auth (login/register/logout), settings (API keys), index (мои прогнозы, пресеты), progress (SSE), results, about | DONE | 29 тестов |
 | **Data Sources** | RSS, web search, scraper, foresight (Metaculus/Polymarket/GDELT) | DONE | 104 теста |
 | **Evaluation (пилот)** | Brier Score + bootstrap CI, Log Score, Composite Score, Wayback CDX | DONE | 18 тестов |
+| **Evaluation (market)** | Market-calibrated eval (resolved markets, BS по горизонтам), news↔market correlation (Spearman, Granger) | DONE | 49 тестов |
 | **Agent Registry** | 18 агентов зарегистрированы в `build_default_registry()` | DONE | Есть |
 | **E2E Testing** | MockLLMClient + 25 fixture factories + 7 integration tests | DONE | 7 тестов |
 | **Dry-Run Script** | `scripts/dry_run.py` — standalone, no Redis/DB/Docker | DONE | — |
+| **Eval Scripts** | `scripts/eval_market_calibration.py`, `scripts/eval_news_correlation.py` | DONE | — |
+| **Fuzzy Match Utility** | `src/utils/fuzzy_match.py` — extracted from Judge, reusable | DONE | 8 тестов |
 
 ### Единственный известный stub
 
@@ -50,6 +53,10 @@ src/agents/registry.py              — 18 агентов, build_default_registr
 src/schemas/pipeline.py             — PipelineContext со всеми слотами
 src/llm/router.py                   — 28 task-to-model mappings (DEFAULT_ASSIGNMENTS)
 scripts/dry_run.py                  — standalone E2E dry run (cheap model, no infra)
+scripts/eval_market_calibration.py  — market BS по горизонтам на resolved markets
+scripts/eval_news_correlation.py    — news↔market Spearman/Granger → markdown report
+src/eval/correlation.py             — detect movements, news window, Spearman, Granger
+src/utils/fuzzy_match.py            — 3-tier fuzzy match (extracted from Judge)
 tests/fixtures/mock_llm.py          — MockLLMClient (task-based dispatch)
 tests/fixtures/llm_responses.py     — 25+ JSON fixture factories
 tests/test_integration/             — 7 E2E integration tests

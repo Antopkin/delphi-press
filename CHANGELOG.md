@@ -4,6 +4,28 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.6.0] - 2026-03-29
+
+Market-calibrated eval (Direction B) + news↔market correlation (Direction C).
+
+### Added
+
+- **`fetch_resolved_markets()`** в PolymarketClient — запрос resolved markets из Gamma API (`active=false&closed=true`). Resolution через `outcomePrices[0]=="1"` (поля `resolvedAt`/`resolution` не существуют в API). Timestamp: `closedTime`.
+- **`fetch_historical_price()`** в PolymarketClient — цена на конкретный timestamp через `startTs/endTs` (обход бага CLOB `interval=max`, который возвращает пустой ответ для resolved markets с fidelity < 720).
+- **`market_brier_comparison()`** в `src/eval/metrics.py` — сравнение BS на 3 горизонтах (T-24h, T-48h, T-7d), BSS Delphi vs Market.
+- **4 Pydantic-схемы** в `src/eval/schemas.py`: `ResolvedMarket`, `BrierComparison`, `PriceMovement`, `CorrelationResult`.
+- **`src/eval/correlation.py`** — `detect_sharp_movements()`, `collect_news_in_window()`, `compute_spearman_correlation()`, `compute_granger_causality()`. Granger: `statsmodels` optional dep в `[eval]` extras.
+- **`src/utils/fuzzy_match.py`** — 3-tier fuzzy matching извлечён из Judge для переиспользования в eval pipeline.
+- **`scripts/eval_market_calibration.py`** — standalone скрипт: BS рынка по горизонтам на resolved markets.
+- **`scripts/eval_news_correlation.py`** — standalone скрипт: Spearman/Granger корреляция news↔price, генерирует markdown отчёт.
+- 49 новых тестов, итого **902/902** зелёных.
+
+### Changed
+
+- **Judge** (`src/agents/forecasters/judge.py`) — `_match_market_to_thread()` делегирует в `fuzzy_match_to_market()` утилиту. Поведение не изменилось, регрессионные тесты зелёные.
+
+---
+
 ## [0.5.2] - 2026-03-29
 
 Delphi pipeline parse-error fix: personas fallback + orchestrator quorum relaxation.

@@ -163,10 +163,11 @@ Delphi Press уже коллектит оба потока данных:
 | Шаг 2: Distribution metrics | **Готово** | `src/data_sources/market_metrics.py` (volatility, trend, spread, lw_probability, CI) | 37 |
 | Enrichment в ForesightCollector | **Готово** | `src/agents/collectors/foresight_collector.py` (`_map_polymarket`) | 2 |
 | Judge 6-я персона «market» | **Готово** | `src/agents/forecasters/judge.py` (fuzzy match, dynamic weight, alignment bonus) | 13 |
-| Шаг 3: Market-calibrated eval | Не начат | `src/eval/metrics.py` (будущее) | — |
-| Шаг 4: News↔market корреляция | Не начат | `tasks/research/` (будущее) | — |
+| Шаг 3: Market-calibrated eval | **Готово** | `src/eval/metrics.py` (`market_brier_comparison`), `src/data_sources/foresight.py` (`fetch_resolved_markets`, `fetch_historical_price`), `src/eval/schemas.py` (4 схемы), `scripts/eval_market_calibration.py` | 31 |
+| Шаг 4: News↔market корреляция | **Готово** | `src/eval/correlation.py` (detect, collect, Spearman, Granger), `scripts/eval_news_correlation.py` | 16 |
+| Fuzzy match extraction | **Готово** | `src/utils/fuzzy_match.py` (extracted from Judge) | 8 |
 
-Итого реализовано: **4 фазы, 60 тестов, 4 коммита на main** (2026-03-28).
+Итого реализовано: **6 фаз, 109 тестов, 6 коммитов на main** (2026-03-28 — 2026-03-29).
 
 ---
 
@@ -183,19 +184,22 @@ Delphi Press уже коллектит оба потока данных:
 - Dynamic weight: base 0.15 × liquidity_factor × volatility_discount × reliability
 - Alignment bonus: +0.04 если persona |Δp| < 0.10 от рынка
 
-### Шаг 3: Market-calibrated eval (отдельная сессия)
+### Шаг 3: Market-calibrated eval — ✅ ГОТОВО
 - **Источник ground truth**: Polymarket resolved markets (Gamma API: `active=false&closed=true`)
-- **Парсинг**: `resolutionSource`, `resolvedAt`, `outcome` (YES/NO → 1.0/0.0)
-- **Сопоставление**: fuzzy match event_threads ↔ resolved markets (аналогично `Judge._match_market_to_thread`)
-- **Метрика**: Brier Score (наш) vs. Brier Score (рыночный за 24h/48h/7d до resolution)
-- **Вопрос**: если наш Brier Score лучше рыночного → мы добавляем ценность поверх рынка
-- **Файлы**: `src/eval/metrics.py` (новая метрика), `src/data_sources/foresight.py` (новый метод `fetch_resolved_markets()`)
+- **Парсинг**: `outcomePrices[0]=="1"` → YES, `closedTime` как timestamp. **Важно**: поля `resolvedAt`/`resolution` НЕ существуют в Gamma API.
+- **Historical price**: `fetch_historical_price(token_id, target_ts)` через `startTs/endTs` (НЕ `interval=max` — баг CLOB для resolved markets с fidelity < 720).
+- **Сопоставление**: `fuzzy_match_to_market()` из `src/utils/fuzzy_match.py` (extracted from Judge)
+- **Метрика**: `market_brier_comparison()` — BS на 3 горизонтах (T-24h, T-48h, T-7d), BSS Delphi vs Market
+- **Скрипт**: `scripts/eval_market_calibration.py` (standalone, паттерн dry_run.py)
+- **Файлы**: `src/eval/metrics.py`, `src/eval/schemas.py` (4 схемы), `src/data_sources/foresight.py`
 
-### Шаг 4 (опционально): корреляционный анализ news ↔ market
-- Для N resolved markets: найти резкие движения цены (|Δp| > threshold за окно)
-- Собрать `foresight_signals` и `news_signals` за [-24h, 0] перед движением
-- **Корреляция**: Spearman rank между sentiment/volume новостей и Δp рынка
-- Это валидация пайплайна, не фича — результат идёт в `tasks/research/`
+### Шаг 4: корреляционный анализ news ↔ market — ✅ ГОТОВО
+- **Детекция**: `detect_sharp_movements()` — |Δp| >= 0.10, dedup по min_interval
+- **Сбор новостей**: `collect_news_in_window()` — [-24h, 0] перед движением, category overlap
+- **Корреляция**: `compute_spearman_correlation()` — news count vs |Δp| (min 5 points, NaN-safe)
+- **Причинность**: `compute_granger_causality()` — statsmodels optional dep, ADF stationarity check
+- **Скрипт**: `scripts/eval_news_correlation.py` → markdown отчёт в `tasks/research/news_market_correlation.md`
+- **Файлы**: `src/eval/correlation.py`
 
 ### Связь с исследованием Алексея
 - Результаты его модели (inverse problem, клонирование трейдеров) можно подключить как внешний сигнал
