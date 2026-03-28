@@ -84,7 +84,7 @@ class Orchestrator:
             name=ProgressStage.DELPHI_R1,
             agent_names=_DELPHI_PERSONA_NAMES,
             parallel=True,
-            min_successful=4,
+            min_successful=3,
             timeout_seconds=600,
         ),
         StageDefinition(
@@ -337,13 +337,13 @@ class Orchestrator:
         successful_count = sum(1 for r in r2_results if r.success)
         duration_ms = (time.monotonic_ns() - start_ns) // 1_000_000
 
-        if successful_count < 4:
+        if successful_count < 3:
             return StageResult(
                 stage_name=str(ProgressStage.DELPHI_R2),
                 success=False,
                 agent_results=all_results,
                 duration_ms=duration_ms,
-                error=(f"Insufficient Delphi R2 agents: {successful_count}/4"),
+                error=(f"Insufficient Delphi R2 agents: {successful_count}/3"),
             )
 
         return StageResult(

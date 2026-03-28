@@ -149,6 +149,12 @@ def test_delphi_r1_has_5_agents():
     assert len(stage.agent_names) == 5
 
 
+def test_delphi_r1_min_successful_is_3():
+    """Delphi R1 requires majority quorum (3 of 5), not 4."""
+    stage = Orchestrator.STAGES[3]
+    assert stage.min_successful == 3
+
+
 def test_delphi_r2_timeout_is_900():
     stage = Orchestrator.STAGES[4]
     assert stage.timeout_seconds == 900
@@ -320,12 +326,12 @@ async def test_delphi_r2_mediator_failure_aborts(mock_router, make_context):
 
 
 @pytest.mark.asyncio
-async def test_delphi_r2_needs_4_of_5_agents(mock_router, make_context):
-    """4 of 5 Delphi agents succeed -> R2 succeeds."""
+async def test_delphi_r2_needs_3_of_5_agents(mock_router, make_context):
+    """3 of 5 Delphi agents succeed -> R2 succeeds (majority quorum)."""
     registry = AgentRegistry(mock_router)
     registry.register_class(make_stub_agent_class("mediator", {"synthesis": {"ok": True}}))
     for i, name in enumerate(DELPHI_AGENT_NAMES):
-        succeed = i < 4  # first 4 succeed, 5th fails
+        succeed = i < 3  # first 3 succeed, last 2 fail
         registry.register_class(
             make_stub_agent_class(
                 name,
@@ -338,6 +344,28 @@ async def test_delphi_r2_needs_4_of_5_agents(mock_router, make_context):
     stage = Orchestrator.STAGES[4]
     result = await orch._run_delphi_r2(stage, make_context(), start_ns=0)
     assert result.success is True
+
+
+@pytest.mark.asyncio
+async def test_delphi_r2_below_3_fails(mock_router, make_context):
+    """2 of 5 Delphi agents succeed -> R2 fails (below majority quorum)."""
+    registry = AgentRegistry(mock_router)
+    registry.register_class(make_stub_agent_class("mediator", {"synthesis": {"ok": True}}))
+    for i, name in enumerate(DELPHI_AGENT_NAMES):
+        succeed = i < 2  # first 2 succeed, last 3 fail
+        registry.register_class(
+            make_stub_agent_class(
+                name,
+                {"revised_assessment": {"persona_id": name}} if succeed else None,
+                succeed=succeed,
+            )
+        )
+
+    orch = Orchestrator(registry)
+    stage = Orchestrator.STAGES[4]
+    result = await orch._run_delphi_r2(stage, make_context(), start_ns=0)
+    assert result.success is False
+    assert "Insufficient" in result.error
 
 
 @pytest.mark.asyncio
