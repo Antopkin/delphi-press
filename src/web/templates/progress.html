@@ -1,0 +1,135 @@
+{# src/web/templates/progress.html -- Real-time progress via SSE. #}
+{% extends "base.html" %}
+
+{% block title %}Прогноз для {{ outlet }} -- Foresighting News{% endblock %}
+
+{% block content %}
+
+<section>
+    <hgroup>
+        <h1>Формируем прогноз</h1>
+        <p>
+            <strong>{{ outlet }}</strong> &middot; {{ target_date }}
+        </p>
+    </hgroup>
+</section>
+
+{# ===== PROGRESS BAR ===== #}
+<section>
+    <progress id="progress-bar" value="0" max="100"></progress>
+    <div class="fn-progress-meta">
+        <span id="progress-percent">0%</span>
+        <span id="progress-elapsed"></span>
+    </div>
+</section>
+
+{# ===== STEP LIST ===== #}
+<section>
+    <article>
+        <ul id="step-list" class="fn-step-list">
+            <li class="fn-step fn-step--pending" data-stage="collection">
+                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content">
+                    <strong>Собираем новости</strong>
+                    <small>RSS-фиды, поисковые системы, архивы издания</small>
+                </div>
+                <span class="fn-step-duration"></span>
+            </li>
+            <li class="fn-step fn-step--pending" data-stage="event_identification">
+                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content">
+                    <strong>Выявляем ключевые события</strong>
+                    <small>Кластеризация сигналов, определение трендов</small>
+                </div>
+                <span class="fn-step-duration"></span>
+            </li>
+            <li class="fn-step fn-step--pending" data-stage="trajectory">
+                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content">
+                    <strong>Анализируем траектории событий</strong>
+                    <small>Сценарии развития, перекрёстные влияния</small>
+                </div>
+                <span class="fn-step-duration"></span>
+            </li>
+            <li class="fn-step fn-step--pending" data-stage="delphi_r1">
+                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content">
+                    <strong>Экспертная панель: раунд 1</strong>
+                    <small>Пять ИИ-экспертов независимо оценивают ситуацию</small>
+                </div>
+                <span class="fn-step-duration"></span>
+            </li>
+            <li class="fn-step fn-step--pending" data-stage="delphi_r2">
+                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content">
+                    <strong>Экспертная панель: раунд 2</strong>
+                    <small>Медиация расхождений, уточнение прогнозов</small>
+                </div>
+                <span class="fn-step-duration"></span>
+            </li>
+            <li class="fn-step fn-step--pending" data-stage="consensus">
+                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content">
+                    <strong>Формируем консенсус</strong>
+                    <small>Агрегация оценок, калибровка вероятностей</small>
+                </div>
+                <span class="fn-step-duration"></span>
+            </li>
+            <li class="fn-step fn-step--pending" data-stage="framing">
+                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content">
+                    <strong>Анализируем стиль издания</strong>
+                    <small>Как {{ outlet }} подаст каждое событие</small>
+                </div>
+                <span class="fn-step-duration"></span>
+            </li>
+            <li class="fn-step fn-step--pending" data-stage="generation">
+                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content">
+                    <strong>Генерируем заголовки</strong>
+                    <small>Стилизация под формат издания</small>
+                </div>
+                <span class="fn-step-duration"></span>
+            </li>
+            <li class="fn-step fn-step--pending" data-stage="quality_gate">
+                <span class="fn-step-icon" aria-hidden="true">&#9675;</span>
+                <div class="fn-step-content">
+                    <strong>Проверяем качество</strong>
+                    <small>Факт-чек, стилистика, дедупликация</small>
+                </div>
+                <span class="fn-step-duration"></span>
+            </li>
+        </ul>
+    </article>
+</section>
+
+{# ===== NARRATIVE MESSAGE ===== #}
+<section>
+    <article id="narrative-area" class="fn-narrative" hidden>
+        <p id="narrative-message"></p>
+    </article>
+</section>
+
+{# ===== ERROR DISPLAY (hidden by default) ===== #}
+<section id="error-section" hidden>
+    <article class="fn-error-card">
+        <header>
+            <h3>Произошла ошибка</h3>
+        </header>
+        <p id="error-message"></p>
+        <footer>
+            <a href="/" role="button">Попробовать снова</a>
+        </footer>
+    </article>
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+{# Pass prediction_id to JavaScript via data attribute #}
+<script
+    id="progress-config"
+    type="application/json"
+>{"predictionId": "{{ prediction_id }}", "outlet": "{{ outlet }}"}</script>
+<script src="{{ url_for('static', path='js/progress.js') }}"></script>
+{% endblock %}

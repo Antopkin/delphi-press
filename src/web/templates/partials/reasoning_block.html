@@ -1,0 +1,58 @@
+{# src/web/templates/partials/reasoning_block.html
+   Expects: headline (Headline ORM) #}
+
+<details class="fn-reasoning-block">
+    <summary>Обоснование</summary>
+
+    <div class="fn-reasoning-content">
+
+        {# === Evidence chain === #}
+        {% if headline.evidence_chain %}
+        <div class="fn-evidence">
+            <h4>Цепочка доказательств</h4>
+            <ul>
+                {% for evidence in headline.evidence_chain %}
+                <li>
+                    <strong>{{ evidence.source }}:</strong>
+                    {{ evidence.summary }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {# === Agent agreement === #}
+        <div class="fn-agreement">
+            <h4>Согласие экспертов</h4>
+            {% if headline.agent_agreement == "consensus" %}
+                <p class="fn-agreement-indicator fn-agreement--consensus">
+                    5 из 5 экспертов согласны
+                </p>
+            {% elif headline.agent_agreement == "majority" %}
+                <p class="fn-agreement-indicator fn-agreement--majority">
+                    4 из 5 экспертов согласны
+                </p>
+            {% elif headline.agent_agreement == "split" %}
+                <p class="fn-agreement-indicator fn-agreement--split">
+                    Мнения разделились (3 против 2)
+                </p>
+            {% endif %}
+        </div>
+
+        {# === Dissenting views === #}
+        {% if headline.dissenting_views %}
+        <div class="fn-dissent">
+            <h4>Особые мнения</h4>
+            {% for dv in headline.dissenting_views %}
+            <blockquote class="fn-dissent-item">
+                <p>{{ dv.view }}</p>
+                <footer>
+                    <cite>-- {{ dv.agent }}</cite>
+                </footer>
+            </blockquote>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+    </div>
+</details>

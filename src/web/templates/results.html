@@ -1,0 +1,42 @@
+{# src/web/templates/results.html -- Prediction results with headline cards. #}
+{% extends "base.html" %}
+
+{% block title %}Прогноз: {{ prediction.outlet_name }} -- Foresighting News{% endblock %}
+
+{% block content %}
+
+{# ===== HEADER ===== #}
+<section>
+    <hgroup>
+        <h1>Прогноз для {{ prediction.outlet_name }}</h1>
+        <p>
+            Дата прогноза: <strong>{{ prediction.target_date.strftime('%d.%m.%Y') }}</strong>
+            {% if prediction.total_duration_ms %}
+            &middot;
+            Выполнен за {{ (prediction.total_duration_ms / 1000) | round(0) | int }} сек.
+            {% endif %}
+            {% if prediction.total_llm_cost_usd and prediction.total_llm_cost_usd > 0 %}
+                &middot;
+                Стоимость: ${{ prediction.total_llm_cost_usd | round(2) }}
+            {% endif %}
+        </p>
+    </hgroup>
+</section>
+
+{# ===== HEADLINE CARDS ===== #}
+<section>
+    {% for headline in prediction.headlines %}
+        {% include "partials/headline_card.html" %}
+    {% endfor %}
+</section>
+
+{# ===== ACTIONS ===== #}
+<section style="text-align: center;">
+    <a href="/" role="button">Новый прогноз</a>
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/results.js') }}"></script>
+{% endblock %}

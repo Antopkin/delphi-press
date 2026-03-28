@@ -1,0 +1,65 @@
+{# src/web/templates/base.html -- Base layout for all pages. #}
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+
+    <title>{% block title %}Foresighting News{% endblock %}</title>
+    <meta name="description" content="Прогнозирование заголовков СМИ с помощью мультиагентного ИИ">
+
+    {# Pico.css -- semantic HTML framework, no classes needed for most elements #}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+
+    {# Project-specific overrides -- confidence badges, progress indicators, cards #}
+    <link rel="stylesheet" href="{{ url_for('static', path='css/custom.css') }}">
+
+    <link rel="icon" href="{{ url_for('static', path='img/favicon.svg') }}" type="image/svg+xml">
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+    {# ===== NAVIGATION ===== #}
+    <nav class="container">
+        <ul>
+            <li>
+                <a href="/" class="fn-logo">
+                    <strong>Foresighting News</strong>
+                </a>
+            </li>
+        </ul>
+        <ul>
+            <li><a href="/">Главная</a></li>
+            <li><a href="/about">О методологии</a></li>
+        </ul>
+    </nav>
+
+    {# ===== MAIN CONTENT ===== #}
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    {# ===== FOOTER ===== #}
+    <footer class="container">
+        <hr>
+        <div class="grid">
+            <div>
+                <small>
+                    &copy; {{ current_year | default(2026) }} Foresighting News.
+                    Прогнозы носят исследовательский характер.
+                </small>
+            </div>
+            <div style="text-align: right;">
+                <small>
+                    Powered by AI
+                </small>
+            </div>
+        </div>
+    </footer>
+
+    {% block extra_js %}{% endblock %}
+
+</body>
+</html>

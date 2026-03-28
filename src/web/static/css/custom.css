@@ -1,0 +1,542 @@
+/**
+ * src/web/static/css/custom.css
+ *
+ * Project-specific styles for Foresighting News.
+ * Pico.css handles base typography, forms, buttons, and layout.
+ * This file only styles custom components:
+ *   - Confidence badges
+ *   - Progress step indicators
+ *   - Headline cards
+ *   - Autocomplete dropdown
+ *   - Animations
+ *   - Mobile adjustments
+ */
+
+/* ===================================================================
+   CSS CUSTOM PROPERTIES
+   =================================================================== */
+
+:root {
+  /* Primary (override Pico) */
+  --pico-primary: #2563eb;
+  --pico-primary-hover: #1d4ed8;
+  --pico-primary-focus: rgba(37, 99, 235, 0.25);
+
+  /* Confidence colors */
+  --fn-confidence-very-high: #16a34a;
+  --fn-confidence-high: #2563eb;
+  --fn-confidence-moderate: #d97706;
+  --fn-confidence-low: #ea580c;
+  --fn-confidence-speculative: #dc2626;
+
+  /* Card */
+  --fn-card-bg: #f8fafc;
+  --fn-card-border: #e2e8f0;
+
+  /* Steps */
+  --fn-step-done: #16a34a;
+  --fn-step-active: #2563eb;
+  --fn-step-pending: #94a3b8;
+}
+
+
+/* ===================================================================
+   LOGO
+   =================================================================== */
+
+.fn-logo {
+  text-decoration: none;
+}
+
+
+/* ===================================================================
+   HERO SECTION
+   =================================================================== */
+
+.fn-hero {
+  text-align: center;
+  padding: 2rem 0 1rem;
+}
+
+.fn-hero h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.fn-hero p {
+  max-width: 600px;
+  margin: 0 auto;
+  color: var(--pico-muted-color);
+}
+
+@media (max-width: 768px) {
+  .fn-hero h1 {
+    font-size: 1.75rem;
+  }
+}
+
+
+/* ===================================================================
+   BADGES (confidence, status)
+   =================================================================== */
+
+.fn-badge {
+  display: inline-block;
+  padding: 0.2em 0.6em;
+  border-radius: 1em;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  color: #fff;
+  background-color: var(--pico-muted-color);
+}
+
+.fn-badge--very-high {
+  background-color: var(--fn-confidence-very-high);
+}
+
+.fn-badge--high {
+  background-color: var(--fn-confidence-high);
+}
+
+.fn-badge--moderate {
+  background-color: var(--fn-confidence-moderate);
+}
+
+.fn-badge--low {
+  background-color: var(--fn-confidence-low);
+}
+
+.fn-badge--speculative {
+  background-color: var(--fn-confidence-speculative);
+}
+
+/* Status badges (for the recent predictions table) */
+.fn-badge--success {
+  background-color: var(--fn-confidence-very-high);
+}
+
+.fn-badge--info {
+  background-color: var(--fn-confidence-high);
+}
+
+.fn-badge--danger {
+  background-color: var(--fn-confidence-speculative);
+}
+
+
+/* ===================================================================
+   HEADLINE CARDS
+   =================================================================== */
+
+.fn-headline-card {
+  background: var(--fn-card-bg);
+  border: 1px solid var(--fn-card-border);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.fn-headline-card header {
+  padding: 0;
+  border: none;
+  margin-bottom: 0.75rem;
+}
+
+.fn-headline-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.fn-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--pico-primary);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.fn-category {
+  font-size: 0.8rem;
+  color: var(--pico-muted-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fn-headline-text {
+  font-size: 1.25rem;
+  line-height: 1.4;
+  margin: 0.5rem 0;
+}
+
+.fn-first-paragraph {
+  color: var(--pico-muted-color);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.fn-reasoning-summary {
+  margin-top: 0.5rem;
+}
+
+
+/* ===================================================================
+   REASONING BLOCK (expandable <details>)
+   =================================================================== */
+
+.fn-reasoning-block {
+  margin-top: 1rem;
+  border-top: 1px solid var(--fn-card-border);
+  padding-top: 0.75rem;
+}
+
+.fn-reasoning-block summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--pico-primary);
+  font-size: 0.9rem;
+}
+
+.fn-reasoning-block summary:hover {
+  text-decoration: underline;
+}
+
+.fn-reasoning-content {
+  padding: 0.75rem 0 0;
+}
+
+.fn-reasoning-content h4 {
+  font-size: 0.9rem;
+  margin: 1rem 0 0.5rem;
+  color: var(--pico-muted-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fn-reasoning-content h4:first-child {
+  margin-top: 0;
+}
+
+.fn-evidence ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+}
+
+.fn-evidence li {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Agent agreement indicators */
+.fn-agreement-indicator {
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.3rem 0;
+}
+
+.fn-agreement--consensus {
+  color: var(--fn-confidence-very-high);
+}
+
+.fn-agreement--majority {
+  color: var(--fn-confidence-high);
+}
+
+.fn-agreement--split {
+  color: var(--fn-confidence-moderate);
+}
+
+/* Dissenting views */
+.fn-dissent-item {
+  border-left: 3px solid var(--fn-confidence-low);
+  padding: 0.5rem 1rem;
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.fn-dissent-item footer {
+  font-size: 0.8rem;
+  color: var(--pico-muted-color);
+  padding: 0;
+  border: none;
+}
+
+
+/* ===================================================================
+   PROGRESS PAGE: STEP LIST
+   =================================================================== */
+
+.fn-step-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.fn-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--fn-card-border);
+}
+
+.fn-step:last-child {
+  border-bottom: none;
+}
+
+.fn-step-icon {
+  flex-shrink: 0;
+  font-size: 1.2rem;
+  width: 1.5rem;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.fn-step-content {
+  flex: 1;
+}
+
+.fn-step-content strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.fn-step-content small {
+  color: var(--pico-muted-color);
+}
+
+.fn-step-duration {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  color: var(--pico-muted-color);
+  white-space: nowrap;
+  align-self: center;
+}
+
+/* Step states */
+.fn-step--pending .fn-step-icon {
+  color: var(--fn-step-pending);
+}
+
+.fn-step--pending .fn-step-content strong {
+  color: var(--fn-step-pending);
+}
+
+.fn-step--active .fn-step-icon {
+  color: var(--fn-step-active);
+  animation: fn-pulse 1.5s ease-in-out infinite;
+}
+
+.fn-step--active .fn-step-content strong {
+  color: var(--fn-step-active);
+}
+
+.fn-step--done .fn-step-icon {
+  color: var(--fn-step-done);
+}
+
+.fn-step--done .fn-step-content strong {
+  color: inherit;
+}
+
+
+/* ===================================================================
+   PROGRESS PAGE: META & NARRATIVE
+   =================================================================== */
+
+.fn-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--pico-muted-color);
+}
+
+.fn-narrative {
+  text-align: center;
+  font-style: italic;
+  color: var(--pico-muted-color);
+}
+
+
+/* ===================================================================
+   PROGRESS PAGE: ERROR CARD
+   =================================================================== */
+
+.fn-error-card {
+  border-left: 4px solid var(--fn-confidence-speculative);
+}
+
+
+/* ===================================================================
+   FORM: AUTOCOMPLETE DROPDOWN
+   =================================================================== */
+
+.fn-autocomplete-wrapper {
+  position: relative;
+}
+
+.fn-autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--pico-background-color);
+  border: 1px solid var(--fn-card-border);
+  border-top: none;
+  border-radius: 0 0 0.25rem 0.25rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.fn-autocomplete-dropdown li {
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  border-bottom: 1px solid var(--fn-card-border);
+}
+
+.fn-autocomplete-dropdown li:last-child {
+  border-bottom: none;
+}
+
+.fn-autocomplete-dropdown li:hover,
+.fn-autocomplete-dropdown li.fn-autocomplete-active {
+  background: var(--fn-card-bg);
+  color: var(--pico-primary);
+}
+
+.fn-autocomplete-dropdown li small {
+  color: var(--pico-muted-color);
+  margin-left: 0.25rem;
+}
+
+
+/* ===================================================================
+   FORM: ERROR DISPLAY
+   =================================================================== */
+
+.fn-form-error {
+  padding: 0.75rem 1rem;
+  margin-top: 1rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 0.25rem;
+  color: var(--fn-confidence-speculative);
+  font-size: 0.9rem;
+}
+
+
+/* ===================================================================
+   ABOUT PAGE: PERSONA ICONS
+   =================================================================== */
+
+.fn-persona-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+
+/* ===================================================================
+   ANIMATIONS
+   =================================================================== */
+
+@keyframes fn-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Smooth progress bar transition */
+progress {
+  transition: value 0.5s ease;
+}
+
+/* WebKit progress bar coloring */
+progress::-webkit-progress-bar {
+  background-color: var(--fn-card-bg);
+  border-radius: 0.25rem;
+}
+
+progress::-webkit-progress-value {
+  background-color: var(--pico-primary);
+  border-radius: 0.25rem;
+  transition: width 0.5s ease;
+}
+
+/* Firefox progress bar */
+progress::-moz-progress-bar {
+  background-color: var(--pico-primary);
+  border-radius: 0.25rem;
+}
+
+
+/* ===================================================================
+   MOBILE ADJUSTMENTS
+   =================================================================== */
+
+@media (max-width: 576px) {
+  .fn-headline-card {
+    padding: 1rem;
+  }
+
+  .fn-headline-header {
+    gap: 0.5rem;
+  }
+
+  .fn-headline-text {
+    font-size: 1.1rem;
+  }
+
+  .fn-step {
+    gap: 0.75rem;
+  }
+
+  .fn-step-content small {
+    display: none; /* Hide description text on very small screens */
+  }
+
+  .fn-step-duration {
+    font-size: 0.75rem;
+  }
+
+  /* Stack persona cards vertically */
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .fn-progress-meta {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}
+
+
+/* ===================================================================
+   UTILITY: overflow for tables on mobile
+   =================================================================== */
+
+.overflow-auto {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}

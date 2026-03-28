@@ -1,0 +1,160 @@
+{# src/web/templates/index.html -- Landing page with prediction form. #}
+{% extends "base.html" %}
+
+{% block title %}Foresighting News -- Прогноз заголовков СМИ{% endblock %}
+
+{% block content %}
+
+{# ===== HERO SECTION ===== #}
+<section class="fn-hero">
+    <hgroup>
+        <h1>Что напишут СМИ завтра?</h1>
+        <p>
+            Мультиагентная система прогнозирования заголовков.
+            Пять ИИ-экспертов анализируют события и предсказывают,
+            о чём будет писать выбранное издание.
+        </p>
+    </hgroup>
+</section>
+
+{# ===== HOW IT WORKS ===== #}
+<section>
+    <div class="grid">
+        <div>
+            <hgroup>
+                <h3>1. Выберите СМИ</h3>
+                <p>Укажите издание: ТАСС, РБК, BBC Russian, Незыгарь или любое другое</p>
+            </hgroup>
+        </div>
+        <div>
+            <hgroup>
+                <h3>2. Укажите дату</h3>
+                <p>На какой день нужен прогноз -- от завтра до +30 дней</p>
+            </hgroup>
+        </div>
+        <div>
+            <hgroup>
+                <h3>3. Получите прогноз</h3>
+                <p>Система соберёт данные, проведёт экспертный анализ и выдаст заголовки с обоснованиями</p>
+            </hgroup>
+        </div>
+    </div>
+</section>
+
+{# ===== PREDICTION FORM ===== #}
+<section>
+    <article>
+        <header>
+            <h2>Новый прогноз</h2>
+        </header>
+
+        <form id="prediction-form" action="/api/v1/predictions" method="post">
+
+            {# -- Outlet field with autocomplete -- #}
+            <label for="outlet">
+                СМИ
+                <div class="fn-autocomplete-wrapper">
+                    <input
+                        type="text"
+                        id="outlet"
+                        name="outlet"
+                        placeholder="Начните вводить название, например: ТАСС"
+                        autocomplete="off"
+                        required
+                        aria-describedby="outlet-help"
+                    >
+                    <ul id="outlet-suggestions" class="fn-autocomplete-dropdown" role="listbox" hidden></ul>
+                </div>
+                <small id="outlet-help">Название издания на русском или английском</small>
+            </label>
+
+            {# -- Target date field -- #}
+            <label for="target_date">
+                Дата прогноза
+                <input
+                    type="date"
+                    id="target_date"
+                    name="target_date"
+                    min="{{ min_date }}"
+                    max="{{ max_date }}"
+                    required
+                    aria-describedby="date-help"
+                >
+                <small id="date-help">От завтра до +30 дней</small>
+            </label>
+
+            {# -- Submit -- #}
+            <button type="submit" id="submit-btn">
+                Прогнозировать
+            </button>
+
+        </form>
+
+        {# -- Error display area -- #}
+        <div id="form-error" class="fn-form-error" hidden role="alert"></div>
+
+    </article>
+</section>
+
+{# ===== RECENT PREDICTIONS ===== #}
+{% if recent_predictions %}
+<section>
+    <h2>Последние прогнозы</h2>
+    <div class="overflow-auto">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">СМИ</th>
+                    <th scope="col">Дата</th>
+                    <th scope="col">Статус</th>
+                    <th scope="col">Топ-заголовок</th>
+                    <th scope="col"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pred in recent_predictions %}
+                <tr>
+                    <td>{{ pred.outlet_name }}</td>
+                    <td>{{ pred.target_date.strftime('%d.%m.%Y') }}</td>
+                    <td>
+                        {% if pred.status.value == 'completed' %}
+                            <span class="fn-badge fn-badge--success">Готово</span>
+                        {% elif pred.status.value == 'in_progress' %}
+                            <span class="fn-badge fn-badge--info">В процессе</span>
+                        {% elif pred.status.value == 'failed' %}
+                            <span class="fn-badge fn-badge--danger">Ошибка</span>
+                        {% else %}
+                            <span class="fn-badge">{{ pred.status.value }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if pred.headlines %}
+                            {{ pred.headlines[0].headline_text | truncate(60) }}
+                        {% else %}
+                            --
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if pred.status.value == 'completed' %}
+                            <a href="/results/{{ pred.id }}" role="button" class="outline secondary">
+                                Результаты
+                            </a>
+                        {% elif pred.status.value == 'in_progress' %}
+                            <a href="/predict/{{ pred.id }}" role="button" class="outline">
+                                Следить
+                            </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/form.js') }}"></script>
+{% endblock %}
