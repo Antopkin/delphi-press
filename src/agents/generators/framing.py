@@ -81,24 +81,25 @@ class FramingAnalyzer(BaseAgent):
             cost_usd=response.cost_usd,
         )
 
-        parsed = prompt.parse_response(response.content)
-        if parsed is not None:
-            brief = parsed.model_dump()
-            brief["event_thread_id"] = prediction.event_thread_id
-            return brief
+        try:
+            parsed = prompt.parse_response(response.content)
+        except Exception as exc:
+            self.logger.warning("Framing parse failed for %s: %s", prediction.event_thread_id, exc)
+            return FramingBrief(
+                event_thread_id=prediction.event_thread_id,
+                outlet_name=profile.outlet_name,
+                framing_strategy="neutral_report",
+                angle=prediction.prediction,
+                emphasis_points=[prediction.reasoning[:200]],
+                headline_tone="нейтральный",
+                likely_sources=profile.editorial_position.source_preferences[:3] or ["источники"],
+                section="новости",
+                editorial_alignment_score=0.5,
+            ).model_dump()
 
-        # Fallback: minimal brief
-        return FramingBrief(
-            event_thread_id=prediction.event_thread_id,
-            outlet_name=profile.outlet_name,
-            framing_strategy="neutral_report",
-            angle=prediction.prediction,
-            emphasis_points=[prediction.reasoning[:200]],
-            headline_tone="нейтральный",
-            likely_sources=profile.editorial_position.source_preferences[:3] or ["источники"],
-            section="новости",
-            editorial_alignment_score=0.5,
-        ).model_dump()
+        brief = parsed.model_dump()
+        brief["event_thread_id"] = prediction.event_thread_id
+        return brief
 
     @staticmethod
     def _parse_prediction(raw: object) -> RankedPrediction:

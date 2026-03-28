@@ -142,3 +142,32 @@ class TestFramingExecute:
 
         assert len(result["framing_briefs"]) == 1
         assert result["framing_briefs"][0]["event_thread_id"] == "thread_correct_42"
+
+    @pytest.mark.asyncio
+    async def test_parse_error_returns_fallback_brief(self, mock_router, make_context):
+        """When LLM returns unparseable JSON, _analyze_one must return fallback FramingBrief."""
+        from src.agents.generators.framing import FramingAnalyzer
+
+        agent = FramingAnalyzer(llm_client=mock_router)
+        ctx = make_context()
+        ctx.ranked_predictions = [
+            make_ranked_prediction(event_thread_id="thread_fail"),
+            make_ranked_prediction(event_thread_id="thread_ok", rank=2),
+        ]
+        ctx.outlet_profile = make_outlet_profile()
+
+        ok_brief = make_framing_brief(event_thread_id="thread_ok")
+        mock_router.complete.side_effect = [
+            make_llm_response("INVALID JSON — triggers PromptParseError"),
+            make_llm_response(json.dumps(ok_brief.model_dump(), default=str)),
+        ]
+
+        result = await agent.execute(ctx)
+
+        assert len(result["framing_briefs"]) == 2
+        # First brief is fallback (neutral_report strategy)
+        fallback = result["framing_briefs"][0]
+        assert fallback["event_thread_id"] == "thread_fail"
+        assert fallback["framing_strategy"] == "neutral_report"
+        # Second brief is real
+        assert result["framing_briefs"][1]["event_thread_id"] == "thread_ok"
