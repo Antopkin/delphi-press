@@ -121,3 +121,24 @@ class TestFramingExecute:
 
         assert len(result["framing_briefs"]) == 3
         assert mock_router.complete.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_brief_always_has_prediction_event_thread_id(self, mock_router, make_context):
+        """LLM may return wrong event_thread_id — framing must override with prediction's ID."""
+        from src.agents.generators.framing import FramingAnalyzer
+
+        agent = FramingAnalyzer(llm_client=mock_router)
+        ctx = make_context()
+        ctx.ranked_predictions = [make_ranked_prediction(event_thread_id="thread_correct_42")]
+        ctx.outlet_profile = make_outlet_profile()
+
+        # LLM returns brief with WRONG event_thread_id
+        wrong_brief = make_framing_brief(event_thread_id="thread_WRONG_llm_hallucinated")
+        mock_router.complete.return_value = make_llm_response(
+            json.dumps(wrong_brief.model_dump(), default=str)
+        )
+
+        result = await agent.execute(ctx)
+
+        assert len(result["framing_briefs"]) == 1
+        assert result["framing_briefs"][0]["event_thread_id"] == "thread_correct_42"

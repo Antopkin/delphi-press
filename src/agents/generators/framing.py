@@ -83,7 +83,9 @@ class FramingAnalyzer(BaseAgent):
 
         parsed = prompt.parse_response(response.content)
         if parsed is not None:
-            return parsed.model_dump()
+            brief = parsed.model_dump()
+            brief["event_thread_id"] = prediction.event_thread_id
+            return brief
 
         # Fallback: minimal brief
         return FramingBrief(
