@@ -65,6 +65,7 @@ DEFAULT_ASSIGNMENTS: dict[str, ModelAssignment] = {
         primary_model="anthropic/claude-opus-4.6",
         fallback_models=["anthropic/claude-sonnet-4.5"],
         temperature=0.6,
+        max_tokens=16384,
         json_mode=True,
     ),
     "cross_impact_analysis": ModelAssignment(

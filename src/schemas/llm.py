@@ -91,5 +91,5 @@ class ModelAssignment(BaseModel):
     )
     provider: str = Field(default="openrouter")
     temperature: float = Field(default=0.7)
-    max_tokens: int = Field(default=4096)
+    max_tokens: int = Field(default=8192)
     json_mode: bool = Field(default=False)
