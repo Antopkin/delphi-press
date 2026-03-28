@@ -302,8 +302,17 @@ class DelphiPersonaAgent(BaseAgent):
             cost_usd=response.cost_usd,
         )
 
-        parsed = prompt.parse_response(response.content)
-        assessment_dict = parsed.model_dump() if parsed else {}
+        try:
+            parsed = prompt.parse_response(response.content)
+            assessment_dict = parsed.model_dump()
+        except Exception as exc:
+            self.logger.warning(
+                "Persona %s R%d parse failed, returning empty assessment: %s",
+                self.persona.id.value,
+                round_number,
+                exc,
+            )
+            assessment_dict = {}
 
         if round_number == 2:
             return {"revised_assessment": assessment_dict}

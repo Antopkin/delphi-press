@@ -239,6 +239,47 @@ class TestDelphiPersonaAgent:
         assert agent._cost_usd > 0
         assert agent._tokens_in > 0
 
+    @pytest.mark.asyncio
+    async def test_parse_error_returns_fallback_assessment_r1(self, mock_router, make_context):
+        """When LLM returns unparseable JSON in R1, execute returns empty assessment."""
+        from src.agents.forecasters.personas import PERSONAS, DelphiPersonaAgent, PersonaID
+
+        persona = PERSONAS[PersonaID.REALIST]
+        agent = DelphiPersonaAgent(llm_client=mock_router, persona=persona)
+        ctx = make_context()
+        ctx.trajectories = [make_trajectory("thread_0000")]
+
+        mock_router.complete.return_value = make_llm_response(
+            "INVALID JSON — triggers PromptParseError"
+        )
+
+        result = await agent.execute(ctx)
+
+        assert "assessment" in result
+        assert result["assessment"] == {}
+
+    @pytest.mark.asyncio
+    async def test_parse_error_returns_fallback_assessment_r2(self, mock_router, make_context):
+        """When LLM returns unparseable JSON in R2, execute returns empty revised_assessment."""
+        from src.agents.forecasters.personas import PERSONAS, DelphiPersonaAgent, PersonaID
+
+        from .conftest import make_mediator_synthesis
+
+        persona = PERSONAS[PersonaID.ECONOMIST]
+        agent = DelphiPersonaAgent(llm_client=mock_router, persona=persona)
+        ctx = make_context()
+        ctx.trajectories = [make_trajectory("thread_0000")]
+        ctx.mediator_synthesis = make_mediator_synthesis()
+
+        mock_router.complete.return_value = make_llm_response(
+            'TRUNCATED JSON {"persona_id": "economist"'
+        )
+
+        result = await agent.execute(ctx)
+
+        assert "revised_assessment" in result
+        assert result["revised_assessment"] == {}
+
     def test_all_five_agents_have_distinct_names(self, mock_router):
         from src.agents.forecasters.personas import PERSONAS, DelphiPersonaAgent
 
