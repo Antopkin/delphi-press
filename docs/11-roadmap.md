@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-28. Production deployed.
+> Статус на 2026-03-28. Production deployed. Обновлено: 2026-03-28 (post-session 4).
 
 ---
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". **789 тестов** зелёные. Hardening (retry, SSRF, cron, monitoring) завершён.
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **819 тестов** зелёные. Hardening (retry, SSRF, cron, monitoring) завершён.
 
 ### Реализованные компоненты
 
@@ -26,7 +26,7 @@
 | **Schemas** | 60+ Pydantic-моделей в 7 файлах | DONE | Контрактные тесты |
 | **Prompts** | 21 prompt-класс для всех агентов | DONE | — |
 | **API** | JWT auth, predictions CRUD, outlets, health, API keys | DONE | Есть |
-| **Frontend** | index, progress (SSE), results, about | DONE | Есть |
+| **Frontend** | Auth (login/register/logout), settings (API keys), index (мои прогнозы, пресеты), progress (SSE), results, about | DONE | 29 тестов |
 | **Data Sources** | RSS, web search, scraper, foresight (Metaculus/Polymarket/GDELT) | DONE | 104 теста |
 | **Evaluation (пилот)** | Brier Score + bootstrap CI, Log Score, Composite Score, Wayback CDX | DONE | 18 тестов |
 | **Agent Registry** | 18 агентов зарегистрированы в `build_default_registry()` | DONE | Есть |
@@ -75,7 +75,7 @@ tests/test_integration/             — 7 E2E integration tests
 | # | Задача | Файлы | Критерий |
 |---|--------|-------|----------|
 | 1.1 | ~~Fix: `_build_response` не извлекает headline text~~ | `src/schemas/pipeline.py`, `src/agents/orchestrator.py` | **DONE** — falsy check `[] or dict` + rank preservation |
-| 1.2 | Fix: Foresight APIs (Metaculus 403, Polymarket 422, GDELT parse error) | `src/data_sources/foresight.py` | В работе (отдельная сессия) |
+| 1.2 | ~~Fix: Foresight APIs (Polymarket 422, GDELT parse error)~~ | `src/data_sources/foresight.py` | **DONE** — Polymarket camelCase fix, GDELT HTML guard + null articles (987260c). Metaculus: fail-soft (auth token required, возвращает `[]`) |
 | 1.3 | ~~Refactor: унифицировать `ScenarioType` enum~~ | `src/schemas/events.py` | **DONE** — единый enum: BASELINE/OPTIMISTIC/PESSIMISTIC/BLACK_SWAN/WILDCARD |
 | 1.4 | ~~Docs: написать architectural overview~~ | `docs/architecture.md` | **DONE** — 251 строка, 7 секций, tables-first |
 
@@ -121,7 +121,7 @@ tests/test_integration/             — 7 E2E integration tests
 - [x] Phase 3: ForesightCollector enrichment — distribution metrics из price history (2 теста)
 - [x] Phase 4: Judge 6-я персона "market" — fuzzy matching, dynamic weight, alignment boost (13 тестов)
 
-**Итого:** 60 новых тестов, 789/789 зелёные. 4 коммита на main.
+**Итого:** 60 новых тестов. 4 коммита на main.
 
 ---
 
@@ -158,7 +158,7 @@ evaluation = [
 
 ---
 
-### Сессия 4: Frontend
+### Сессия 4: Frontend — DONE (2026-03-28)
 
 **Цель:** Пользователь может ввести свои API-ключи и видеть только свои прогнозы.
 
@@ -166,12 +166,23 @@ evaluation = [
 
 | # | Задача | Файлы | Критерий готовности |
 |---|--------|-------|---------------------|
-| 4.1 | UI для API-ключей | `src/web/templates/settings.html`, `src/web/router.py` | Форма: OpenRouter key + YandexGPT key сохраняются через Fernet |
-| 4.2 | Фильтр "Мои прогнозы" | `src/web/router.py`, `src/web/templates/index.html` | Список прогнозов только текущего пользователя (JWT) |
-| 4.3 | Пресеты (Light/Standard/Full) | `src/web/templates/index.html`, `src/api/predictions.py` | 3 кнопки: Light (~$1), Standard (~$5), Full (~$15) |
-| 4.4 | Редизайн | `src/web/templates/*.html`, `src/web/static/` | Обновлённый визуал (TBD) |
+| 4.0 | ~~Auth UI (login/register/logout)~~ | `src/web/router.py`, `src/web/templates/login.html`, `register.html` | **DONE** — JWT в HttpOnly cookie, cookie fallback в `get_current_user` |
+| 4.1 | ~~UI для API-ключей~~ | `src/web/templates/settings.html`, `src/web/static/js/settings.js` | **DONE** — add/delete/validate через fetch, Fernet encryption |
+| 4.2 | ~~Фильтр "Мои прогнозы"~~ | `src/web/router.py`, `src/web/templates/index.html` | **DONE** — `PredictionRepository.get_by_user()`, guest prompt |
+| 4.3 | ~~Пресеты (Light/Standard/Full)~~ | `src/config.py`, `src/web/templates/index.html`, `src/api/predictions.py` | **DONE** — `PresetConfig` dataclass, `ModelRouter.with_model_override()`, R2 skip для 1-round |
 
-**Зависимости:** Сессия 1 (бэкенд для ключей уже готов: `src/api/keys.py` + `src/security/encryption.py`).
+**Backend для пресетов:** `PresetConfig` в `src/config.py`, `with_model_override()` в `src/llm/router.py`, preset-aware orchestrator + worker + 3 агента (event_trend, judge, quality_gate).
+
+**Коммит:** `4574c2d` feat(frontend): Session 4 — auth UI, settings, my predictions, presets (+30 тестов, 819 total).
+
+#### Пост-деплой фиксы (уже в main)
+
+| Коммит | Что |
+|--------|-----|
+| `dd500d8` | Worker `logging.basicConfig` для Docker |
+| `a04b094` | `max_tokens` 4096→8192, `trajectory_analysis`→16384 |
+| `d1ce04d` | `BudgetTracker._budget` attribute fix |
+| `48cc4e6` | Truncated markdown JSON fence fallback в LLM parser |
 
 ---
 
@@ -214,25 +225,23 @@ evaluation = [
 ## Граф зависимостей
 
 ```
-Сессия 1: First Real Prediction
+Сессия 1: First Real Prediction ──── 90% DONE (Opus run pending)
     |
-    +----> Сессия 2: Hardening
+    +----> Сессия 2: Hardening ───── DONE
     |          |
-    |          +----> Сессия 5: Deploy
+    |          +----> Сессия 5: Deploy ── DONE
     |
-    +----> Сессия 3: Evaluation
+    +----> Сессия 3: Evaluation ──── Core done, full eval pending
     |          |
     |          +----> Backlog: Калибровка (B.4, B.5, B.6)
     |
-    +----> Сессия 4: Frontend
-               |
-               +----> Сессия 5: Deploy
+    +----> Сессия 4: Frontend ────── DONE
 ```
 
-**Критический путь:** 1 -> 2 -> 5 (минимум для production deploy).
+**Оставшийся критический путь:** 1.5-1.7 (Opus prediction) → 3 (Evaluation pilot).
 
-**Параллельно:** Сессии 3 и 4 могут идти одновременно с сессией 2.
+**Всё остальное — backlog.**
 
 ---
 
-*Создано: 2026-03-28. Обновлять после каждой сессии.*
+*Создано: 2026-03-28. Обновлено: 2026-03-28 (post-session 4, 819 тестов).*
