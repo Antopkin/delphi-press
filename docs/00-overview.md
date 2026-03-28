@@ -89,7 +89,7 @@
 | YandexGPT | yandex-cloud-ml-sdk | — | Официальный SDK |
 | HTTP клиент | httpx | 0.27+ | Async HTTP для RSS, web search, scraping |
 | RSS | feedparser | 6.0+ | Парсинг RSS/Atom фидов |
-| Frontend CSS | Pico.css | 2.0 | Semantic HTML, красиво без классов |
+| Frontend CSS | Tailwind CSS | 4.2.2 | Utility-first, @theme config, PostCSS build |
 | Frontend JS | Vanilla JS | ES2022 | EventSource API для SSE, no build step |
 | Шаблоны | Jinja2 | 3.1+ | Server-rendered, встроен в FastAPI |
 | Deployment | Docker Compose | 2.0+ | Multi-container orchestration |
@@ -152,7 +152,7 @@ foresighting_news/
 │   │   ├── __init__.py
 │   │   ├── router.py               # HTML-роуты: /, /predict/{id}, /about
 │   │   ├── templates/
-│   │   │   ├── base.html           # Layout: nav, footer, Pico.css
+│   │   │   ├── base.html           # Layout: nav, footer, Tailwind utilities
 │   │   │   ├── index.html          # Главная: форма ввода
 │   │   │   ├── progress.html       # Прогресс: SSE, прогресс-бар
 │   │   │   ├── results.html        # Результаты: карточки прогнозов
@@ -161,7 +161,8 @@ foresighting_news/
 │   │   │       ├── headline_card.html
 │   │   │       └── reasoning_block.html
 │   │   └── static/
-│   │       ├── css/custom.css
+│   │       ├── css/input.css         # Tailwind source + @theme
+│   │       ├── css/tailwind.css     # Compiled output
 │   │       ├── js/progress.js      # SSE-клиент
 │   │       ├── js/form.js          # Autocomplete, валидация
 │   │       └── img/

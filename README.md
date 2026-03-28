@@ -17,7 +17,7 @@
 | БД | SQLite + aiosqlite, SQLAlchemy 2.0 |
 | Валидация | Pydantic v2 |
 | LLM | OpenRouter (Claude/GPT-4/Gemini) + YandexGPT |
-| Frontend | Jinja2 + Pico.css + Vanilla JS |
+| Frontend | Jinja2 + Tailwind CSS v4 + Vanilla JS |
 | Деплой | Docker Compose (app + worker + redis + nginx) |
 
 ## Архитектура

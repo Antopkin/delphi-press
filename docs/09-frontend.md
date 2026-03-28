@@ -175,7 +175,7 @@ base.html
 
 ## 5. Компонентная библиотека
 
-Все кастомные компоненты имеют префикс `fn-` и определены в `custom.css`. Полный список (~60 классов):
+Все кастомные компоненты имеют префикс `fn-` и определены в `input.css` (`@layer components`). Полный список (~60 классов):
 
 | Компонент | CSS-класс | Шаблон | Назначение |
 |-----------|-----------|--------|-----------|
@@ -265,7 +265,7 @@ npm run css:dev     # Development: input.css → tailwind.css (watch mode)
 
 ## 8. Система анимаций
 
-### Keyframes (в `custom.css`):
+### Keyframes (в `input.css` @theme):
 
 - `fn-fade-in` — opacity 0→1
 - `fn-fade-in-up` — transform + opacity (снизу вверх)
@@ -425,7 +425,7 @@ npm run css:dev     # Development: input.css → tailwind.css (watch mode)
 
 **Шаги:**
 
-1. Добавить новый CSS-класс в `custom.css` с префиксом `fn-`
+1. Добавить новый CSS-класс в `input.css` (`@layer components`) с префиксом `fn-`
 2. Определить базовый стиль + все модификаторы (например, `fn-badge--success`)
 3. Добавить в таблицу компонентов (раздел 5)
 4. Создать шаблон-пример в нужном `.html`-файле
