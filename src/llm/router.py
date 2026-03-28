@@ -395,7 +395,7 @@ class ModelRouter:
         return ModelRouter(
             providers=self._providers,
             assignments=new_assignments,
-            budget_usd=budget_usd or self._budget_tracker._budget_usd,
+            budget_usd=budget_usd or self._budget_tracker._budget,
         )
 
     def _resolve_provider(self, model: str) -> LLMProvider | None:
