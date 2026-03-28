@@ -127,14 +127,16 @@ class StyleReplicator(BaseAgent):
             cost_usd=response.cost_usd,
         )
 
-        parsed = prompt.parse_response(response.content)
-        if parsed is not None:
-            headlines = parsed.headlines
-            # Ensure correct event_thread_id (LLM may hallucinate)
-            for h in headlines:
-                h.event_thread_id = prediction.event_thread_id
-        else:
+        try:
+            parsed = prompt.parse_response(response.content)
+        except Exception as exc:
+            self.logger.warning("Style parse failed for %s: %s", prediction.event_thread_id, exc)
             return []
+
+        headlines = parsed.headlines
+        # Ensure correct event_thread_id (LLM may hallucinate)
+        for h in headlines:
+            h.event_thread_id = prediction.event_thread_id
 
         # Compute length deviation
         target_len = profile.headline_style.avg_length_chars

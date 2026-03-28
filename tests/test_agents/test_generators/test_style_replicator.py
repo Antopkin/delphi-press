@@ -173,3 +173,19 @@ class TestStyleReplicatorExecute:
         assert len(headlines) >= 1
         # length_deviation should be negative (too short)
         assert headlines[0]["length_deviation"] < 0
+
+    @pytest.mark.asyncio
+    async def test_generate_one_parse_error_returns_empty(self, mock_router, make_context):
+        """_generate_one must catch PromptParseError and return [] without raising."""
+        from src.agents.generators.style_replicator import StyleReplicator
+
+        agent = StyleReplicator(llm_client=mock_router)
+        prediction = make_ranked_prediction()
+        brief = make_framing_brief()
+        profile = make_outlet_profile()
+
+        mock_router.complete.return_value = make_llm_response("INVALID JSON — not parseable")
+
+        # _generate_one should return [] on parse failure, not raise
+        result = await agent._generate_one(prediction, brief, profile)
+        assert result == []
