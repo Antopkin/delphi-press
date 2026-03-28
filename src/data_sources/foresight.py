@@ -135,8 +135,15 @@ class PolymarketClient:
             timeout=httpx.Timeout(timeout),
             headers={"User-Agent": _USER_AGENT},
         )
+        self._clob_client = httpx.AsyncClient(
+            base_url="https://clob.polymarket.com",
+            timeout=httpx.Timeout(timeout),
+            headers={"User-Agent": _USER_AGENT},
+        )
         self._cache: dict[str, tuple[float, list[dict]]] = {}
+        self._price_cache: dict[str, tuple[float, list[float]]] = {}
         self._cache_ttl = 900  # 15 min
+        self._semaphore = asyncio.Semaphore(10)
 
     async def fetch_markets(
         self,
@@ -220,6 +227,13 @@ class PolymarketClient:
             # Extract categories from tags
             categories = [t.get("label", "") for t in market.get("tags", [])]
 
+            # Extract CLOB token ID for price history
+            try:
+                clob_ids = json.loads(market.get("clobTokenIds", "[]"))
+                clob_token_id = clob_ids[0] if clob_ids else ""
+            except (json.JSONDecodeError, ValueError, TypeError, IndexError):
+                clob_token_id = ""
+
             results.append(
                 {
                     "id": market.get("id", ""),
@@ -231,15 +245,93 @@ class PolymarketClient:
                     "liquidity": liquidity,
                     "end_date": end_date_str,
                     "categories": categories,
+                    "clob_token_id": clob_token_id,
                 }
             )
 
         self._cache[cache_key] = (time.monotonic(), results)
         return results
 
+    async def fetch_price_history(
+        self,
+        token_id: str,
+        *,
+        interval: str = "1d",
+        fidelity: int = 60,
+    ) -> list[float]:
+        """Fetch CLOB price history for a token.
+
+        Returns:
+            Chronological list of prices (floats). Empty on error.
+        """
+        if not token_id:
+            return []
+
+        cache_key = f"clob_prices:{token_id}"
+        cached = self._price_cache.get(cache_key)
+        if cached and (time.monotonic() - cached[0]) < self._cache_ttl:
+            return cached[1]
+
+        params = {"market": token_id, "interval": interval, "fidelity": fidelity}
+        try:
+            async with self._semaphore:
+                response = await self._clob_client.get("/prices-history", params=params)
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.warning("CLOB price history failed for %s: %s", token_id, exc)
+            return []
+
+        try:
+            data = response.json()
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.warning("CLOB price history parse error: %s", exc)
+            return []
+
+        history = data.get("history", [])
+        prices = []
+        for point in history:
+            try:
+                prices.append(float(point["p"]))
+            except (KeyError, ValueError, TypeError):
+                continue
+
+        self._price_cache[cache_key] = (time.monotonic(), prices)
+        return prices
+
+    async def fetch_enriched_markets(
+        self,
+        query: str = "",
+        *,
+        limit: int = 100,
+        min_liquidity: float = 5000.0,
+        end_date_days_ahead: int = 30,
+    ) -> list[dict]:
+        """Fetch markets from Gamma then enrich with CLOB price history.
+
+        For each market, fetches price history in parallel via the CLOB API.
+        Adds ``price_history`` (list[float]) to each market dict. On partial
+        CLOB failure, affected markets get ``price_history=[]``.
+        """
+        markets = await self.fetch_markets(
+            query,
+            limit=limit,
+            min_liquidity=min_liquidity,
+            end_date_days_ahead=end_date_days_ahead,
+        )
+        if not markets:
+            return markets
+
+        async def _enrich(market: dict) -> None:
+            token_id = market.get("clob_token_id", "")
+            market["price_history"] = await self.fetch_price_history(token_id)
+
+        await asyncio.gather(*[_enrich(m) for m in markets], return_exceptions=True)
+        return markets
+
     async def close(self) -> None:
-        """Close the underlying HTTP client."""
+        """Close the underlying HTTP clients."""
         await self._client.aclose()
+        await self._clob_client.aclose()
 
 
 class GdeltDocClient:

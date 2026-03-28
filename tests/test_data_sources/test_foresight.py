@@ -89,6 +89,7 @@ POLYMARKET_RESPONSE = [
         "outcomePrices": '["0.65", "0.35"]',
         "volume": "450000.00",
         "liquidity": "85000.00",
+        "clobTokenIds": '["token_yes_abc", "token_no_abc"]',
         "tags": [{"id": 1, "label": "Politics"}],
     },
 ]
@@ -277,6 +278,149 @@ class TestPolymarketClient:
             results = await client.fetch_markets()
 
         assert results == []
+
+
+# ---------------------------------------------------------------------------
+# CLOB / enriched markets
+# ---------------------------------------------------------------------------
+
+CLOB_PRICE_HISTORY_RESPONSE = {
+    "history": [
+        {"t": 1709000000, "p": "0.52"},
+        {"t": 1709003600, "p": "0.54"},
+        {"t": 1709007200, "p": "0.55"},
+        {"t": 1709010800, "p": "0.53"},
+        {"t": 1709014400, "p": "0.56"},
+    ]
+}
+
+CLOB_EMPTY_HISTORY = {"history": []}
+
+
+class TestPolymarketClientCLOB:
+    async def test_fetch_price_history_success(self) -> None:
+        client = PolymarketClient()
+        mock_resp = _make_response(200, CLOB_PRICE_HISTORY_RESPONSE)
+        with patch.object(
+            client._clob_client, "get", new_callable=AsyncMock, return_value=mock_resp
+        ):
+            prices = await client.fetch_price_history("token_yes_abc")
+
+        assert prices == [0.52, 0.54, 0.55, 0.53, 0.56]
+
+    async def test_fetch_price_history_empty(self) -> None:
+        client = PolymarketClient()
+        mock_resp = _make_response(200, CLOB_EMPTY_HISTORY)
+        with patch.object(
+            client._clob_client, "get", new_callable=AsyncMock, return_value=mock_resp
+        ):
+            prices = await client.fetch_price_history("token_xyz")
+
+        assert prices == []
+
+    async def test_fetch_price_history_empty_token_id(self) -> None:
+        client = PolymarketClient()
+        prices = await client.fetch_price_history("")
+        assert prices == []
+
+    async def test_fetch_price_history_http_error(self) -> None:
+        client = PolymarketClient()
+        with patch.object(
+            client._clob_client,
+            "get",
+            new_callable=AsyncMock,
+            side_effect=httpx.ConnectError("timeout"),
+        ):
+            prices = await client.fetch_price_history("token_fail")
+
+        assert prices == []
+
+    async def test_fetch_price_history_caching(self) -> None:
+        client = PolymarketClient()
+        mock_resp = _make_response(200, CLOB_PRICE_HISTORY_RESPONSE)
+        mock_get = AsyncMock(return_value=mock_resp)
+        with patch.object(client._clob_client, "get", mock_get):
+            first = await client.fetch_price_history("token_cache")
+            second = await client.fetch_price_history("token_cache")
+
+        assert mock_get.await_count == 1
+        assert first == second
+
+    async def test_fetch_enriched_markets_success(self) -> None:
+        client = PolymarketClient()
+        gamma_resp = _make_response(200, POLYMARKET_RESPONSE)
+        clob_resp = _make_response(200, CLOB_PRICE_HISTORY_RESPONSE)
+        with (
+            patch.object(client._client, "get", new_callable=AsyncMock, return_value=gamma_resp),
+            patch.object(
+                client._clob_client, "get", new_callable=AsyncMock, return_value=clob_resp
+            ),
+        ):
+            markets = await client.fetch_enriched_markets()
+
+        assert len(markets) == 1
+        assert markets[0]["clob_token_id"] == "token_yes_abc"
+        assert markets[0]["price_history"] == [0.52, 0.54, 0.55, 0.53, 0.56]
+
+    async def test_fetch_enriched_markets_partial_clob_failure(self) -> None:
+        """CLOB failure for one market should not affect others."""
+        two_markets = [
+            {
+                **POLYMARKET_RESPONSE[0],
+                "id": "m1",
+                "clobTokenIds": '["token_m1"]',
+            },
+            {
+                **POLYMARKET_RESPONSE[0],
+                "id": "m2",
+                "clobTokenIds": '["token_m2"]',
+            },
+        ]
+        client = PolymarketClient()
+        gamma_resp = _make_response(200, two_markets)
+
+        call_count = 0
+
+        async def _clob_get(url: str, **kwargs: object) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            params = kwargs.get("params", {})
+            if params.get("market") == "token_m1":
+                return _make_response(200, CLOB_PRICE_HISTORY_RESPONSE)
+            raise httpx.ConnectError("timeout")
+
+        with (
+            patch.object(client._client, "get", new_callable=AsyncMock, return_value=gamma_resp),
+            patch.object(client._clob_client, "get", side_effect=_clob_get),
+        ):
+            markets = await client.fetch_enriched_markets()
+
+        assert len(markets) == 2
+        # m1 succeeded
+        m1 = next(m for m in markets if m["id"] == "m1")
+        assert len(m1["price_history"]) == 5
+        # m2 failed gracefully
+        m2 = next(m for m in markets if m["id"] == "m2")
+        assert m2["price_history"] == []
+
+    async def test_fetch_markets_includes_clob_token_id(self) -> None:
+        client = PolymarketClient()
+        mock_resp = _make_response(200, POLYMARKET_RESPONSE)
+        with patch.object(client._client, "get", new_callable=AsyncMock, return_value=mock_resp):
+            results = await client.fetch_markets()
+
+        assert results[0]["clob_token_id"] == "token_yes_abc"
+
+    async def test_fetch_markets_missing_clob_token_ids(self) -> None:
+        """Markets without clobTokenIds should get empty string."""
+        data = [{**POLYMARKET_RESPONSE[0]}]
+        del data[0]["clobTokenIds"]
+        client = PolymarketClient()
+        mock_resp = _make_response(200, data)
+        with patch.object(client._client, "get", new_callable=AsyncMock, return_value=mock_resp):
+            results = await client.fetch_markets()
+
+        assert results[0]["clob_token_id"] == ""
 
 
 # ===========================================================================
