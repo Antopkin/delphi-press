@@ -117,11 +117,19 @@ class EventTrendAnalyzer(BaseAgent):
 
         self.logger.info("Identified %d event threads from %d signals", len(threads), len(signals))
 
-        # Trajectory analysis
-        trajectories = await self._analyze_trajectories(threads)
+        # Trajectory analysis (graceful: if LLM parse fails, return empty)
+        try:
+            trajectories = await self._analyze_trajectories(threads)
+        except Exception as exc:
+            self.logger.warning("Trajectory analysis failed, continuing without: %s", exc)
+            trajectories = []
 
-        # Cross-impact matrix
-        cross_impact = await self._build_cross_impact_matrix(threads)
+        # Cross-impact matrix (graceful)
+        try:
+            cross_impact = await self._build_cross_impact_matrix(threads)
+        except Exception as exc:
+            self.logger.warning("Cross-impact matrix failed, continuing without: %s", exc)
+            cross_impact = None
 
         return {
             "event_threads": threads,
