@@ -33,7 +33,9 @@
 - `src/agents/collectors/foresight_collector.py` → `docs/03-collectors.md` + ресёрчи выше
 - `src/web/` → `docs/09-frontend.md`
 - `src/eval/` → `tasks/research/retrospective_testing.md`
-- Roadmap (оставшиеся сессии) → `docs/11-roadmap.md`
+- Roadmap (задачи, баги, сессии) → `docs/11-roadmap.md`
+- `scripts/dry_run.py` → E2E dry run без инфраструктуры
+- `tests/fixtures/mock_llm.py` → MockLLMClient для E2E тестов
 - `.claude/skills/predict/` → Claude Code predict skill (сессия 12)
 
 ## Доменный глоссарий
@@ -57,6 +59,28 @@
 uv run uvicorn src.main:app --reload --port 8000   # dev server
 uv run arq src.worker.WorkerSettings                # background worker
 uv run pytest tests/ -v                             # tests
+uv run pytest tests/test_integration/ -v            # E2E integration tests only
 ruff format src/ tests/ && ruff check src/ --fix    # lint
 docker compose up -d                                # production
 ```
+
+### E2E Dry Run (без Redis/DB/Docker)
+
+```bash
+# Дешёвая модель, 5 event threads (быстрый smoke test, ~$0.25)
+uv run python scripts/dry_run.py --outlet "ТАСС" --model google/gemini-2.5-flash --event-threads 5
+
+# Production-like (Opus, 20 threads, ~$5-15)
+uv run python scripts/dry_run.py --outlet "ТАСС" --model anthropic/claude-opus-4.6
+
+# Полный список аргументов
+uv run python scripts/dry_run.py --help
+```
+
+Требует `OPENROUTER_API_KEY` в env. Скрипт вызывает `Orchestrator.run_prediction()` напрямую, минуя API/worker/Redis.
+
+## Архитектура pipeline
+
+> TODO: `docs/architecture.md` — полное описание 9 стадий, 28 LLM-задач, data flow, task IDs. Создать в следующей сессии.
+
+Краткая навигация по pipeline: `docs/11-roadmap.md` (таблица компонентов + ключевые файлы).

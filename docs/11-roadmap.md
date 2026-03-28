@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-28. Актуальный аудит кодовой базы.
+> Статус на 2026-03-28 (вечер). После E2E dry run.
 
 ---
 
-## Текущее состояние: feature-complete
+## Текущее состояние: E2E verified
 
-Полный аудит кодовой базы показал, что **все 18 агентов реализованы и зарегистрированы**, 9-стадийный пайплайн работает end-to-end, 701 тест зелёный.
+Все 18 агентов реализованы. Первый E2E dry run (gemini-2.5-flash, 5 event threads) прошёл **9/9 стадий** за 6 мин, $0.24. В процессе найдено и пофикшено **10 integration-багов**. 708 тестов зелёные (7 новых E2E).
 
 ### Реализованные компоненты
 
@@ -30,6 +30,8 @@
 | **Data Sources** | RSS, web search, scraper, foresight (Metaculus/Polymarket/GDELT) | DONE | 104 теста |
 | **Evaluation (пилот)** | Brier Score + bootstrap CI, Log Score, Composite Score, Wayback CDX | DONE | 18 тестов |
 | **Agent Registry** | 18 агентов зарегистрированы в `build_default_registry()` | DONE | Есть |
+| **E2E Testing** | MockLLMClient + 25 fixture factories + 7 integration tests | DONE | 7 тестов |
+| **Dry-Run Script** | `scripts/dry_run.py` — standalone, no Redis/DB/Docker | DONE | — |
 
 ### Единственный известный stub
 
@@ -40,13 +42,17 @@
 ### Ключевые файлы пайплайна
 
 ```
-src/agents/orchestrator.py          — 473 строк, координация 9 стадий
-src/agents/forecasters/personas.py  — 310 строк, 5 персон с execute()
-src/agents/forecasters/mediator.py  — 245 строк, медиация + анонимизация
-src/agents/forecasters/judge.py     — 313 строк, агрегация + калибровка
-src/agents/registry.py              — 202 строки, 18 агентов
-src/schemas/pipeline.py             — 304 строки, PipelineContext со всеми слотами
-src/llm/router.py                   — 367 строк, 40+ task-to-model mappings
+src/agents/orchestrator.py          — координация 9 стадий
+src/agents/forecasters/personas.py  — 5 персон с execute()
+src/agents/forecasters/mediator.py  — медиация + анонимизация
+src/agents/forecasters/judge.py     — агрегация + калибровка
+src/agents/registry.py              — 18 агентов, build_default_registry()
+src/schemas/pipeline.py             — PipelineContext со всеми слотами
+src/llm/router.py                   — 28 task-to-model mappings (DEFAULT_ASSIGNMENTS)
+scripts/dry_run.py                  — standalone E2E dry run (cheap model, no infra)
+tests/fixtures/mock_llm.py          — MockLLMClient (task-based dispatch)
+tests/fixtures/llm_responses.py     — 25+ JSON fixture factories
+tests/test_integration/             — 7 E2E integration tests
 ```
 
 ---
@@ -55,29 +61,31 @@ src/llm/router.py                   — 367 строк, 40+ task-to-model mappin
 
 ### Сессия 1: First Real Prediction
 
-**Цель:** Запустить полный 9-стадийный пайплайн на реальных данных и убедиться, что всё работает end-to-end.
+**Цель:** Запустить полный 9-стадийный пайплайн на реальных данных и получить заголовки.
 
-**Предусловия:**
-- OpenRouter API-ключ (Claude Opus 4.6, Gemini Flash)
-- Redis запущен (`docker run -d -p 6379:6379 redis:alpine` или `brew services start redis`)
-- БД инициализирована
+#### Выполнено: E2E Dry Run (2026-03-28)
 
-| # | Задача | Файлы | Критерий готовности |
-|---|--------|-------|---------------------|
-| 1.1 | Настроить `.env` с ключами | `.env` | `OPENROUTER_API_KEY` заполнен |
-| 1.2 | Запустить dev-сервер + worker | — | `uvicorn` + `arq` без ошибок |
-| 1.3 | Отправить prediction request (ТАСС RU, завтра) | — | Ответ 201, task_id получен |
-| 1.4 | Дождаться завершения 9 стадий | — | SSE: все стадии завершены, статус `completed` |
-| 1.5 | Проверить результат | — | `PredictionResponse` с 7+ заголовками |
-| 1.6 | Замерить стоимость и время | — | Записать: $X, Y минут, Z LLM-вызовов |
-| 1.7 | Проверить BudgetTracker логи | — | cost_usd > 0 для каждого агента |
+- [x] Mock E2E тест (7 integration tests, MockLLMClient, 708 total green)
+- [x] Live dry run: gemini-2.5-flash, 5 threads, 9/9 стадий, $0.24, 6 мин
+- [x] Fix 10 integration-багов (task names, dict/object, foresight APIs, schema validation)
+- [x] Relax Pydantic constraints (17 string max_length, DisputeArea.spread, ScenarioType+wildcard)
 
-**Изменения кода:** Не требуются. Только конфигурация и запуск.
+#### Осталось: баги из dry run
 
-**Риски:**
-- OpenRouter rate limits на Opus — может потребоваться увеличить timeout
-- Redis connection — убедиться что worker подключается
-- LLM JSON parsing — structured output может потребовать prompt tuning
+| # | Задача | Файлы | Критерий |
+|---|--------|-------|----------|
+| 1.1 | Fix: `_build_response` не извлекает headline text из `final_predictions` | `src/agents/orchestrator.py` | Dry run возвращает headlines с текстом |
+| 1.2 | Fix: Foresight APIs (Metaculus 403, Polymarket 422, GDELT parse error) | `src/data_sources/foresight.py` | Хотя бы 1 из 3 API возвращает данные |
+| 1.3 | Refactor: унифицировать `ScenarioType` enum (agent.py vs events.py — два разных) | `src/schemas/agent.py`, `src/schemas/events.py` | Один enum, используется везде |
+| 1.4 | Docs: написать architectural overview (`docs/architecture.md`) | `docs/architecture.md`, `CLAUDE.md` | Pipeline flow, task IDs, data contracts в одном месте |
+
+#### Осталось: первый прогноз на Opus
+
+| # | Задача | Критерий |
+|---|--------|----------|
+| 1.5 | Запустить dry run с Opus (20 threads, production config) | `status=completed`, 7+ headlines |
+| 1.6 | Замерить стоимость и время | Записать: $X, Y минут |
+| 1.7 | Запустить через API (dev-сервер + worker + Redis) | SSE progress + результат в БД |
 
 **Ожидаемая стоимость:** ~$5-15 за один full prediction (5 персон x 2 раунда x Opus 4.6).
 

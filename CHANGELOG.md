@@ -4,6 +4,34 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.4.0] - 2026-03-28
+
+Первый E2E dry run pipeline. 10 integration-багов найдено и пофикшено. 9/9 стадий пройдены (gemini-2.5-flash, 5 threads, $0.24, 6 мин).
+
+### Added
+
+- **E2E mock test suite** — 7 integration-тестов: full pipeline, context verification, progress events, partial failure, schema contract (`tests/test_integration/`)
+- **MockLLMClient** — Protocol-based drop-in для ModelRouter с task-based dispatch и call logging (`tests/fixtures/mock_llm.py`)
+- **25+ JSON fixture factories** — валидные ответы для всех LLM-задач pipeline (`tests/fixtures/llm_responses.py`)
+- **Dry-run script** — standalone E2E без Redis/DB/Docker, cheap model override, progress bar, cost report (`scripts/dry_run.py`)
+- `style_generation_ru` в DEFAULT_ASSIGNMENTS — отсутствовал, KeyError для русских СМИ
+- `WILDCARD` в ScenarioType enum — LLM использует, валидация падала
+- `GdeltDocClient.fetch_articles()` — Protocol-compliant wrapper вокруг `search_articles()`
+
+### Fixed
+
+- **quality_gate.py** — task names `"factual_check"` → `"quality_factcheck"`, `"style_check"` → `"quality_style"` (KeyError на стадии 9)
+- **media_analyst.py** — `context.outlet_profile` хранится как dict (после `model_dump()`), не как `OutletProfile` (AttributeError)
+- **orchestrator._build_response** — `getattr()` на dict'ах из `final_predictions` → `_get_field()` helper
+- **MetaculusClient.fetch_questions** — добавлен `query: str` параметр (Protocol mismatch → TypeError)
+- **PolymarketClient.fetch_markets** — добавлен `query: str` параметр (Protocol mismatch → TypeError)
+
+### Changed
+
+- **DisputeArea.spread** — `ge=0.15` → `ge=0.0` (LLM не контролирует числовые пороги)
+- **17 string `max_length`** убрано из `events.py` (LLM не контролирует длину символов) — `SignalRecord`, `ScheduledEvent`, `EventThread`, `Scenario`, `EventTrajectory`, `CrossImpactEntry`, `GeopoliticalAssessment`, `EconomicAssessment`, `MediaAssessment`
+- Тесты: 701 → 708 (7 новых E2E)
+
 ## [0.3.1] - 2026-03-27
 
 Раунд 2 evidence-based prompt improvements. Ревизия research-материалов выявила пропущенные высокоценные компоненты.
