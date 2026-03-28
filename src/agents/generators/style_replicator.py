@@ -48,17 +48,36 @@ class StyleReplicator(BaseAgent):
         profile = self._parse_outlet_profile(context.outlet_profile)
         briefs_index = self._build_briefs_index(context.framing_briefs)
 
+        self.logger.info(
+            "StyleReplicator: %d ranked_predictions, %d framing_briefs, briefs_keys=%s",
+            len(context.ranked_predictions),
+            len(context.framing_briefs),
+            list(briefs_index.keys())[:5],
+        )
+
         all_headlines: list[dict] = []
 
         for raw_pred in context.ranked_predictions:
             prediction = self._parse_prediction(raw_pred)
             brief = briefs_index.get(prediction.event_thread_id)
             if brief is None:
+                self.logger.warning(
+                    "No brief for event_thread_id=%s (briefs have: %s)",
+                    prediction.event_thread_id,
+                    list(briefs_index.keys())[:5],
+                )
                 continue
 
-            headlines = await self._generate_one(prediction, brief, profile)
+            try:
+                headlines = await self._generate_one(prediction, brief, profile)
+            except Exception as exc:
+                self.logger.warning(
+                    "Style generation failed for %s: %s", prediction.event_thread_id, exc
+                )
+                headlines = []
             all_headlines.extend(headlines)
 
+        self.logger.info("StyleReplicator produced %d headlines", len(all_headlines))
         return {"generated_headlines": all_headlines}
 
     async def _generate_one(

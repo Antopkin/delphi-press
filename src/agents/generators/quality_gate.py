@@ -91,9 +91,18 @@ class QualityGate(BaseAgent):
         # Deprioritized go at the end
         passed.extend(deprioritized)
 
+        self.logger.info(
+            "QualityGate: %d headlines scored, %d passed, %d deprioritized, %d rejected",
+            len(scored),
+            len(passed),
+            len(deprioritized),
+            len(scored) - len(passed) - len(deprioritized),
+        )
+
         # 4. Build FinalPrediction list
         finals = self._build_final_predictions(passed, pred_index, framing_index)
 
+        self.logger.info("QualityGate: %d final_predictions built", len(finals))
         return {"final_predictions": finals}
 
     async def _score_one(
