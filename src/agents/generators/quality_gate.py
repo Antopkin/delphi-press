@@ -135,7 +135,9 @@ class QualityGate(BaseAgent):
             schema_instruction=prompt.render_output_schema_instruction(),
         )
 
-        response = await self.llm.complete(task="factual_check", messages=messages, json_mode=True)
+        response = await self.llm.complete(
+            task="quality_factcheck", messages=messages, json_mode=True
+        )
         self.track_llm_usage(
             model=response.model,
             tokens_in=response.tokens_in,
@@ -169,7 +171,7 @@ class QualityGate(BaseAgent):
             schema_instruction=prompt.render_output_schema_instruction(),
         )
 
-        response = await self.llm.complete(task="style_check", messages=messages, json_mode=True)
+        response = await self.llm.complete(task="quality_style", messages=messages, json_mode=True)
         self.track_llm_usage(
             model=response.model,
             tokens_in=response.tokens_in,

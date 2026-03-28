@@ -192,6 +192,12 @@ DEFAULT_ASSIGNMENTS: dict[str, ModelAssignment] = {
         fallback_models=["anthropic/claude-opus-4.6"],
         temperature=0.8,
     ),
+    "style_generation_ru": ModelAssignment(
+        task="style_generation_ru",
+        primary_model="yandexgpt",
+        fallback_models=["anthropic/claude-opus-4.6"],
+        temperature=0.8,
+    ),
     "style_generation_en": ModelAssignment(
         task="style_generation_en",
         primary_model="anthropic/claude-opus-4.6",

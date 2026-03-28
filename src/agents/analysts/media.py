@@ -53,11 +53,20 @@ class MediaAnalyst(BaseAgent):
     async def execute(self, context: PipelineContext) -> dict[str, Any]:
         """Медийный анализ нитей относительно целевого издания."""
         threads: list[EventThread] = context.event_threads
-        profile: OutletProfile = context.outlet_profile
+        profile = self._parse_outlet_profile(context.outlet_profile)
 
         assessments = await self._analyze_batch(threads, profile)
 
         return {"assessments": [a.model_dump() for a in assessments]}
+
+    @staticmethod
+    def _parse_outlet_profile(raw: object) -> OutletProfile:
+        """Coerce dict or Pydantic model to OutletProfile."""
+        if isinstance(raw, OutletProfile):
+            return raw
+        if isinstance(raw, dict):
+            return OutletProfile.model_validate(raw)
+        return OutletProfile.model_validate(raw)
 
     async def _analyze_batch(
         self,

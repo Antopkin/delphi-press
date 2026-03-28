@@ -76,7 +76,7 @@ def test_stage_result_total_tokens_out():
 def test_scenario_type_membership():
     assert ScenarioType.BASE == "base"
     assert ScenarioType.BLACK_SWAN == "black_swan"
-    assert len(ScenarioType) == 4
+    assert len(ScenarioType) == 5
 
 
 # ── PredictionItem ───────────────────────────────────────────────────
@@ -158,14 +158,15 @@ def test_dispute_area_spread_at_015():
     assert d.spread == 0.15
 
 
-def test_dispute_area_spread_below_015_rejected():
-    with pytest.raises(ValidationError):
-        DisputeArea(
-            event_thread_id="t1",
-            median_probability=0.5,
-            spread=0.14,
-            positions=[],
-        )
+def test_dispute_area_spread_below_015_accepted():
+    """Spreads below 0.15 are now accepted — LLMs cannot enforce precise thresholds."""
+    d = DisputeArea(
+        event_thread_id="t1",
+        median_probability=0.5,
+        spread=0.14,
+        positions=[],
+    )
+    assert d.spread == 0.14
 
 
 # ── MediatorSynthesis ────────────────────────────────────────────────

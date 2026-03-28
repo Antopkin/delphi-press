@@ -40,13 +40,10 @@ class SignalRecord(BaseModel):
         ...,
         description="Уникальный идентификатор сигнала. Формат: 'rss_{hash}' или 'ws_{hash}'.",
     )
-    title: str = Field(
-        ..., description="Заголовок новости / поста. Оригинальный язык.", max_length=500
-    )
+    title: str = Field(..., description="Заголовок новости / поста. Оригинальный язык.")
     summary: str = Field(
         default="",
-        description="Краткое содержание (первые 2-3 предложения). Максимум 1000 символов.",
-        max_length=1000,
+        description="Краткое содержание (первые 2-3 предложения).",
     )
     url: str = Field(..., description="URL источника.")
     source_name: str = Field(
@@ -107,8 +104,8 @@ class ScheduledEvent(BaseModel):
     """
 
     id: str = Field(..., description="Уникальный идентификатор. Формат: 'evt_{hash}'.")
-    title: str = Field(..., description="Название события.", max_length=300)
-    description: str = Field(default="", description="Подробное описание события.", max_length=500)
+    title: str = Field(..., description="Название события.")
+    description: str = Field(default="", description="Подробное описание события.")
     event_date: date = Field(..., description="Дата события.")
     event_type: EventType = Field(..., description="Тип события.")
     certainty: EventCertainty = Field(
@@ -117,7 +114,7 @@ class ScheduledEvent(BaseModel):
     location: str = Field(default="", description="Место проведения.")
     participants: list[str] = Field(default_factory=list, description="Ключевые участники.")
     potential_impact: str = Field(
-        default="", description="Потенциальное влияние на новостную повестку.", max_length=300
+        default="", description="Потенциальное влияние на новостную повестку."
     )
     source_url: str = Field(default="", description="URL источника информации о событии.")
     newsworthiness: float = Field(
@@ -263,10 +260,8 @@ class EventThread(BaseModel):
     """
 
     id: str = Field(..., description="Уникальный идентификатор нити. Формат: 'thread_{hash}'.")
-    title: str = Field(..., description="Краткое название нити (1 предложение).", max_length=200)
-    summary: str = Field(
-        ..., description="Развёрнутое описание нити. 2-4 предложения.", max_length=1000
-    )
+    title: str = Field(..., description="Краткое название нити (1 предложение).")
+    summary: str = Field(..., description="Развёрнутое описание нити. 2-4 предложения.")
     signal_ids: list[str] = Field(default_factory=list, description="ID сигналов в кластере.")
     scheduled_event_ids: list[str] = Field(
         default_factory=list, description="ID запланированных событий, связанных с нитью."
@@ -319,9 +314,7 @@ class Scenario(BaseModel):
     """Один сценарий развития события."""
 
     scenario_type: ScenarioType = Field(..., description="Тип сценария.")
-    description: str = Field(
-        ..., description="Описание сценария. 2-3 предложения.", max_length=500
-    )
+    description: str = Field(..., description="Описание сценария. 2-3 предложения.")
     probability: float = Field(
         ..., ge=0.0, le=1.0, description="Вероятность сценария (0-1). Сумма = 1.0."
     )
@@ -341,9 +334,7 @@ class EventTrajectory(BaseModel):
     """
 
     thread_id: str = Field(..., description="ID связанного EventThread.")
-    current_state: str = Field(
-        ..., description="Описание текущего состояния события.", max_length=500
-    )
+    current_state: str = Field(..., description="Описание текущего состояния события.")
     momentum: str = Field(
         ...,
         description="Динамика (escalating, stable, de_escalating и др.).",
@@ -379,9 +370,7 @@ class CrossImpactEntry(BaseModel):
         le=1.0,
         description="Сила влияния (-1 до +1). Положительные: усиливает. Отрицательные: ослабляет.",
     )
-    explanation: str = Field(
-        default="", description="Краткое объяснение механизма влияния.", max_length=200
-    )
+    explanation: str = Field(default="", description="Краткое объяснение механизма влияния.")
 
 
 class CrossImpactMatrix(BaseModel):
@@ -445,9 +434,7 @@ class GeopoliticalAssessment(BaseModel):
     strategic_actors: list[StrategicActor] = Field(
         default_factory=list, description="Ключевые геополитические акторы. 2-5 акторов."
     )
-    power_dynamics: str = Field(
-        default="", description="Описание расстановки сил.", max_length=500
-    )
+    power_dynamics: str = Field(default="", description="Описание расстановки сил.")
     alliance_shifts: list[str] = Field(
         default_factory=list, description="Возможные сдвиги в альянсах."
     )
@@ -462,7 +449,7 @@ class GeopoliticalAssessment(BaseModel):
         description="Санкционный риск: 'none', 'low', 'medium', 'high', 'imminent'.",
     )
     military_implications: str = Field(
-        default="", description="Военные последствия (если применимо).", max_length=300
+        default="", description="Военные последствия (если применимо)."
     )
     headline_angles: list[str] = Field(
         default_factory=list, description="Возможные углы подачи для заголовков."
@@ -505,24 +492,18 @@ class EconomicAssessment(BaseModel):
     affected_sectors: list[str] = Field(
         default_factory=list, description="Затронутые сектора экономики."
     )
-    supply_chain_impact: str = Field(
-        default="", description="Влияние на цепочки поставок.", max_length=300
-    )
+    supply_chain_impact: str = Field(default="", description="Влияние на цепочки поставок.")
     fiscal_calendar_events: list[str] = Field(
         default_factory=list, description="Связанные события фискального календаря."
     )
     central_bank_signals: list[str] = Field(
         default_factory=list, description="Релевантные сигналы от центробанков."
     )
-    trade_flow_impact: str = Field(
-        default="", description="Влияние на торговые потоки.", max_length=300
-    )
+    trade_flow_impact: str = Field(default="", description="Влияние на торговые потоки.")
     commodity_prices: list[str] = Field(
         default_factory=list, description="Затронутые товарные рынки."
     )
-    employment_impact: str = Field(
-        default="", description="Влияние на рынок труда.", max_length=200
-    )
+    employment_impact: str = Field(default="", description="Влияние на рынок труда.")
     headline_angles: list[str] = Field(
         default_factory=list, description="Возможные экономические углы для заголовков."
     )
@@ -578,7 +559,7 @@ class MediaAssessment(BaseModel):
         default=0.0, ge=0.0, le=1.0, description="Соответствие редакционной политике (0-1)."
     )
     editorial_fit_explanation: str = Field(
-        default="", description="Почему событие подходит/не подходит изданию.", max_length=300
+        default="", description="Почему событие подходит/не подходит изданию."
     )
     news_cycle_position: str = Field(
         default="emerging",
@@ -594,9 +575,7 @@ class MediaAssessment(BaseModel):
         default="secondary",
         description="Заметность: 'top_headline', 'major', 'secondary', 'brief', 'ignore'.",
     )
-    likely_framing: str = Field(
-        default="", description="Предполагаемый фрейм подачи.", max_length=300
-    )
+    likely_framing: str = Field(default="", description="Предполагаемый фрейм подачи.")
     competing_stories: list[str] = Field(
         default_factory=list, description="Конкурирующие истории в этот день."
     )

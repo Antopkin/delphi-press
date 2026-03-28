@@ -40,10 +40,12 @@ class MetaculusClient:
 
     async def fetch_questions(
         self,
+        query: str = "",
         *,
         resolve_days_ahead: int = 14,
         limit: int = 100,
         min_forecasters: int = 10,
+        status: str = "open",
     ) -> list[dict]:
         """Fetch open binary questions resolving within resolve_days_ahead.
 
@@ -138,6 +140,7 @@ class PolymarketClient:
 
     async def fetch_markets(
         self,
+        query: str = "",
         *,
         limit: int = 100,
         min_liquidity: float = 5000.0,
@@ -355,6 +358,27 @@ class GdeltDocClient:
 
         self._cache[cache_key] = (time.monotonic(), results)
         return results
+
+    async def fetch_articles(
+        self,
+        query: str,
+        *,
+        language: str = "english",
+        limit: int = 50,
+        days_back: int = 3,
+    ) -> list[dict]:
+        """Protocol-compliant wrapper around search_articles.
+
+        Maps GdeltClientProto.fetch_articles() to the underlying
+        search_articles() with appropriate parameter translation.
+        """
+        timespan = f"{days_back * 24}h"
+        return await self.search_articles(
+            query,
+            timespan=timespan,
+            max_records=limit,
+            sourcelang=language,
+        )
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""

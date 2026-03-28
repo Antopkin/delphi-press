@@ -109,6 +109,7 @@ class ScenarioType(StrEnum):
     UPSIDE = "upside"
     DOWNSIDE = "downside"
     BLACK_SWAN = "black_swan"
+    WILDCARD = "wildcard"
 
 
 class PredictionItem(BaseModel):
@@ -191,7 +192,7 @@ class DisputeArea(BaseModel):
 
     event_thread_id: str
     median_probability: float = Field(ge=0.0, le=1.0)
-    spread: float = Field(ge=0.15, le=1.0, description="Разброс >= 0.15")
+    spread: float = Field(ge=0.0, le=1.0, description="Разброс между экспертами")
     positions: list[AnonymizedPosition] = Field(description="Анонимизированные позиции экспертов")
     key_question: str = Field(
         default="",

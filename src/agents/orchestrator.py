@@ -398,17 +398,17 @@ class Orchestrator:
             try:
                 headline = HeadlineOutput(
                     rank=i,
-                    headline=getattr(pred, "headline", ""),
-                    first_paragraph=getattr(pred, "first_paragraph", ""),
-                    confidence=getattr(pred, "confidence", 0.0),
-                    confidence_label=str(getattr(pred, "confidence_label", "")),
-                    category=getattr(pred, "category", ""),
-                    reasoning=getattr(pred, "reasoning", ""),
-                    evidence_chain=getattr(pred, "evidence_chain", []),
-                    agent_agreement=str(getattr(pred, "agent_agreement", "")),
+                    headline=self._get_field(pred, "headline", ""),
+                    first_paragraph=self._get_field(pred, "first_paragraph", ""),
+                    confidence=self._get_field(pred, "confidence", 0.0),
+                    confidence_label=str(self._get_field(pred, "confidence_label", "")),
+                    category=self._get_field(pred, "category", ""),
+                    reasoning=self._get_field(pred, "reasoning", ""),
+                    evidence_chain=self._get_field(pred, "evidence_chain", []),
+                    agent_agreement=str(self._get_field(pred, "agent_agreement", "")),
                     dissenting_views=[
                         dv.model_dump() if hasattr(dv, "model_dump") else dv
-                        for dv in getattr(pred, "dissenting_views", [])
+                        for dv in self._get_field(pred, "dissenting_views", [])
                     ],
                 )
                 headlines.append(headline)
@@ -470,3 +470,14 @@ class Orchestrator:
             failed_stage=failed_stage.stage_name,
             stage_results=stage_results_dicts,
         )
+
+    @staticmethod
+    def _get_field(obj: object, name: str, default: object = None) -> object:
+        """Extract a field from a dict or an object attribute.
+
+        Pipeline context slots may contain Pydantic models or their
+        ``model_dump()`` dicts -- this helper handles both transparently.
+        """
+        if isinstance(obj, dict):
+            return obj.get(name, default)
+        return getattr(obj, name, default)
