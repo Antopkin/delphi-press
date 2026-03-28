@@ -2,13 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import math
-
-import pytest
-
-from .conftest import make_llm_response, make_persona_assessment, make_prediction_item
-
 
 class TestPlattScale:
     """Test Platt scaling (extremization)."""

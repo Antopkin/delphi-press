@@ -32,18 +32,19 @@ class _TokenBucket:
 
     async def acquire(self) -> None:
         """Wait until a token is available."""
-        async with self._lock:
-            now = time.monotonic()
-            elapsed = now - self._last_refill
-            self._tokens = min(self._capacity, self._tokens + elapsed * self._rate)
-            self._last_refill = now
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                elapsed = now - self._last_refill
+                self._tokens = min(self._capacity, self._tokens + elapsed * self._rate)
+                self._last_refill = now
 
-            if self._tokens < 1:
+                if self._tokens >= 1:
+                    self._tokens -= 1
+                    return
                 wait = (1 - self._tokens) / self._rate
-                await asyncio.sleep(wait)
-                self._tokens = 0
-            else:
-                self._tokens -= 1
+            # Sleep OUTSIDE the lock so other coroutines are not blocked
+            await asyncio.sleep(wait)
 
 
 class ExaSearchProvider:
@@ -182,6 +183,8 @@ class WebSearchService:
     Implements WebSearchProto: search(query, num_results=10) -> list[SearchResult].
     """
 
+    _MAX_CACHE_SIZE = 500
+
     def __init__(
         self,
         *,
@@ -195,6 +198,13 @@ class WebSearchService:
             self._providers.append(JinaSearchProvider(jina_api_key))
         self._cache: dict[str, tuple[float, list[SearchResult]]] = {}
         self._cache_ttl = 600.0  # 10 minutes
+
+    def _evict_expired(self) -> None:
+        """Remove cache entries whose TTL has expired."""
+        now = time.monotonic()
+        expired_keys = [k for k, (ts, _) in self._cache.items() if now - ts >= self._cache_ttl]
+        for k in expired_keys:
+            del self._cache[k]
 
     async def search(
         self,
@@ -227,6 +237,11 @@ class WebSearchService:
                             seen.add(url_key)
                             deduped.append(r)
 
+                    self._evict_expired()
+                    if len(self._cache) >= self._MAX_CACHE_SIZE:
+                        # Remove the oldest entry by timestamp
+                        oldest_key = min(self._cache, key=lambda k: self._cache[k][0])
+                        del self._cache[oldest_key]
                     self._cache[cache_key] = (time.monotonic(), deduped)
                     return deduped
             except Exception as exc:

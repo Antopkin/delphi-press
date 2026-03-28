@@ -10,13 +10,12 @@ from datetime import date
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from src.config import Settings
 from src.db.engine import create_session_factory
 from src.db.models import Base, Prediction, PredictionStatus
-
 
 # ── Fakes ───────────────────────────────────────────────────────────
 

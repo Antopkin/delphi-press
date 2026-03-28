@@ -5,9 +5,6 @@ from __future__ import annotations
 import uuid
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
-
 # ── Helpers ────────────────────────────────────────────────────────
 
 
@@ -81,10 +78,10 @@ class TestAddKey:
         )
 
         # Verify the stored value is encrypted (not plaintext)
+        from sqlalchemy import select
+
         from src.db.engine import get_session
         from src.db.models import UserAPIKey
-
-        from sqlalchemy import select
 
         session_factory = test_app.state.session_factory
         async with get_session(session_factory) as session:

@@ -1,12 +1,13 @@
 """Tests for src.data_sources.rss."""
 
-from datetime import UTC, datetime, timedelta
+import time
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 
-from src.data_sources.rss import RSSFetcher, _clean_text, _parse_date
+from src.agents.collectors.protocols import RSSItem
+from src.data_sources.rss import RSSFetcher, _CacheEntry, _clean_text, _parse_date
 
 # Sample RSS XML for testing
 SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>
@@ -162,3 +163,89 @@ class TestHelpers:
 
     def test_clean_text_empty(self):
         assert _clean_text("") == ""
+
+    def test_parse_date_non_utc_timezone(self):
+        """Bug 3: +0300 timezone should be converted to UTC, not replaced.
+
+        Input: 12:00:00 +0300 → Expected output: 09:00:00 UTC.
+        With bug (replace): output would be 12:00:00 UTC (wrong).
+        """
+        entry = {"published": "Mon, 24 Mar 2025 12:00:00 +0300"}
+        dt = _parse_date(entry)
+        assert dt is not None
+        assert dt.tzinfo is not None
+        # +0300 means UTC+3 → 12:00 local = 09:00 UTC
+        assert dt.hour == 9, f"Expected hour=9 (UTC), got hour={dt.hour}"
+        assert dt.day == 24
+        assert dt.year == 2025
+
+
+class TestRSSCacheEviction:
+    """Bug 2: RSS cache should evict expired entries and stay bounded."""
+
+    @pytest.mark.asyncio
+    async def test_cache_evicts_expired_rss(self):
+        """Expired RSS cache entries should be removed on next cache write."""
+        fetcher = RSSFetcher(cache_ttl_seconds=300)
+
+        # Insert 3 expired cache entries (fetched_at far in the past)
+        old_ts = time.monotonic() - 9999.0  # way beyond 300s TTL
+        for i in range(3):
+            fetcher._cache[f"https://old.example.com/feed{i}"] = _CacheEntry(
+                fetched_at=old_ts,
+                records=[
+                    RSSItem(
+                        title=f"Old item {i}",
+                        url=f"https://old.example.com/article{i}",
+                    )
+                ],
+            )
+
+        assert len(fetcher._cache) == 3
+
+        # Trigger a real cache write via fetch_feeds
+        mock_response = httpx.Response(
+            200,
+            text=SAMPLE_RSS,
+            request=httpx.Request("GET", "https://example.com/fresh"),
+        )
+        with patch.object(
+            fetcher._client, "get", new_callable=AsyncMock, return_value=mock_response
+        ):
+            await fetcher.fetch_feeds(["https://example.com/fresh"], days_back=365 * 10)
+
+        # Expired entries should be gone
+        assert "https://old.example.com/feed0" not in fetcher._cache
+        assert "https://old.example.com/feed1" not in fetcher._cache
+        assert "https://old.example.com/feed2" not in fetcher._cache
+        # Fresh entry should be present
+        assert "https://example.com/fresh" in fetcher._cache
+
+    @pytest.mark.asyncio
+    async def test_cache_bounded_size_rss(self):
+        """RSS cache should not exceed _MAX_CACHE_SIZE."""
+        fetcher = RSSFetcher(cache_ttl_seconds=300)
+        max_size = fetcher._MAX_CACHE_SIZE
+
+        # Fill cache to max with non-expired entries
+        now = time.monotonic()
+        for i in range(max_size):
+            fetcher._cache[f"https://feed{i}.example.com/rss"] = _CacheEntry(
+                fetched_at=now,
+                records=[],
+            )
+
+        assert len(fetcher._cache) == max_size
+
+        # Trigger one more cache write
+        mock_response = httpx.Response(
+            200,
+            text=SAMPLE_RSS,
+            request=httpx.Request("GET", "https://example.com/overflow"),
+        )
+        with patch.object(
+            fetcher._client, "get", new_callable=AsyncMock, return_value=mock_response
+        ):
+            await fetcher.fetch_feeds(["https://example.com/overflow"], days_back=365 * 10)
+
+        assert len(fetcher._cache) <= max_size

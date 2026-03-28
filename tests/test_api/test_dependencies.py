@@ -10,7 +10,6 @@ from fastapi import HTTPException
 from src.security.jwt import create_access_token
 from src.security.password import hash_password
 
-
 # ── get_current_user ───────────────────────────────────────────────
 
 
@@ -25,10 +24,9 @@ async def test_get_current_user_no_credentials_returns_none(test_app):
 
 
 async def test_get_current_user_valid_token_returns_user(test_app):
+    from src.api.dependencies import get_current_user
     from src.db.engine import get_session
     from src.db.repositories import UserRepository
-
-    from src.api.dependencies import get_current_user
 
     # Create a user in DB
     user_id = str(uuid.uuid4())

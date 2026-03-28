@@ -4,14 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import pytest
-
 from src.schemas.agent import (
     AnonymizedPosition,
     ConsensusArea,
-    CrossImpactFlag,
     DisputeArea,
-    GapArea,
     MediatorSynthesis,
     PersonaAssessment,
     PredictionItem,

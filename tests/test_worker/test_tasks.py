@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, patch
 from src.db.models import PredictionStatus
 from src.schemas.prediction import HeadlineOutput, PredictionResponse
 
-
 # ── run_prediction_task ─────────────────────────────────────────────
 
 

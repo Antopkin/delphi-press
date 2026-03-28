@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from .conftest import make_llm_response, make_prediction_item, make_trajectory
+from .conftest import make_llm_response, make_trajectory
 
 
 class TestPersonaID:

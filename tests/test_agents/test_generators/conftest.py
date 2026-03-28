@@ -13,7 +13,6 @@ from src.schemas.events import (
 )
 from src.schemas.headline import (
     AgreementLevel,
-    CheckResult,
     ConfidenceLabel,
     FramingBrief,
     FramingStrategy,

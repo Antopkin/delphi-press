@@ -40,6 +40,8 @@ class RSSFetcher:
     Реализует RSSFetcherProto для NewsScout.
     """
 
+    _MAX_CACHE_SIZE = 500
+
     def __init__(
         self,
         *,
@@ -57,6 +59,15 @@ class RSSFetcher:
             headers={"User-Agent": user_agent},
             follow_redirects=True,
         )
+
+    def _evict_expired(self) -> None:
+        """Remove cache entries whose TTL has expired."""
+        now = time.monotonic()
+        expired_keys = [
+            k for k, entry in self._cache.items() if now - entry.fetched_at >= self._cache_ttl
+        ]
+        for k in expired_keys:
+            del self._cache[k]
 
     async def fetch_feeds(
         self,
@@ -146,7 +157,12 @@ class RSSFetcher:
         text = response.text
         items = self._parse_feed(text, feed_url, since)
 
-        # Update cache
+        # Update cache (evict expired, enforce max size)
+        self._evict_expired()
+        if len(self._cache) >= self._MAX_CACHE_SIZE:
+            # Remove the oldest entry by fetched_at timestamp
+            oldest_key = min(self._cache, key=lambda k: self._cache[k].fetched_at)
+            del self._cache[oldest_key]
         self._cache[feed_url] = _CacheEntry(
             fetched_at=time.monotonic(),
             etag=response.headers.get("ETag"),
@@ -244,7 +260,12 @@ def _parse_date(entry: dict) -> datetime | None:
             continue
         if isinstance(raw, str):
             try:
-                return parsedate_to_datetime(raw).replace(tzinfo=UTC)
+                dt = parsedate_to_datetime(raw)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=UTC)
+                else:
+                    dt = dt.astimezone(UTC)
+                return dt
             except (TypeError, ValueError):
                 pass
             try:
