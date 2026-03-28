@@ -141,6 +141,11 @@ class Settings(LLMConfig):
         default="",
         description="Metaculus API token (free, from metaculus.com/aib).",
     )
+    metaculus_tournaments: str = Field(
+        default="32977",
+        description="Comma-separated Metaculus tournament IDs with CP access. "
+        "32977=bot testing (~50 Qs), 32979=bot benchmarking (~500 Qs, needs BENCHMARKING tier).",
+    )
 
     # === Server ===
 

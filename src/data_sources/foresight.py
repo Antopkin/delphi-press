@@ -31,7 +31,13 @@ class MetaculusClient:
     Auth: optional Token (free, from metaculus.com/aib). Cache TTL: 30 min.
     """
 
-    def __init__(self, *, token: str = "", timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        *,
+        token: str = "",
+        tournaments: list[int] | None = None,
+        timeout: float = 30.0,
+    ) -> None:
         headers: dict[str, str] = {"User-Agent": _USER_AGENT}
         if token:
             headers["Authorization"] = f"Token {token}"
@@ -39,6 +45,7 @@ class MetaculusClient:
             timeout=httpx.Timeout(timeout),
             headers=headers,
         )
+        self._tournaments = tournaments
         self._cache: dict[str, tuple[float, list[dict]]] = {}
         self._cache_ttl = 1800  # 30 min
 
@@ -76,6 +83,8 @@ class MetaculusClient:
             "limit": limit,
             "with_cp": "true",
         }
+        if self._tournaments:
+            params["tournaments"] = ",".join(str(t) for t in self._tournaments)
         if query:
             params["search"] = query
 

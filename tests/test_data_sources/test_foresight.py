@@ -303,6 +303,28 @@ class TestMetaculusClient:
         params = mock_get.call_args.kwargs.get("params", {})
         assert params.get("with_cp") == "true"
 
+    async def test_fetch_questions_sends_tournaments_param(self) -> None:
+        """When tournaments are set, they must appear in API params."""
+        client = MetaculusClient(tournaments=[32977, 32979])
+        mock_resp = _make_response(200, METACULUS_RESPONSE)
+        mock_get = AsyncMock(return_value=mock_resp)
+        with patch.object(client._client, "get", mock_get):
+            await client.fetch_questions()
+
+        params = mock_get.call_args.kwargs.get("params", {})
+        assert params.get("tournaments") == "32977,32979"
+
+    async def test_fetch_questions_no_tournaments_by_default(self) -> None:
+        """Without tournaments, param should not be sent."""
+        client = MetaculusClient()
+        mock_resp = _make_response(200, METACULUS_RESPONSE)
+        mock_get = AsyncMock(return_value=mock_resp)
+        with patch.object(client._client, "get", mock_get):
+            await client.fetch_questions()
+
+        params = mock_get.call_args.kwargs.get("params", {})
+        assert "tournaments" not in params
+
     async def test_fetch_questions_uses_new_param_names(self) -> None:
         """Verify scheduled_resolve_time__gt/lt and statuses params."""
         client = MetaculusClient()

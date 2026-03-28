@@ -189,7 +189,11 @@ async def main() -> None:
     outlet_catalog = OutletsCatalog()
     scraper = NoopScraper()  # NoopScraper instead of TrafilaturaScraper for speed
     profile_cache = InMemoryProfileCache()
-    metaculus = MetaculusClient(token=os.environ.get("METACULUS_TOKEN", ""))
+    _tournaments_str = os.environ.get("METACULUS_TOURNAMENTS", "32977")
+    metaculus = MetaculusClient(
+        token=os.environ.get("METACULUS_TOKEN", ""),
+        tournaments=[int(t) for t in _tournaments_str.split(",") if t.strip()],
+    )
     polymarket = PolymarketClient()
     gdelt = GdeltDocClient()
 

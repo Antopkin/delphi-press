@@ -100,7 +100,10 @@ async def run_prediction_task(
         "outlet_catalog": OutletsCatalog(),
         "scraper": TrafilaturaScraper(),
         "profile_cache": RedisProfileCache(redis),
-        "metaculus_client": MetaculusClient(token=settings.metaculus_token),
+        "metaculus_client": MetaculusClient(
+            token=settings.metaculus_token,
+            tournaments=[int(t) for t in settings.metaculus_tournaments.split(",") if t.strip()],
+        ),
         "polymarket_client": PolymarketClient(),
         "gdelt_client": GdeltDocClient(),
     }
