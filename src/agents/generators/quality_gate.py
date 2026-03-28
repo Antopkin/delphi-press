@@ -47,8 +47,6 @@ class QualityGate(BaseAgent):
     name = "quality_gate"
 
     def validate_context(self, context: PipelineContext) -> str | None:
-        if not context.generated_headlines:
-            return "No generated_headlines for QualityGate"
         if not context.ranked_predictions:
             return "No ranked_predictions for QualityGate"
         return None
