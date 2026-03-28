@@ -257,8 +257,7 @@ async def main() -> None:
         conf = h.confidence
         print(f"\n  #{h.rank} [{conf:.0%}] {h.headline}")
         if h.first_paragraph:
-            para = h.first_paragraph[:120] + ("..." if len(h.first_paragraph) > 120 else "")
-            print(f"     {para}")
+            print(f"     {h.first_paragraph}")
 
     # 8. Summary
     print(f"\n  {'=' * 60}")
