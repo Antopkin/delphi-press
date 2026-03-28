@@ -609,7 +609,7 @@ class TestPolymarketClientCLOB:
             nonlocal call_count
             call_count += 1
             params = kwargs.get("params", {})
-            if params.get("token_id") == "token_m1":
+            if params.get("market") == "token_m1":
                 return _make_response(200, CLOB_PRICE_HISTORY_RESPONSE)
             raise httpx.ConnectError("timeout")
 
@@ -646,8 +646,8 @@ class TestPolymarketClientCLOB:
 
         assert results[0]["clob_token_id"] == ""
 
-    async def test_fetch_price_history_sends_token_id_param(self) -> None:
-        """CLOB API must receive 'token_id' param, not 'market'."""
+    async def test_fetch_price_history_sends_market_param(self) -> None:
+        """CLOB API must receive 'market' param (asset id)."""
         client = PolymarketClient()
         mock_resp = _make_response(200, CLOB_PRICE_HISTORY_RESPONSE)
         mock_get = AsyncMock(return_value=mock_resp)
@@ -655,9 +655,8 @@ class TestPolymarketClientCLOB:
             await client.fetch_price_history("token_abc")
 
         params = mock_get.call_args.kwargs.get("params", {})
-        assert "token_id" in params
-        assert params["token_id"] == "token_abc"
-        assert "market" not in params
+        assert "market" in params
+        assert params["market"] == "token_abc"
 
     async def test_fetch_enriched_markets_always_has_price_history_key(self) -> None:
         """Every market must have price_history key even when _enrich raises."""
@@ -855,8 +854,8 @@ class TestPolymarketHistoricalPrice:
 
         assert price is None
 
-    async def test_fetch_historical_price_uses_startTs_endTs(self) -> None:
-        """Must use startTs/endTs, NOT interval=max (resolved markets bug)."""
+    async def test_fetch_historical_price_uses_market_and_startTs_endTs(self) -> None:
+        """Must use 'market' param + startTs/endTs, NOT interval=max."""
         client = PolymarketClient()
         mock_resp = _make_response(200, CLOB_EMPTY_HISTORY)
         mock_get = AsyncMock(return_value=mock_resp)
@@ -864,6 +863,8 @@ class TestPolymarketHistoricalPrice:
             await client.fetch_historical_price("token_check", 1710500000)
 
         params = mock_get.call_args.kwargs.get("params", {})
+        assert "market" in params
+        assert params["market"] == "token_check"
         assert "startTs" in params
         assert "endTs" in params
         assert "interval" not in params

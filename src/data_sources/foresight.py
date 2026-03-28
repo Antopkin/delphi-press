@@ -304,7 +304,7 @@ class PolymarketClient:
         if cached and (time.monotonic() - cached[0]) < self._cache_ttl:
             return cached[1]
 
-        params = {"token_id": token_id, "interval": interval, "fidelity": fidelity}
+        params = {"market": token_id, "interval": interval, "fidelity": fidelity}
         try:
             async with self._semaphore:
                 response = await retry_with_backoff(
@@ -447,7 +447,7 @@ class PolymarketClient:
             return None
 
         params = {
-            "token_id": token_id,
+            "market": token_id,
             "startTs": target_timestamp - window_seconds,
             "endTs": target_timestamp + window_seconds,
             "fidelity": 60,

@@ -50,7 +50,7 @@ async def _fetch_full_price_history(
     while start < end:
         chunk_end = min(start + chunk_size, end)
         params = {
-            "token_id": token_id,
+            "market": token_id,
             "startTs": start,
             "endTs": chunk_end,
             "fidelity": 60,
@@ -111,9 +111,7 @@ async def main() -> None:
     try:
         # 1. Fetch resolved markets
         print("  Fetching resolved markets...")
-        resolved = await poly_client.fetch_resolved_markets(
-            limit=args.markets, min_volume=50_000.0
-        )
+        resolved = await poly_client.fetch_resolved_markets(limit=args.markets, min_volume=1_000.0)
         print(f"  Found {len(resolved)} resolved markets")
         if not resolved:
             print("  No resolved markets found.")
