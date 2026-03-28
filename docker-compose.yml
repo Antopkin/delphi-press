@@ -87,6 +87,7 @@ services:
         condition: service_healthy
     networks:
       - backend
+      - frontend
     volumes:
       - sqlite_data:/app/data
     deploy:
