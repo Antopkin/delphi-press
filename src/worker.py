@@ -303,9 +303,41 @@ async def _fetch_and_store_feeds(
 
             stats["feeds_processed"] += 1
 
+            # Update feed health in Redis
+            redis = ctx.get("redis")
+            if redis:
+                try:
+                    await redis.hset(
+                        f"delphi:feed_health:{feed.rss_url}",
+                        {
+                            "last_fetched_at": datetime.now(UTC).isoformat(),
+                            "articles_count": str(len(article_dicts)),
+                            "error_count": "0",
+                            "last_error": "",
+                        },
+                    )
+                except Exception:
+                    pass  # non-critical
+
         except Exception as exc:
             logger.warning("Error fetching feed %d (%s): %s", feed.id, feed.rss_url, exc)
             stats["errors"] += 1
+
+            # Update feed health error in Redis
+            redis = ctx.get("redis")
+            if redis:
+                try:
+                    await redis.hset(
+                        f"delphi:feed_health:{feed.rss_url}",
+                        {
+                            "last_fetched_at": datetime.now(UTC).isoformat(),
+                            "error_count": str(stats["errors"]),
+                            "last_error": str(exc)[:200],
+                        },
+                    )
+                except Exception:
+                    pass  # non-critical
+
             try:
                 async with get_session(session_factory) as session:
                     feed_repo = FeedSourceRepository(session)

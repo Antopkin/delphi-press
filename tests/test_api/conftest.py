@@ -66,6 +66,26 @@ class FakeRedis:
     async def ping(self) -> bool:
         return True
 
+    async def hset(self, name: str, mapping: dict) -> int:
+        if not hasattr(self, "_hashes"):
+            self._hashes: dict[str, dict] = {}
+        if name not in self._hashes:
+            self._hashes[name] = {}
+        self._hashes[name].update(mapping)
+        return len(mapping)
+
+    async def hgetall(self, name: str) -> dict:
+        if not hasattr(self, "_hashes"):
+            return {}
+        return self._hashes.get(name, {})
+
+    async def keys(self, pattern: str) -> list:
+        if not hasattr(self, "_hashes"):
+            return []
+        # Simple pattern matching: delphi:feed_health:* → match all that start with prefix
+        prefix = pattern.rstrip("*")
+        return [k for k in self._hashes if k.startswith(prefix)]
+
     async def close(self) -> None:
         pass
 

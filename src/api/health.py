@@ -81,3 +81,50 @@ async def health_check(request: Request) -> HealthResponse | JSONResponse:
         return JSONResponse(status_code=503, content=response_data.model_dump())
 
     return response_data
+
+
+class FeedStatus(BaseModel):
+    feed_url: str
+    last_fetched_at: str | None = None
+    articles_count: str | None = None
+    error_count: str | None = None
+    last_error: str | None = None
+
+
+class FeedHealthResponse(BaseModel):
+    feeds: list[FeedStatus]
+
+
+@router.get(
+    "/health/feeds",
+    response_model=FeedHealthResponse,
+    summary="Feed health status",
+)
+async def feed_health(request: Request) -> FeedHealthResponse:
+    """Per-feed health status from Redis."""
+    redis = request.app.state.redis
+    prefix = "delphi:feed_health:"
+
+    try:
+        keys = await redis.keys(f"{prefix}*")
+    except Exception:
+        logger.warning("Failed to read feed health from Redis", exc_info=True)
+        return FeedHealthResponse(feeds=[])
+
+    feeds: list[FeedStatus] = []
+    for key in keys:
+        key_str = key.decode() if isinstance(key, bytes) else key
+        feed_url = key_str.removeprefix(prefix)
+        try:
+            data = await redis.hgetall(key_str)
+            decoded = {
+                (k.decode() if isinstance(k, bytes) else k): (
+                    v.decode() if isinstance(v, bytes) else v
+                )
+                for k, v in data.items()
+            }
+            feeds.append(FeedStatus(feed_url=feed_url, **decoded))
+        except Exception:
+            feeds.append(FeedStatus(feed_url=feed_url))
+
+    return FeedHealthResponse(feeds=feeds)
