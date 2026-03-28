@@ -74,10 +74,8 @@ class Judge(BaseAgent):
             super().__init__(llm_client)
 
     def validate_context(self, context: PipelineContext) -> str | None:
-        if not context.round2_assessments:
-            return "No round2_assessments for Judge"
-        if context.mediator_synthesis is None:
-            return "No mediator_synthesis for Judge"
+        if not context.round2_assessments and not context.round1_assessments:
+            return "No round2_assessments or round1_assessments for Judge"
         return None
 
     async def execute(self, context: PipelineContext) -> dict[str, Any]:
@@ -90,15 +88,16 @@ class Judge(BaseAgent):
         from src.llm.prompts.forecasters.judge import JudgePrompt
         from src.schemas.agent import MediatorSynthesis, PersonaAssessment, PredictionItem
 
-        # Parse assessments (may be dicts or Pydantic models)
+        # Parse assessments: prefer R2, fallback to R1 (single-round presets)
+        raw_assessments = context.round2_assessments or context.round1_assessments
         assessments: list[PersonaAssessment] = []
-        for raw in context.round2_assessments:
+        for raw in raw_assessments:
             if isinstance(raw, PersonaAssessment):
                 assessments.append(raw)
             elif isinstance(raw, dict):
                 assessments.append(PersonaAssessment.model_validate(raw))
 
-        # Parse mediator synthesis
+        # Parse mediator synthesis (may be None for single-round presets)
         synthesis = context.mediator_synthesis
         if isinstance(synthesis, dict):
             synthesis = MediatorSynthesis.model_validate(synthesis)

@@ -181,13 +181,14 @@ class TestJudgeValidation:
         ctx.mediator_synthesis = {"some": "data"}
         assert judge.validate_context(ctx) is not None
 
-    def test_no_mediator_synthesis_returns_error(self, mock_router, make_context):
+    def test_no_mediator_synthesis_still_valid(self, mock_router, make_context):
+        """Mediator synthesis is optional (single-round presets skip R2)."""
         from src.agents.forecasters.judge import Judge
 
         judge = Judge(llm_client=mock_router)
         ctx = make_context()
         ctx.round2_assessments = [{"some": "data"}]
-        assert judge.validate_context(ctx) is not None
+        assert judge.validate_context(ctx) is None
 
     def test_valid_context(self, mock_router, make_context):
         from src.agents.forecasters.judge import Judge
@@ -196,6 +197,15 @@ class TestJudgeValidation:
         ctx = make_context()
         ctx.round2_assessments = [{"some": "data"}]
         ctx.mediator_synthesis = {"some": "data"}
+        assert judge.validate_context(ctx) is None
+
+    def test_fallback_to_round1(self, mock_router, make_context):
+        """Judge accepts R1 assessments when R2 is empty."""
+        from src.agents.forecasters.judge import Judge
+
+        judge = Judge(llm_client=mock_router)
+        ctx = make_context()
+        ctx.round1_assessments = [{"some": "data"}]
         assert judge.validate_context(ctx) is None
 
 

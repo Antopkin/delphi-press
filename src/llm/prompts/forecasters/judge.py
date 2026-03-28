@@ -50,6 +50,7 @@ contested (> 0.30).
 
 ---
 
+{% if mediator_synthesis %}
 ## СИНТЕЗ МЕДИАТОРА
 
 {{ mediator_synthesis.overall_summary }}
@@ -67,8 +68,9 @@ spread {{ area.spread }}, agents={{ area.num_agents }}
 {% endfor %}
 
 ---
+{% endif %}
 
-## ОЦЕНКИ РАУНДА 2
+## ОЦЕНКИ ПЕРСОН
 
 {% for persona_id, assessment in round2_assessments.items() %}
 ### {{ persona_id }} (R2)
