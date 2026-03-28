@@ -287,7 +287,7 @@ class Judge(BaseAgent):
         assessments: list[Any],
     ) -> list[RankedPrediction]:
         """Отобрать wild cards от Адвоката дьявол��."""
-        from src.schemas.agent import ScenarioType
+        from src.schemas.events import ScenarioType
 
         top_ids = {p.event_thread_id for p in top_preds}
 

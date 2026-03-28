@@ -9,10 +9,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+from src.schemas.events import ScenarioType
 
 # =====================================================================
 # AgentResult — иммутабельный результат выполнения агента
@@ -102,14 +103,7 @@ class StageResult:
 # =====================================================================
 
 
-class ScenarioType(StrEnum):
-    """Тип сценария в рамках оценки персоны."""
-
-    BASE = "base"
-    UPSIDE = "upside"
-    DOWNSIDE = "downside"
-    BLACK_SWAN = "black_swan"
-    WILDCARD = "wildcard"
+# ScenarioType re-exported from src.schemas.events (unified enum)
 
 
 class PredictionItem(BaseModel):

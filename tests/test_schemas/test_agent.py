@@ -74,7 +74,7 @@ def test_stage_result_total_tokens_out():
 
 
 def test_scenario_type_membership():
-    assert ScenarioType.BASE == "base"
+    assert ScenarioType.BASELINE == "baseline"
     assert ScenarioType.BLACK_SWAN == "black_swan"
     assert len(ScenarioType) == 5
 
@@ -88,7 +88,7 @@ def _prediction_item_kwargs(**overrides) -> dict:
         "prediction": "Something will happen",
         "probability": 0.7,
         "newsworthiness": 0.5,
-        "scenario_type": ScenarioType.BASE,
+        "scenario_type": ScenarioType.BASELINE,
         "reasoning": "Because of X, Y, Z.",
         "key_assumptions": ["A", "B"],
         "evidence": ["fact1"],

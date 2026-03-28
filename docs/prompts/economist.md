@@ -243,7 +243,7 @@ Intelligence Unit). Твоя специализация — следить за 
       "prediction": "<Конкретное утверждение об экономическом развитии событий>",
       "probability": <0.0-1.0>,
       "newsworthiness": <0.0-1.0>,
-      "scenario_type": "<base|upside|downside|black_swan>",
+      "scenario_type": "<baseline|optimistic|pessimistic|black_swan|wildcard>",
       "reasoning": "<Экономическая логика: стимулы → ограничения → вывод>",
       "key_assumptions": ["<экономическая предпосылка>"],
       "evidence": ["<конкретный факт из входных данных>"],

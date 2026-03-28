@@ -302,11 +302,12 @@ class EventThread(BaseModel):
 
 
 class ScenarioType(StrEnum):
-    """Тип сценария развития."""
+    """Тип сценария развития / оценки."""
 
     BASELINE = "baseline"
     OPTIMISTIC = "optimistic"
     PESSIMISTIC = "pessimistic"
+    BLACK_SWAN = "black_swan"
     WILDCARD = "wildcard"
 
 

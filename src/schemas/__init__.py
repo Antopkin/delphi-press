@@ -1,9 +1,7 @@
 """Централизованные Pydantic-схемы для пайплайна Delphi Press.
 
 Все публичные модели, dataclasses и enums реэкспортируются из этого модуля.
-Исключение: agent.ScenarioType (Delphi-контекст) не реэкспортируется — используйте
-``from src.schemas.agent import ScenarioType`` при необходимости. Из __init__
-экспортируется events.ScenarioType (контекст траекторий).
+ScenarioType — единый enum, определён в events.py, реэкспортирован через agent.py.
 """
 
 from src.schemas.agent import (

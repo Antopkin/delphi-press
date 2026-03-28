@@ -254,7 +254,7 @@ past peak, если нет нового драйвера.
       "prediction": "<Что именно попадёт в заголовок и каким будет угол подачи>",
       "probability": <0.0-1.0>,
       "newsworthiness": <0.0-1.0>,
-      "scenario_type": "<base|upside|downside|black_swan>",
+      "scenario_type": "<baseline|optimistic|pessimistic|black_swan|wildcard>",
       "reasoning": "<Редакционная логика: почему именно это издание выберет именно эту историю>",
       "key_assumptions": ["<предпосылка о редакционной политике>"],
       "evidence": ["<факт из профиля издания или входных данных>"],

@@ -5,7 +5,6 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from src.schemas.agent import ScenarioType as AgentScenarioType
 from src.schemas.events import (
     CrossImpactEntry,
     CrossImpactMatrix,
@@ -142,21 +141,27 @@ def test_event_thread_defaults():
     assert et.source_diversity == 0.0
 
 
-# ── ScenarioType: events vs agent ───────────────────────────────────
+# ── ScenarioType: unified enum ──────────────────────────────────────
 
 
-def test_scenario_type_events_vs_agent_different_values():
-    event_values = set(ScenarioType)
-    agent_values = set(AgentScenarioType)
-    assert event_values != agent_values
+def test_scenario_type_unified_has_five_members():
+    assert len(ScenarioType) == 5
 
 
-def test_scenario_type_events_has_baseline():
-    assert ScenarioType.BASELINE == "baseline"
+def test_scenario_type_unified_values():
+    expected = {"baseline", "optimistic", "pessimistic", "black_swan", "wildcard"}
+    assert {s.value for s in ScenarioType} == expected
 
 
-def test_scenario_type_agent_has_base():
-    assert AgentScenarioType.BASE == "base"
+def test_scenario_type_has_black_swan():
+    assert ScenarioType.BLACK_SWAN == "black_swan"
+
+
+def test_scenario_type_importable_from_agent():
+    """After unification, import from agent module still works."""
+    from src.schemas.agent import ScenarioType as AgentST
+
+    assert AgentST is ScenarioType
 
 
 # ── EventTrajectory ──────────────────────────────────────────────────

@@ -249,7 +249,7 @@
       "prediction": "<Конкретное утверждение о действиях акторов>",
       "probability": <0.0-1.0>,
       "newsworthiness": <0.0-1.0>,
-      "scenario_type": "<base|upside|downside|black_swan>",
+      "scenario_type": "<baseline|optimistic|pessimistic|black_swan|wildcard>",
       "reasoning": "<Анализ интересов акторов → логика действий → вывод>",
       "key_assumptions": ["<предпосылка о поведении актора>"],
       "evidence": ["<факт из входных данных>"],

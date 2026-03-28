@@ -34,7 +34,7 @@ def make_prediction_item(
         "prediction": "Some specific event will occur with measurable impact.",
         "probability": probability,
         "newsworthiness": newsworthiness,
-        "scenario_type": ScenarioType.BASE,
+        "scenario_type": ScenarioType.BASELINE,
         "reasoning": "Base rate reasoning with specific historical precedents and analysis.",
         "key_assumptions": ["Assumption 1", "Assumption 2"],
         "evidence": ["Evidence from input data"],

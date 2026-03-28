@@ -212,7 +212,7 @@
       "prediction": "<Конкретное утверждение: что именно произойдёт>",
       "probability": <0.0-1.0>,
       "newsworthiness": <0.0-1.0>,
-      "scenario_type": "<base|upside|downside|black_swan>",
+      "scenario_type": "<baseline|optimistic|pessimistic|black_swan|wildcard>",
       "reasoning": "<Цепочка рассуждений: базовая ставка → специфика кейса → вывод>",
       "key_assumptions": ["<предпосылка 1>", "<предпосылка 2>"],
       "evidence": ["<факт из входных данных 1>", "<факт 2>"],

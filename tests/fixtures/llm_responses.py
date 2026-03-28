@@ -618,7 +618,7 @@ def _make_persona_assessment(
                 ),
                 "probability": round(prob, 2),
                 "newsworthiness": base_n,
-                "scenario_type": "base",
+                "scenario_type": "baseline",
                 "reasoning": (
                     f"Based on analysis of current dynamics, {persona_id} "
                     f"assesses a {'higher' if offset > 0 else 'baseline'} "
@@ -649,7 +649,7 @@ def _make_persona_assessment(
                 ),
                 "probability": round(prob, 2),
                 "newsworthiness": round(_BASE_NEWS[tid] - 0.1, 2),
-                "scenario_type": "base",
+                "scenario_type": "baseline",
                 "reasoning": (
                     f"Alternative angle from {persona_id} perspective. "
                     "Supporting evidence is weaker but scenario is plausible. "

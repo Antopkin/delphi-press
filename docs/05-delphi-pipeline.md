@@ -221,12 +221,13 @@ from pydantic import BaseModel, Field
 from enum import Enum
 
 
-class ScenarioType(str, Enum):
-    """Тип сценария в рамках оценки."""
-    BASE = "base"             # наиболее вероятный
-    UPSIDE = "upside"         # оптимистичный / эскалация
-    DOWNSIDE = "downside"     # пессимистичный / деэскалация
-    BLACK_SWAN = "black_swan" # маловероятный высокоимпактный
+class ScenarioType(StrEnum):
+    """Тип сценария развития / оценки (единый enum, определён в events.py)."""
+    BASELINE = "baseline"       # наиболее вероятный
+    OPTIMISTIC = "optimistic"   # оптимистичный / эскалация
+    PESSIMISTIC = "pessimistic" # пессимистичный / деэскалация
+    BLACK_SWAN = "black_swan"   # маловероятный высокоимпактный
+    WILDCARD = "wildcard"       # неожиданный поворот
 
 
 class PredictionItem(BaseModel):
