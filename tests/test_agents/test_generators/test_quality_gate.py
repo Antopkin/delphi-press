@@ -238,6 +238,27 @@ class TestQualityGateParseErrors:
         assert result.score == 3
         assert "parse" in result.feedback.lower() or "could not" in result.feedback.lower()
 
+    @pytest.mark.asyncio
+    async def test_full_preset_parse_error_does_not_reject(self, mock_router, make_context):
+        """With min_score=4, fallback score must equal min_score so headline isn't rejected."""
+        from src.agents.generators.quality_gate import QualityGate
+
+        gate = QualityGate(llm_client=mock_router)
+        ctx = make_context()
+        ctx.generated_headlines = [make_generated_headline()]
+        ctx.ranked_predictions = [make_ranked_prediction()]
+        ctx.framing_briefs = [make_framing_brief()]
+        ctx.outlet_profile = make_outlet_profile()
+        ctx.pipeline_config["quality_gate_min_score"] = 4
+
+        # ALL LLM calls return invalid JSON → fallback scores
+        mock_router.complete.return_value = make_llm_response("INVALID JSON")
+
+        result = await gate.execute(ctx)
+
+        # With preset-aware fallback, headline should PASS (not be rejected)
+        assert len(result["final_predictions"]) >= 1
+
 
 class TestBuildFinalPredictions:
     """Test _build_final_predictions helper."""

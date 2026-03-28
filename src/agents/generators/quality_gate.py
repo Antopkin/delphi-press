@@ -63,11 +63,13 @@ class QualityGate(BaseAgent):
 
         headlines = [self._parse_headline(h) for h in context.generated_headlines]
 
+        min_score = context.pipeline_config.get("quality_gate_min_score", FACTUAL_MIN_SCORE)
+
         # 1. Score all headlines (factual + style)
         scored: list[tuple[GeneratedHeadline, QualityScore]] = []
         for headline in headlines:
             prediction = pred_index.get(headline.event_thread_id)
-            score = await self._score_one(headline, prediction, profile)
+            score = await self._score_one(headline, prediction, profile, min_score=min_score)
             scored.append((headline, score))
 
         # 2. Dedup (algorithmic, no embeddings)
@@ -78,8 +80,6 @@ class QualityGate(BaseAgent):
         # 3. Apply gate decisions
         passed: list[GeneratedHeadline] = []
         deprioritized: list[GeneratedHeadline] = []
-
-        min_score = context.pipeline_config.get("quality_gate_min_score", FACTUAL_MIN_SCORE)
         for headline, score in scored:
             decision = self._make_decision(score, min_score=min_score)
             if decision == GateDecision.PASS:
@@ -110,19 +110,25 @@ class QualityGate(BaseAgent):
         headline: GeneratedHeadline,
         prediction: RankedPrediction | None,
         profile: OutletProfile | None,
+        *,
+        min_score: int = FACTUAL_MIN_SCORE,
     ) -> QualityScore:
         """Score a single headline: factual + style checks."""
         from src.llm.prompts.base import PromptParseError
 
         try:
-            factual = await self._check_factual(headline, prediction)
+            factual = await self._check_factual(headline, prediction, min_score=min_score)
         except (PromptParseError, Exception):
-            factual = CheckResult(score=3, feedback="factual check parse error — neutral score")
+            factual = CheckResult(
+                score=min_score, feedback="factual check parse error — neutral score"
+            )
 
         try:
-            style = await self._check_style(headline, profile)
+            style = await self._check_style(headline, profile, min_score=min_score)
         except (PromptParseError, Exception):
-            style = CheckResult(score=3, feedback="style check parse error — neutral score")
+            style = CheckResult(
+                score=min_score, feedback="style check parse error — neutral score"
+            )
 
         return QualityScore(
             headline_id=headline.id,
@@ -133,7 +139,11 @@ class QualityGate(BaseAgent):
         )
 
     async def _check_factual(
-        self, headline: GeneratedHeadline, prediction: RankedPrediction | None
+        self,
+        headline: GeneratedHeadline,
+        prediction: RankedPrediction | None,
+        *,
+        min_score: int = FACTUAL_MIN_SCORE,
     ) -> CheckResult:
         """Factual plausibility check via LLM."""
         from src.llm.prompts.generators.quality import FactualCheckPrompt
@@ -166,10 +176,14 @@ class QualityGate(BaseAgent):
             return prompt.parse_response(response.content)
         except Exception as exc:
             self.logger.warning("Factual check parse failed for %s: %s", headline.id, exc)
-            return CheckResult(score=3, feedback="Could not parse factual check response.")
+            return CheckResult(score=min_score, feedback="Could not parse factual check response.")
 
     async def _check_style(
-        self, headline: GeneratedHeadline, profile: OutletProfile | None
+        self,
+        headline: GeneratedHeadline,
+        profile: OutletProfile | None,
+        *,
+        min_score: int = FACTUAL_MIN_SCORE,
     ) -> CheckResult:
         """Style authenticity check via LLM."""
         from src.llm.prompts.generators.quality import StyleCheckPrompt
@@ -201,7 +215,7 @@ class QualityGate(BaseAgent):
             return prompt.parse_response(response.content)
         except Exception as exc:
             self.logger.warning("Style check parse failed for %s: %s", headline.id, exc)
-            return CheckResult(score=3, feedback="Could not parse style check response.")
+            return CheckResult(score=min_score, feedback="Could not parse style check response.")
 
     def _make_decision(
         self,
