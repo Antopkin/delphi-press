@@ -119,6 +119,49 @@ tests/test_integration/             — 7 E2E integration tests
 
 ---
 
+### Концепция: двухуровневое предсказание
+
+Delphi Press предсказывает на двух уровнях:
+
+1. **Event-level** — «произойдёт ли событие X к дате Y?» (probability 0-1)
+   - Формируется в Stage 2 (EventTrendAnalyzer) → Stage 4-5 (Delphi R1/R2) → Stage 6 (Judge)
+   - Judge агрегирует persona probabilities в final event probability
+   - **Сравнимо с Polymarket**: обе системы оценивают вероятность бинарного события
+   - **Сейчас не сохраняется** — intermediate event probabilities теряются после Judge
+
+2. **Headline-level** — «какой заголовок напишет издание?» (confidence = производная от event probability)
+   - Формируется в Stage 7 (FramingAnalyzer) → Stage 8 (StyleReplicator)
+   - confidence = вероятность конкретного фрейминга (зависит от события + редполитики)
+   - **Eval через Wayback Machine**: headline появился/не появился
+
+Пользователь видит оба уровня: «событие X произойдёт с вероятностью 70% → ТАСС напишет: ...»
+
+---
+
+### Market Eval v0.6.0: инфраструктура готова (2026-03-29)
+
+**Готовая инфра** (scripts/, src/eval/):
+- `fetch_resolved_markets()` — resolved markets из Gamma API
+- `fetch_historical_price()` — цена на момент T-N через CLOB startTs/endTs
+- `market_brier_comparison()` — BS на 3 горизонтах (T-24h, T-48h, T-7d)
+- `detect_sharp_movements()` + `compute_spearman_correlation()` — news↔market корреляция
+
+**Первые live результаты** (N=12 resolved markets):
+- Market BS (T-24h): 0.190, BSS vs random: 24%
+- Market BS (T-7d): 0.203, BSS: 19%
+
+**Что нужно для полноценного eval:**
+
+| # | Задача | Зависимости | Горизонт |
+|---|--------|-------------|----------|
+| E.1 | Сохранять event-level predictions (event_thread + probability + timestamp) в JSON после каждого run | Изменить Judge / dry_run.py | Ближайшая сессия |
+| E.2 | Накопить 5-10 real runs с сохранёнными predictions | E.1 + Opus/Claude runs | 1-2 недели |
+| E.3 | Подключить event predictions к eval_market_calibration.py (вместо placeholder) | E.1, E.2 | После накопления данных |
+| E.4 | Расширить resolved markets выборку (сейчас 17 markets, нужно 50+) | HuggingFace dataset или Gamma API pagination | Когда нужна статистика |
+| E.5 | News correlation на mainstream markets (сейчас 0 GDELT покрытие — crypto/esports markets) | Дождаться political resolved markets или использовать dataset | Не блокирует |
+
+---
+
 ### Polymarket Enrichment: DONE (2026-03-28)
 
 **Цель:** Обогатить Polymarket-сигналы distribution metrics и внедрить рыночную персону в Judge.
@@ -236,6 +279,8 @@ evaluation = [
 | B.7 | UI: раздел "Внешние прогнозы" | Низкий | — |
 | B.8 | Valdai Club / IMEMO RAN scrapers | Низкий | Нет API, HTML only |
 | B.9 | Правовая проверка Polymarket/Metaculus licensing | Средний | До публичного деплоя |
+| B.10 | Event-level prediction storage (JSON/DB) | **Высокий** | Блокирует market eval (E.1) |
+| B.11 | HuggingFace Polymarket dataset (85MB markets.parquet) | Низкий | Для масштабного eval N=500+ |
 
 ---
 
@@ -253,12 +298,18 @@ evaluation = [
     |          +----> Backlog: Калибровка (B.4, B.5, B.6)
     |
     +----> Сессия 4: Frontend ────── DONE
+    |
+    +----> E.1: Event-level storage ── TODO (блокирует market eval)
+               |
+               +----> E.2: Накопить 5-10 runs
+                          |
+                          +----> E.3: Eval vs market (Delphi BS vs Polymarket BS)
 ```
 
-**Оставшийся критический путь:** 1.5-1.7 (Opus prediction) → 3 (Evaluation pilot).
+**Оставшийся критический путь:** 1.5-1.7 (Opus prediction) → E.1 (event storage) → E.2 (накопить runs) → E.3 (eval vs market).
 
-**Всё остальное — backlog.**
+**Параллельно:** 3 (BERTScore/TopicMatch eval для headline-level).
 
 ---
 
-*Создано: 2026-03-28. Обновлено: 2026-03-29 (v0.5.2, 846 тестов).*
+*Создано: 2026-03-28. Обновлено: 2026-03-29 (v0.6.0, 902 теста).*
