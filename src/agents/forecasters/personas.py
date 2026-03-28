@@ -304,15 +304,16 @@ class DelphiPersonaAgent(BaseAgent):
 
         try:
             parsed = prompt.parse_response(response.content)
-            assessment_dict = parsed.model_dump()
         except Exception as exc:
             self.logger.warning(
-                "Persona %s R%d parse failed, returning empty assessment: %s",
+                "Persona %s R%d parse failed: %s",
                 self.persona.id.value,
                 round_number,
                 exc,
             )
-            assessment_dict = {}
+            raise
+
+        assessment_dict = parsed.model_dump()
 
         if round_number == 2:
             return {"revised_assessment": assessment_dict}

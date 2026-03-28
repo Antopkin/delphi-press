@@ -240,9 +240,10 @@ class TestDelphiPersonaAgent:
         assert agent._tokens_in > 0
 
     @pytest.mark.asyncio
-    async def test_parse_error_returns_fallback_assessment_r1(self, mock_router, make_context):
-        """When LLM returns unparseable JSON in R1, execute returns empty assessment."""
+    async def test_parse_error_raises_r1(self, mock_router, make_context):
+        """When LLM returns unparseable JSON in R1, execute raises (BaseAgent.run catches it)."""
         from src.agents.forecasters.personas import PERSONAS, DelphiPersonaAgent, PersonaID
+        from src.llm.prompts.base import PromptParseError
 
         persona = PERSONAS[PersonaID.REALIST]
         agent = DelphiPersonaAgent(llm_client=mock_router, persona=persona)
@@ -253,15 +254,14 @@ class TestDelphiPersonaAgent:
             "INVALID JSON — triggers PromptParseError"
         )
 
-        result = await agent.execute(ctx)
-
-        assert "assessment" in result
-        assert result["assessment"] == {}
+        with pytest.raises(PromptParseError):
+            await agent.execute(ctx)
 
     @pytest.mark.asyncio
-    async def test_parse_error_returns_fallback_assessment_r2(self, mock_router, make_context):
-        """When LLM returns unparseable JSON in R2, execute returns empty revised_assessment."""
+    async def test_parse_error_raises_r2(self, mock_router, make_context):
+        """When LLM returns unparseable JSON in R2, execute raises (BaseAgent.run catches it)."""
         from src.agents.forecasters.personas import PERSONAS, DelphiPersonaAgent, PersonaID
+        from src.llm.prompts.base import PromptParseError
 
         from .conftest import make_mediator_synthesis
 
@@ -275,10 +275,8 @@ class TestDelphiPersonaAgent:
             'TRUNCATED JSON {"persona_id": "economist"'
         )
 
-        result = await agent.execute(ctx)
-
-        assert "revised_assessment" in result
-        assert result["revised_assessment"] == {}
+        with pytest.raises(PromptParseError):
+            await agent.execute(ctx)
 
     def test_all_five_agents_have_distinct_names(self, mock_router):
         from src.agents.forecasters.personas import PERSONAS, DelphiPersonaAgent
