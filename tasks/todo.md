@@ -63,16 +63,14 @@
 
 > Ресёрч: `tasks/research/metaculus_polymarket_api.md`, `tasks/research/gdelt_api.md`
 
-### Sprint 1 — IN PROGRESS
+### Sprint 1 — DONE (коммит `dd46558`)
 
-- [ ] **MetaculusClient** — `GET /api2/questions/?status=open&forecast_type=binary` → `ScheduledEvent[]`
-  - `community_prediction.full.q2` → certainty (no auth, 120 req/min)
-- [ ] **PolymarketClient** — `GET gamma-api.polymarket.com/markets?active=true` → `SignalRecord[]`
-  - `outcomePrices[0]` → YES probability (no auth, 300 req/10s)
-- [ ] **GdeltDocClient** — `GET api.gdeltproject.org/api/v2/doc/doc?mode=artlist` → `SignalRecord[]`
-  - Операторы: `theme:`, `sourcelang:`, `sourcecountry:` (no auth, ~1 req/s)
-- [ ] **ForesightCollector** — Stage 1 agent, asyncio.gather 3 клиента
-- [ ] Тесты для всех клиентов и коллектора
+- [x] **MetaculusClient** — `GET /api2/questions/` → crowd probabilities (no auth, 30min cache)
+- [x] **PolymarketClient** — `GET gamma-api.polymarket.com/markets` → market prices (no auth, 15min cache)
+- [x] **GdeltDocClient** — `GET api.gdeltproject.org/api/v2/doc/doc` → article search (no auth, 1req/s)
+- [x] **ForesightCollector** — 4th Stage 1 agent, asyncio.gather 3 клиента, graceful degradation
+- [x] PipelineContext: foresight_events + foresight_signals slots
+- [x] 33 новых теста (14 клиенты + 19 коллектор)
 
 ### Sprint 2
 
