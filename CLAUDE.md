@@ -81,6 +81,6 @@ uv run python scripts/dry_run.py --help
 
 ## Архитектура pipeline
 
-> TODO: `docs/architecture.md` — полное описание 9 стадий, 28 LLM-задач, data flow, task IDs. Создать в следующей сессии.
+Полное описание: **[`docs/architecture.md`](docs/architecture.md)** — 9 стадий, 28 LLM-задач, data flow, task IDs, known gotchas.
 
 Краткая навигация по pipeline: `docs/11-roadmap.md` (таблица компонентов + ключевые файлы).
