@@ -29,6 +29,8 @@
 - `src/api/`, `src/db/` → `docs/08-api-backend.md`
 - `src/api/auth.py`, `src/api/keys.py` → `docs/08-api-backend.md` (§12: аутентификация)
 - `src/security/` → `docs/08-api-backend.md` (§12: KeyVault, шифрование)
+- `src/data_sources/foresight.py` → `tasks/research/metaculus_polymarket_api.md`, `tasks/research/gdelt_api.md`
+- `src/agents/collectors/foresight_collector.py` → `docs/03-collectors.md` + ресёрчи выше
 - `src/web/` → `docs/09-frontend.md`
 - `.claude/skills/predict/` → Claude Code predict skill (сессия 12)
 
