@@ -4,6 +4,21 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.5.2] - 2026-03-29
+
+Delphi pipeline parse-error fix: personas fallback + orchestrator quorum relaxation.
+
+### Fixed
+
+- **Persona PromptParseError** — `parse_response()` в `personas.py:305` бросал `PromptParseError` на обрезанном JSON (дешёвые модели). Fallback `if parsed else {}` был мёртвым кодом (parse_response никогда не возвращает None). Обёрнуто в try/except → fallback empty assessment. Паттерн аналогичен фиксам в framing, style_replicator, quality_gate (v0.5.1).
+
+### Changed
+
+- **Delphi quorum 4→3** — `min_successful` для DELPHI_R1 (StageDefinition) и DELPHI_R2 (hardcoded threshold) снижен с 4 до 3 (majority quorum). При 2 упавших персонах из 5 pipeline продолжает работу — медиатор синтезирует то, что есть.
+- 4 новых теста (personas parse-error R1/R2, orchestrator quorum R1/R2), итого 846/846 зелёных.
+
+---
+
 ## [0.5.1] - 2026-03-29
 
 Foresight module bugfix: Metaculus API migration + cache fix + CLOB fix.
