@@ -120,3 +120,39 @@ def make_step_data():
         return defaults
 
     return _factory
+
+
+@pytest.fixture
+def make_feed_source_data():
+    _counter = 0
+
+    def _factory(**overrides):
+        nonlocal _counter
+        _counter += 1
+        defaults = {
+            "rss_url": f"https://example.com/rss/feed-{_counter}",
+        }
+        defaults.update(overrides)
+        return defaults
+
+    return _factory
+
+
+@pytest.fixture
+def make_raw_article_data():
+    _counter = 0
+
+    def _factory(**overrides):
+        nonlocal _counter
+        _counter += 1
+        defaults = {
+            "url": f"https://example.com/article/{_counter}",
+            "title": f"Test article {_counter}",
+            "summary": "Test summary",
+            "source_outlet": "tass",
+            "fetch_method": "rss",
+        }
+        defaults.update(overrides)
+        return defaults
+
+    return _factory

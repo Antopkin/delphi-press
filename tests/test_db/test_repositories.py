@@ -1,14 +1,14 @@
-"""Tests for src.db.repositories — PredictionRepository, OutletRepository, UserRepository."""
+"""Tests for src.db.repositories — all repository classes."""
 
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 
 from src.db.models import PredictionStatus
-
 
 # ── PredictionRepository ────────────────────────────────────────────
 
@@ -449,3 +449,330 @@ class TestUserAPIKeyDelete:
         repo = UserRepository(test_session)
         deleted = await repo.delete_api_key(9999, "no-user")
         assert deleted is False
+
+
+# ── FeedSourceRepository ──────────────────────────────────────────
+
+
+class TestFeedSourceCreate:
+    async def test_create_feed_source(self, test_session, make_outlet_data, make_feed_source_data):
+        from src.db.models import Outlet
+        from src.db.repositories import FeedSourceRepository
+
+        outlet = Outlet(**make_outlet_data())
+        test_session.add(outlet)
+        await test_session.commit()
+
+        repo = FeedSourceRepository(test_session)
+        feed_data = make_feed_source_data()
+        feed = await repo.create(outlet_id=outlet.id, rss_url=feed_data["rss_url"])
+        await test_session.commit()
+
+        assert feed.id is not None
+        assert feed.outlet_id == outlet.id
+        assert feed.rss_url == feed_data["rss_url"]
+        assert feed.is_active is True
+        assert feed.error_count == 0
+
+    async def test_create_duplicate_url_raises(
+        self, test_session, make_outlet_data, make_feed_source_data
+    ):
+        from src.db.models import Outlet
+        from src.db.repositories import FeedSourceRepository
+
+        outlet = Outlet(**make_outlet_data())
+        test_session.add(outlet)
+        await test_session.commit()
+
+        repo = FeedSourceRepository(test_session)
+        feed_data = make_feed_source_data()
+        await repo.create(outlet_id=outlet.id, rss_url=feed_data["rss_url"])
+        await test_session.commit()
+
+        with pytest.raises(IntegrityError):
+            await repo.create(outlet_id=outlet.id, rss_url=feed_data["rss_url"])
+            await test_session.flush()
+
+
+class TestFeedSourceActiveFeeds:
+    async def test_get_active_feeds(self, test_session, make_outlet_data):
+        from src.db.models import FeedSource, Outlet
+        from src.db.repositories import FeedSourceRepository
+
+        outlet = Outlet(**make_outlet_data())
+        test_session.add(outlet)
+        await test_session.flush()
+
+        test_session.add(FeedSource(outlet_id=outlet.id, rss_url="https://a.com/rss"))
+        test_session.add(
+            FeedSource(outlet_id=outlet.id, rss_url="https://b.com/rss", is_active=False)
+        )
+        await test_session.commit()
+
+        repo = FeedSourceRepository(test_session)
+        active = await repo.get_active_feeds()
+        assert len(active) == 1
+        assert active[0].rss_url == "https://a.com/rss"
+
+    async def test_get_active_by_outlet(self, test_session, make_outlet_data):
+        from src.db.models import FeedSource, Outlet
+        from src.db.repositories import FeedSourceRepository
+
+        o1 = Outlet(**make_outlet_data(name="A", normalized_name="a"))
+        o2 = Outlet(**make_outlet_data(name="B", normalized_name="b"))
+        test_session.add_all([o1, o2])
+        await test_session.flush()
+
+        test_session.add(FeedSource(outlet_id=o1.id, rss_url="https://a.com/rss"))
+        test_session.add(FeedSource(outlet_id=o2.id, rss_url="https://b.com/rss"))
+        await test_session.commit()
+
+        repo = FeedSourceRepository(test_session)
+        feeds = await repo.get_active_by_outlet(o1.id)
+        assert len(feeds) == 1
+        assert feeds[0].outlet_id == o1.id
+
+
+class TestFeedSourceCircuitBreaker:
+    async def test_increment_error_increments_count(self, test_session, make_outlet_data):
+        from src.db.models import FeedSource, Outlet
+        from src.db.repositories import FeedSourceRepository
+
+        outlet = Outlet(**make_outlet_data())
+        test_session.add(outlet)
+        await test_session.flush()
+
+        feed = FeedSource(outlet_id=outlet.id, rss_url="https://err.com/rss")
+        test_session.add(feed)
+        await test_session.commit()
+
+        repo = FeedSourceRepository(test_session)
+        await repo.increment_error(feed.id)
+        await test_session.commit()
+
+        await test_session.refresh(feed)
+        assert feed.error_count == 1
+        assert feed.is_active is True
+
+    async def test_increment_error_deactivates_at_threshold(self, test_session, make_outlet_data):
+        from src.db.models import FeedSource, Outlet
+        from src.db.repositories import FeedSourceRepository
+
+        outlet = Outlet(**make_outlet_data())
+        test_session.add(outlet)
+        await test_session.flush()
+
+        feed = FeedSource(outlet_id=outlet.id, rss_url="https://err5.com/rss", error_count=4)
+        test_session.add(feed)
+        await test_session.commit()
+
+        repo = FeedSourceRepository(test_session)
+        await repo.increment_error(feed.id)
+        await test_session.commit()
+
+        await test_session.refresh(feed)
+        assert feed.error_count == 5
+        assert feed.is_active is False
+
+    async def test_reset_errors_reactivates(self, test_session, make_outlet_data):
+        from src.db.models import FeedSource, Outlet
+        from src.db.repositories import FeedSourceRepository
+
+        outlet = Outlet(**make_outlet_data())
+        test_session.add(outlet)
+        await test_session.flush()
+
+        feed = FeedSource(
+            outlet_id=outlet.id, rss_url="https://reset.com/rss", error_count=5, is_active=False
+        )
+        test_session.add(feed)
+        await test_session.commit()
+
+        repo = FeedSourceRepository(test_session)
+        await repo.reset_errors(feed.id)
+        await test_session.commit()
+
+        await test_session.refresh(feed)
+        assert feed.error_count == 0
+        assert feed.is_active is True
+
+
+class TestFeedSourceUpdateFetchState:
+    async def test_update_fetch_state(self, test_session, make_outlet_data):
+        from src.db.models import FeedSource, Outlet
+        from src.db.repositories import FeedSourceRepository
+
+        outlet = Outlet(**make_outlet_data())
+        test_session.add(outlet)
+        await test_session.flush()
+
+        feed = FeedSource(outlet_id=outlet.id, rss_url="https://state.com/rss")
+        test_session.add(feed)
+        await test_session.commit()
+
+        now = datetime.now(UTC)
+        repo = FeedSourceRepository(test_session)
+        await repo.update_fetch_state(
+            feed.id, etag='"abc"', last_modified="Sat, 01 Jan 2026", last_fetched=now
+        )
+        await test_session.commit()
+
+        await test_session.refresh(feed)
+        assert feed.etag == '"abc"'
+        assert feed.last_modified == "Sat, 01 Jan 2026"
+        assert feed.last_fetched is not None
+
+
+# ── RawArticleRepository ─────────────────────────────────────────
+
+
+class TestRawArticleUpsertBatch:
+    async def test_upsert_batch_inserts_new(self, test_session, make_raw_article_data):
+        from src.db.repositories import RawArticleRepository
+
+        repo = RawArticleRepository(test_session)
+        articles = [make_raw_article_data(), make_raw_article_data()]
+        inserted = await repo.upsert_batch(articles)
+        await test_session.commit()
+
+        assert inserted == 2
+
+    async def test_upsert_batch_skips_duplicates(self, test_session, make_raw_article_data):
+        from src.db.repositories import RawArticleRepository
+
+        repo = RawArticleRepository(test_session)
+        article = make_raw_article_data()
+        await repo.upsert_batch([article])
+        await test_session.commit()
+
+        # Insert same article again
+        inserted = await repo.upsert_batch([article])
+        await test_session.commit()
+
+        assert inserted == 0
+
+    async def test_upsert_batch_empty_list_returns_zero(self, test_session):
+        from src.db.repositories import RawArticleRepository
+
+        repo = RawArticleRepository(test_session)
+        inserted = await repo.upsert_batch([])
+        assert inserted == 0
+
+
+class TestRawArticleGetRecent:
+    async def test_get_recent_by_outlet(self, test_session, make_raw_article_data):
+        from src.db.repositories import RawArticleRepository
+
+        repo = RawArticleRepository(test_session)
+        await repo.upsert_batch(
+            [
+                make_raw_article_data(source_outlet="tass"),
+                make_raw_article_data(source_outlet="tass"),
+                make_raw_article_data(source_outlet="bbc"),
+            ]
+        )
+        await test_session.commit()
+
+        results = await repo.get_recent_by_outlet("tass")
+        assert len(results) == 2
+        assert all(r.source_outlet == "tass" for r in results)
+
+    async def test_get_recent_by_outlet_respects_limit(self, test_session, make_raw_article_data):
+        from src.db.repositories import RawArticleRepository
+
+        repo = RawArticleRepository(test_session)
+        await repo.upsert_batch([make_raw_article_data(source_outlet="tass") for _ in range(5)])
+        await test_session.commit()
+
+        results = await repo.get_recent_by_outlet("tass", limit=2)
+        assert len(results) == 2
+
+
+class TestRawArticleDeleteOlderThan:
+    async def test_delete_older_than_removes_old(self, test_session):
+        from src.db.models import FetchMethod, RawArticle
+        from src.db.repositories import RawArticleRepository
+
+        # Insert an old article directly (bypassing upsert to set created_at)
+        old_article = RawArticle(
+            url="https://old.com/1",
+            title="Old article",
+            source_outlet="tass",
+            fetch_method=FetchMethod.RSS,
+            created_at=datetime.now(UTC) - timedelta(days=60),
+        )
+        test_session.add(old_article)
+        new_article = RawArticle(
+            url="https://new.com/1",
+            title="New article",
+            source_outlet="tass",
+            fetch_method=FetchMethod.RSS,
+            created_at=datetime.now(UTC),
+        )
+        test_session.add(new_article)
+        await test_session.commit()
+
+        repo = RawArticleRepository(test_session)
+        deleted = await repo.delete_older_than(30)
+        await test_session.commit()
+
+        assert deleted == 1
+
+        # Verify the new article still exists
+        remaining = await repo.get_recent_by_outlet("tass")
+        assert len(remaining) == 1
+        assert remaining[0].title == "New article"
+
+
+class TestRawArticlePendingTextExtraction:
+    async def test_get_pending_text_extraction(self, test_session):
+        from src.db.models import FetchMethod, RawArticle
+        from src.db.repositories import RawArticleRepository
+
+        # One with cleaned_text, one without
+        test_session.add(
+            RawArticle(
+                url="https://a.com/1",
+                title="Has text",
+                source_outlet="tass",
+                fetch_method=FetchMethod.RSS,
+                cleaned_text="Extracted text here",
+            )
+        )
+        test_session.add(
+            RawArticle(
+                url="https://b.com/1",
+                title="No text",
+                source_outlet="tass",
+                fetch_method=FetchMethod.RSS,
+                cleaned_text=None,
+            )
+        )
+        await test_session.commit()
+
+        repo = RawArticleRepository(test_session)
+        pending = await repo.get_pending_text_extraction()
+        assert len(pending) == 1
+        assert pending[0].title == "No text"
+
+
+class TestRawArticleUpdateCleanedText:
+    async def test_update_cleaned_text(self, test_session):
+        from src.db.models import FetchMethod, RawArticle
+        from src.db.repositories import RawArticleRepository
+
+        article = RawArticle(
+            url="https://upd.com/1",
+            title="To update",
+            source_outlet="tass",
+            fetch_method=FetchMethod.RSS,
+        )
+        test_session.add(article)
+        await test_session.commit()
+
+        repo = RawArticleRepository(test_session)
+        await repo.update_cleaned_text(article.id, "Extracted content")
+        await test_session.commit()
+
+        await test_session.refresh(article)
+        assert article.cleaned_text == "Extracted content"

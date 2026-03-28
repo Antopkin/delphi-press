@@ -5,24 +5,29 @@
 Контракт:
     PredictionRepository: CRUD для прогнозов, headlines, pipeline steps.
     OutletRepository: поиск и upsert для каталога СМИ.
+    FeedSourceRepository: управление RSS-фидами (circuit breaker).
+    RawArticleRepository: upsert/cleanup сырых статей.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Sequence
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import (
+    FeedSource,
     Headline,
     Outlet,
     PipelineStep,
     PipelineStepStatus,
     Prediction,
     PredictionStatus,
+    RawArticle,
     User,
     UserAPIKey,
 )
@@ -306,3 +311,167 @@ class UserRepository:
         await self.session.flush()
         logger.info("Deleted API key %d for user %s", key_id, user_id)
         return True
+
+
+class FeedSourceRepository:
+    """CRUD-операции для RSS-фидов с circuit breaker логикой."""
+
+    MAX_ERRORS = 5
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_active_feeds(self) -> Sequence[FeedSource]:
+        """Все активные фиды."""
+        result = await self.session.execute(
+            select(FeedSource).where(FeedSource.is_active.is_(True))
+        )
+        return list(result.scalars().all())
+
+    async def get_active_by_outlet(self, outlet_id: int) -> Sequence[FeedSource]:
+        """Активные фиды конкретного издания."""
+        result = await self.session.execute(
+            select(FeedSource).where(
+                FeedSource.outlet_id == outlet_id,
+                FeedSource.is_active.is_(True),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def update_fetch_state(
+        self,
+        feed_id: int,
+        *,
+        etag: str | None,
+        last_modified: str | None,
+        last_fetched: datetime,
+    ) -> None:
+        """Обновление состояния после успешного fetch."""
+        await self.session.execute(
+            update(FeedSource)
+            .where(FeedSource.id == feed_id)
+            .values(
+                etag=etag,
+                last_modified=last_modified,
+                last_fetched=last_fetched,
+            )
+        )
+
+    async def increment_error(self, feed_id: int) -> None:
+        """Инкремент error_count; при достижении порога — деактивация (circuit breaker)."""
+        result = await self.session.execute(select(FeedSource).where(FeedSource.id == feed_id))
+        feed = result.scalar_one_or_none()
+        if feed is None:
+            return
+
+        feed.error_count += 1
+        if feed.error_count >= self.MAX_ERRORS:
+            feed.is_active = False
+            logger.warning(
+                "Feed %d deactivated after %d errors (url=%s)",
+                feed_id,
+                feed.error_count,
+                feed.rss_url,
+            )
+        await self.session.flush()
+
+    async def reset_errors(self, feed_id: int) -> None:
+        """Сброс ошибок и реактивация фида."""
+        await self.session.execute(
+            update(FeedSource)
+            .where(FeedSource.id == feed_id)
+            .values(error_count=0, is_active=True)
+        )
+
+    async def create(self, *, outlet_id: int, rss_url: str) -> FeedSource:
+        """Создание нового фида."""
+        feed = FeedSource(outlet_id=outlet_id, rss_url=rss_url)
+        self.session.add(feed)
+        await self.session.flush()
+        logger.info("Created feed source for outlet %d: %s", outlet_id, rss_url)
+        return feed
+
+
+class RawArticleRepository:
+    """CRUD-операции для сырых статей с upsert и retention cleanup."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def upsert_batch(self, articles: list[dict[str, Any]]) -> int:
+        """Массовый insert с пропуском дубликатов по url.
+
+        Использует SQLite INSERT OR IGNORE (on_conflict_do_nothing).
+        Подсчитывает вставленные записи через delta count (before/after),
+        т.к. async SQLite не предоставляет rowcount при executemany.
+        """
+        if not articles:
+            return 0
+
+        # Count existing before insert
+        count_before_result = await self.session.execute(select(func.count(RawArticle.id)))
+        count_before = count_before_result.scalar_one()
+
+        for article in articles:
+            stmt = (
+                sqlite_insert(RawArticle)
+                .values(**article)
+                .on_conflict_do_nothing(index_elements=["url"])
+            )
+            await self.session.execute(stmt)
+
+        await self.session.flush()
+
+        count_after_result = await self.session.execute(select(func.count(RawArticle.id)))
+        count_after = count_after_result.scalar_one()
+
+        inserted = count_after - count_before
+        logger.info("Upserted batch: %d/%d articles inserted", inserted, len(articles))
+        return inserted
+
+    async def get_recent_by_outlet(
+        self,
+        outlet: str,
+        *,
+        days: int = 7,
+        limit: int = 100,
+    ) -> Sequence[RawArticle]:
+        """Недавние статьи по изданию за последние N дней."""
+        since = datetime.now(UTC) - timedelta(days=days)
+        result = await self.session.execute(
+            select(RawArticle)
+            .where(
+                RawArticle.source_outlet == outlet,
+                RawArticle.created_at >= since,
+            )
+            .order_by(RawArticle.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def delete_older_than(self, days: int = 30) -> int:
+        """Retention cleanup: удаление статей старше N дней. Возвращает количество удалённых."""
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        result = await self.session.execute(
+            delete(RawArticle).where(RawArticle.created_at < cutoff)
+        )
+        await self.session.flush()
+        deleted = result.rowcount
+        logger.info("Retention cleanup: deleted %d articles older than %d days", deleted, days)
+        return deleted
+
+    async def get_pending_text_extraction(self, *, limit: int = 50) -> Sequence[RawArticle]:
+        """Статьи без извлечённого текста (cleaned_text IS NULL)."""
+        result = await self.session.execute(
+            select(RawArticle)
+            .where(RawArticle.cleaned_text.is_(None))
+            .order_by(RawArticle.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def update_cleaned_text(self, article_id: int, text: str) -> None:
+        """Обновление cleaned_text после извлечения текста."""
+        await self.session.execute(
+            update(RawArticle).where(RawArticle.id == article_id).values(cleaned_text=text)
+        )

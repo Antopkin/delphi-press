@@ -2,7 +2,8 @@
 
 Спека: docs/08-api-backend.md (§2).
 
-Четыре таблицы: predictions, headlines, pipeline_steps, outlets.
+Таблицы: predictions, headlines, pipeline_steps, outlets, users, user_api_keys,
+feed_sources, raw_articles.
 SQLAlchemy 2.0 Mapped style с полной типизацией.
 """
 
@@ -15,6 +16,7 @@ from typing import Any, Optional
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     Enum,
     Float,
@@ -60,6 +62,14 @@ class PipelineStepStatus(str, enum.Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
+
+
+class FetchMethod(str, enum.Enum):
+    """Метод получения статьи (RSS, поиск, скрейпинг)."""
+
+    RSS = "rss"
+    SEARCH = "search"
+    SCRAPE = "scrape"
 
 
 # === Models ===
@@ -221,6 +231,14 @@ class Outlet(Base):
         DateTime, server_default=func.now(), nullable=False
     )
 
+    # Relationships
+    feed_sources: Mapped[list["FeedSource"]] = relationship(
+        "FeedSource",
+        back_populates="outlet",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
     __table_args__ = (
         Index("ix_outlets_country", "country"),
         Index("ix_outlets_language", "language"),
@@ -281,3 +299,55 @@ class UserAPIKey(Base):
     user: Mapped["User"] = relationship("User", back_populates="api_keys")
 
     __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_user_provider"),)
+
+
+class FeedSource(Base):
+    """RSS-фид конкретного издания для автоматического сбора новостей."""
+
+    __tablename__ = "feed_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    outlet_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("outlets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    rss_url: Mapped[str] = mapped_column(String(500), nullable=False, unique=True)
+    etag: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    last_modified: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    last_fetched: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    error_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    outlet: Mapped["Outlet"] = relationship("Outlet", back_populates="feed_sources")
+
+    __table_args__ = (Index("ix_feed_sources_active", "is_active"),)
+
+
+class RawArticle(Base):
+    """Сырая статья, собранная из RSS/поиска/скрейпинга."""
+
+    __tablename__ = "raw_articles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    url: Mapped[str] = mapped_column(String(2000), nullable=False, unique=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    cleaned_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    source_outlet: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    language: Mapped[str] = mapped_column(String(5), nullable=False, default="und")
+    categories: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    fetch_method: Mapped[FetchMethod] = mapped_column(
+        Enum(FetchMethod, native_enum=False, length=20), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False, index=True
+    )
+
+    __table_args__ = (Index("ix_raw_articles_outlet_published", "source_outlet", "published_at"),)

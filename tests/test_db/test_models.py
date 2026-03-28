@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 # ── Enums ───────────────────────────────────────────────────────────
 
 
@@ -233,3 +232,106 @@ def test_prediction_has_user_relationship():
     from src.db.models import Prediction
 
     assert "user" in Prediction.__mapper__.relationships
+
+
+# ── FetchMethod enum ─────────────────────────────────────────────
+
+
+def test_fetch_method_enum_values():
+    from src.db.models import FetchMethod
+
+    values = {m.value for m in FetchMethod}
+    expected = {"rss", "search", "scrape"}
+    assert values == expected
+
+
+# ── FeedSource model ─────────────────────────────────────────────
+
+
+def test_feed_source_has_expected_columns():
+    from src.db.models import FeedSource
+
+    cols = {c.name for c in FeedSource.__table__.columns}
+    required = {
+        "id",
+        "outlet_id",
+        "rss_url",
+        "etag",
+        "last_modified",
+        "last_fetched",
+        "error_count",
+        "is_active",
+        "created_at",
+    }
+    assert required.issubset(cols)
+
+
+def test_feed_source_rss_url_is_unique():
+    from src.db.models import FeedSource
+
+    col = FeedSource.__table__.c.rss_url
+    assert col.unique is True
+
+
+def test_feed_source_has_outlet_relationship():
+    from src.db.models import FeedSource
+
+    assert "outlet" in FeedSource.__mapper__.relationships
+
+
+def test_outlet_has_feed_sources_relationship():
+    from src.db.models import Outlet
+
+    assert "feed_sources" in Outlet.__mapper__.relationships
+
+
+def test_feed_source_outlet_id_has_fk():
+    from src.db.models import FeedSource
+
+    col = FeedSource.__table__.c.outlet_id
+    fks = {fk.target_fullname for fk in col.foreign_keys}
+    assert "outlets.id" in fks
+
+
+# ── RawArticle model ────────────────────────────────────────────
+
+
+def test_raw_article_has_expected_columns():
+    from src.db.models import RawArticle
+
+    cols = {c.name for c in RawArticle.__table__.columns}
+    required = {
+        "id",
+        "url",
+        "title",
+        "summary",
+        "cleaned_text",
+        "published_at",
+        "source_outlet",
+        "language",
+        "categories",
+        "fetch_method",
+        "created_at",
+    }
+    assert required.issubset(cols)
+
+
+def test_raw_article_url_is_unique():
+    from src.db.models import RawArticle
+
+    col = RawArticle.__table__.c.url
+    assert col.unique is True
+
+
+def test_raw_article_has_composite_index():
+    from src.db.models import RawArticle
+
+    index_names = {idx.name for idx in RawArticle.__table__.indexes}
+    assert "ix_raw_articles_outlet_published" in index_names
+
+
+def test_raw_article_created_at_has_index():
+    from src.db.models import RawArticle
+
+    col = RawArticle.__table__.c.created_at
+    assert col.index is True

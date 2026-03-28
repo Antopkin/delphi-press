@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from src.config import Settings
 
-
 # ── create_engine ───────────────────────────────────────────────────
 
 
@@ -73,7 +72,6 @@ async def test_init_db_creates_tables():
     from sqlalchemy.ext.asyncio import create_async_engine
 
     from src.db.engine import init_db
-    from src.db.models import Base
 
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",

@@ -2,6 +2,8 @@
 
 Спека: docs/08-api-backend.md (§7).
 
+Включает cron-задачи для автоматического сбора RSS и retention cleanup.
+
 Запуск:
     arq src.worker.WorkerSettings
 """
@@ -12,15 +14,19 @@ import json
 import logging
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Sequence
 
 from arq.connections import RedisSettings
+from arq.cron import cron
 
 from src.agents.orchestrator import Orchestrator
 from src.agents.registry import build_default_registry
 from src.llm.router import ModelRouter
 
 logger = logging.getLogger("worker")
+
+# Имена агентств/информагентств для приоритетного сбора (каждые 15 мин)
+_WIRE_AGENCY_NAMES = {"тасс", "риа новости", "интерфакс", "reuters", "ap", "associated press"}
 
 
 async def run_prediction_task(
@@ -57,10 +63,10 @@ async def run_prediction_task(
 
     # --- 3. Создание инфраструктуры ---
     from src.data_sources import (
-        NoopScraper,
         OutletsCatalog,
         RedisProfileCache,
         RSSFetcher,
+        TrafilaturaScraper,
         WebSearchService,
     )
     from src.llm.providers import OpenRouterClient
@@ -81,7 +87,7 @@ async def run_prediction_task(
         "rss_fetcher": rss_fetcher,
         "web_search": web_search,
         "outlet_catalog": OutletsCatalog(),
-        "scraper": NoopScraper(),
+        "scraper": TrafilaturaScraper(),
         "profile_cache": RedisProfileCache(redis),
     }
 
@@ -239,6 +245,176 @@ async def run_prediction_task(
     return {"status": response.status, "duration_ms": duration_ms}
 
 
+async def _fetch_and_store_feeds(
+    ctx: dict[str, Any],
+    feed_sources: Sequence,
+) -> dict[str, int]:
+    """Fetch RSS для переданных фидов, сохранение статей, обработка ошибок.
+
+    Returns:
+        Словарь с метриками: feeds_processed, articles_inserted, errors.
+    """
+    from src.db.engine import get_session
+    from src.db.repositories import FeedSourceRepository, RawArticleRepository
+
+    rss_fetcher = ctx["rss_fetcher"]
+    session_factory = ctx["session_factory"]
+
+    stats = {"feeds_processed": 0, "articles_inserted": 0, "errors": 0}
+
+    for feed in feed_sources:
+        try:
+            items = await rss_fetcher.fetch_feeds([feed.rss_url], days_back=1)
+
+            article_dicts = [
+                {
+                    "title": item.title,
+                    "summary": item.summary,
+                    "url": item.url,
+                    "published_at": item.published_at,
+                    "source_outlet": item.source_name or feed.rss_url,
+                    "fetch_method": "rss",
+                    "language": "und",
+                }
+                for item in items
+                if item.url
+            ]
+
+            async with get_session(session_factory) as session:
+                article_repo = RawArticleRepository(session)
+                inserted = await article_repo.upsert_batch(article_dicts)
+                stats["articles_inserted"] += inserted
+
+                feed_repo = FeedSourceRepository(session)
+                await feed_repo.reset_errors(feed.id)
+                await feed_repo.update_fetch_state(
+                    feed.id,
+                    etag=None,
+                    last_modified=None,
+                    last_fetched=datetime.now(UTC),
+                )
+                await session.commit()
+
+            stats["feeds_processed"] += 1
+
+        except Exception as exc:
+            logger.warning("Error fetching feed %d (%s): %s", feed.id, feed.rss_url, exc)
+            stats["errors"] += 1
+            try:
+                async with get_session(session_factory) as session:
+                    feed_repo = FeedSourceRepository(session)
+                    await feed_repo.increment_error(feed.id)
+                    await session.commit()
+            except Exception:
+                logger.exception("Failed to increment error for feed %d", feed.id)
+
+    return stats
+
+
+async def fetch_rss_wire_agencies(ctx: dict[str, Any]) -> dict[str, int]:
+    """Cron: сбор RSS информагентств (ТАСС, РИА, Интерфакс, Reuters, AP).
+
+    Запускается каждые 15 минут — высокоприоритетные источники.
+    """
+    from src.db.engine import get_session
+    from src.db.repositories import FeedSourceRepository
+
+    session_factory = ctx["session_factory"]
+
+    async with get_session(session_factory) as session:
+        feed_repo = FeedSourceRepository(session)
+        all_feeds = await feed_repo.get_active_feeds()
+
+    # Фильтрация: только фиды, привязанные к информагентствам
+    # Для этого загружаем outlet.name через relationship (selectin)
+    wire_feeds = []
+    for feed in all_feeds:
+        if hasattr(feed, "outlet") and feed.outlet:
+            outlet_name = feed.outlet.name.lower()
+            if outlet_name in _WIRE_AGENCY_NAMES:
+                wire_feeds.append(feed)
+
+    if not wire_feeds:
+        logger.debug("No wire agency feeds found")
+        return {"feeds_processed": 0, "articles_inserted": 0, "errors": 0}
+
+    logger.info("Fetching %d wire agency feeds", len(wire_feeds))
+    return await _fetch_and_store_feeds(ctx, wire_feeds)
+
+
+async def fetch_rss_global(ctx: dict[str, Any]) -> dict[str, int]:
+    """Cron: сбор всех прочих активных фидов (не информагентства).
+
+    Запускается раз в час (minute=5).
+    """
+    from src.db.engine import get_session
+    from src.db.repositories import FeedSourceRepository
+
+    session_factory = ctx["session_factory"]
+
+    async with get_session(session_factory) as session:
+        feed_repo = FeedSourceRepository(session)
+        all_feeds = await feed_repo.get_active_feeds()
+
+    # Исключаем информагентства (они обрабатываются отдельно)
+    non_wire_feeds = []
+    for feed in all_feeds:
+        if hasattr(feed, "outlet") and feed.outlet:
+            outlet_name = feed.outlet.name.lower()
+            if outlet_name not in _WIRE_AGENCY_NAMES:
+                non_wire_feeds.append(feed)
+        else:
+            non_wire_feeds.append(feed)
+
+    if not non_wire_feeds:
+        logger.debug("No non-wire feeds found")
+        return {"feeds_processed": 0, "articles_inserted": 0, "errors": 0}
+
+    logger.info("Fetching %d global feeds", len(non_wire_feeds))
+    return await _fetch_and_store_feeds(ctx, non_wire_feeds)
+
+
+async def fetch_rss_per_outlet(ctx: dict[str, Any]) -> dict[str, int]:
+    """Cron: общий catch-all — сбор ВСЕХ активных фидов.
+
+    Запускается дважды в час (minute={10, 40}).
+    """
+    from src.db.engine import get_session
+    from src.db.repositories import FeedSourceRepository
+
+    session_factory = ctx["session_factory"]
+
+    async with get_session(session_factory) as session:
+        feed_repo = FeedSourceRepository(session)
+        all_feeds = await feed_repo.get_active_feeds()
+
+    if not all_feeds:
+        logger.debug("No active feeds found")
+        return {"feeds_processed": 0, "articles_inserted": 0, "errors": 0}
+
+    logger.info("Fetching all %d active feeds", len(all_feeds))
+    return await _fetch_and_store_feeds(ctx, all_feeds)
+
+
+async def cleanup_old_articles(ctx: dict[str, Any]) -> dict[str, int]:
+    """Cron: retention cleanup — удаление статей старше 30 дней.
+
+    Запускается ежедневно в 03:00.
+    """
+    from src.db.engine import get_session
+    from src.db.repositories import RawArticleRepository
+
+    session_factory = ctx["session_factory"]
+
+    async with get_session(session_factory) as session:
+        repo = RawArticleRepository(session)
+        deleted = await repo.delete_older_than(30)
+        await session.commit()
+
+    logger.info("Cleanup complete: %d old articles deleted", deleted)
+    return {"deleted": deleted}
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     """ARQ worker startup: инициализация зависимостей."""
     from src.config import get_settings
@@ -252,12 +428,20 @@ async def startup(ctx: dict[str, Any]) -> None:
     ctx["engine"] = engine
     ctx["session_factory"] = create_session_factory(engine)
 
+    from src.data_sources.rss import RSSFetcher
+
+    ctx["rss_fetcher"] = RSSFetcher()
+
     logger.info("Worker started with settings: %s", settings.app_name)
 
 
 async def shutdown(ctx: dict[str, Any]) -> None:
     """ARQ worker shutdown: освобождение ресурсов."""
     from src.db.engine import dispose_engine
+
+    rss_fetcher = ctx.get("rss_fetcher")
+    if rss_fetcher:
+        await rss_fetcher.close()
 
     engine = ctx.get("engine")
     if engine is not None:
@@ -287,6 +471,13 @@ class WorkerSettings:
     functions = [run_prediction_task]
     on_startup = startup
     on_shutdown = shutdown
+
+    cron_jobs = [
+        cron(fetch_rss_wire_agencies, minute={0, 15, 30, 45}),
+        cron(fetch_rss_global, minute=5),
+        cron(fetch_rss_per_outlet, minute={10, 40}),
+        cron(cleanup_old_articles, hour=3, minute=0),
+    ]
 
     redis_settings = _parse_redis_settings()
 
