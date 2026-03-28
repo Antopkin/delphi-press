@@ -111,6 +111,9 @@ class StyleReplicator(BaseAgent):
         parsed = prompt.parse_response(response.content)
         if parsed is not None:
             headlines = parsed.headlines
+            # Ensure correct event_thread_id (LLM may hallucinate)
+            for h in headlines:
+                h.event_thread_id = prediction.event_thread_id
         else:
             return []
 
