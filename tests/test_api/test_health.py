@@ -1,0 +1,40 @@
+"""Tests for GET /api/v1/health."""
+
+from __future__ import annotations
+
+
+async def test_health_returns_200_when_all_ok(test_client):
+    resp = await test_client.get("/api/v1/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "healthy"
+    assert data["checks"]["database"]["status"] == "ok"
+    assert data["checks"]["redis"]["status"] == "ok"
+
+
+async def test_health_includes_version(test_client):
+    resp = await test_client.get("/api/v1/health")
+    assert resp.json()["version"] == "0.1.0"
+
+
+async def test_health_includes_uptime(test_client):
+    resp = await test_client.get("/api/v1/health")
+    assert resp.json()["uptime_seconds"] >= 0
+
+
+async def test_health_returns_503_when_redis_down(test_app, test_engine):
+    from tests.test_api.conftest import BrokenRedis
+
+    test_app.state.redis = BrokenRedis()
+
+    from httpx import ASGITransport, AsyncClient
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        resp = await client.get("/api/v1/health")
+
+    assert resp.status_code == 503
+    data = resp.json()
+    assert data["status"] == "unhealthy"
+    assert data["checks"]["redis"]["status"] == "error"

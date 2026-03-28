@@ -1,0 +1,116 @@
+"""Tests for /api/v1/predictions endpoints."""
+
+from __future__ import annotations
+
+from src.db.models import PredictionStatus
+
+
+# ── POST /predictions ───────────────────────────────────────────────
+
+
+async def test_create_prediction_returns_201(test_client):
+    resp = await test_client.post(
+        "/api/v1/predictions",
+        json={"outlet": "ТАСС", "target_date": "2026-04-02"},
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["status"] == "pending"
+    assert data["outlet"] == "ТАСС"
+    assert "progress_url" in data
+    assert "result_url" in data
+
+
+async def test_create_prediction_enqueues_arq_job(test_client, fake_arq_pool):
+    await test_client.post(
+        "/api/v1/predictions",
+        json={"outlet": "TASS", "target_date": "2026-04-02"},
+    )
+    assert len(fake_arq_pool.jobs) == 1
+    assert fake_arq_pool.jobs[0][0] == "run_prediction_task"
+
+
+async def test_create_prediction_saves_to_db(test_client, test_app):
+    resp = await test_client.post(
+        "/api/v1/predictions",
+        json={"outlet": "TASS", "target_date": "2026-04-02"},
+    )
+    prediction_id = resp.json()["id"]
+
+    from src.db.repositories import PredictionRepository
+
+    async with test_app.state.session_factory() as session:
+        repo = PredictionRepository(session)
+        pred = await repo.get_by_id(prediction_id)
+        assert pred is not None
+        assert pred.outlet_normalized == "tass"
+
+
+async def test_create_prediction_invalid_outlet_returns_422(test_client):
+    resp = await test_client.post(
+        "/api/v1/predictions",
+        json={"outlet": "", "target_date": "2026-04-02"},
+    )
+    assert resp.status_code == 422
+
+
+# ── GET /predictions/{id} ──────────────────────────────────────────
+
+
+async def test_get_prediction_returns_200(test_client, seed_prediction):
+    pid = await seed_prediction()
+    resp = await test_client.get(f"/api/v1/predictions/{pid}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == pid
+    assert data["status"] == "pending"
+    assert data["headlines"] == []
+
+
+async def test_get_prediction_not_found_returns_404(test_client):
+    resp = await test_client.get("/api/v1/predictions/nonexistent")
+    assert resp.status_code == 404
+
+
+# ── GET /predictions ────────────────────────────────────────────────
+
+
+async def test_list_predictions_returns_200(test_client, seed_prediction):
+    await seed_prediction()
+    resp = await test_client.get("/api/v1/predictions")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["limit"] == 20
+    assert data["offset"] == 0
+
+
+async def test_list_predictions_pagination(test_client, seed_prediction):
+    import uuid
+
+    for _ in range(3):
+        await seed_prediction(id=str(uuid.uuid4()))
+
+    resp = await test_client.get("/api/v1/predictions", params={"limit": 2, "offset": 1})
+    data = resp.json()
+    assert data["total"] == 3
+    assert len(data["items"]) == 2
+
+
+async def test_list_predictions_status_filter(test_client, seed_prediction):
+    import uuid
+
+    pid = str(uuid.uuid4())
+    await seed_prediction(id=pid, status=PredictionStatus.COMPLETED)
+    await seed_prediction(id=str(uuid.uuid4()), status=PredictionStatus.PENDING)
+
+    resp = await test_client.get("/api/v1/predictions", params={"status": "completed"})
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["items"][0]["id"] == pid
+
+
+async def test_list_predictions_invalid_status_returns_400(test_client):
+    resp = await test_client.get("/api/v1/predictions", params={"status": "invalid"})
+    assert resp.status_code == 400
