@@ -24,6 +24,7 @@ import trafilatura
 from trafilatura.spider import extract_links
 
 from src.agents.collectors.protocols import ScrapedArticle
+from src.utils.retry import retry_with_backoff
 
 logger = logging.getLogger(__name__)
 
@@ -157,10 +158,13 @@ class TrafilaturaScraper:
                 # Polite delay before each request
                 await asyncio.sleep(random.uniform(*self._delay_range))
                 try:
-                    response = await self._client.get(url)
-                    if response.status_code >= 400:
-                        logger.warning("HTTP %d fetching %s", response.status_code, url)
-                        return None
+
+                    async def _do_fetch() -> httpx.Response:
+                        resp = await self._client.get(url)
+                        resp.raise_for_status()
+                        return resp
+
+                    response = await retry_with_backoff(_do_fetch, max_retries=2, base_delay=2.0)
                     return response.text
                 except httpx.TimeoutException:
                     logger.warning("Timeout fetching %s", url)

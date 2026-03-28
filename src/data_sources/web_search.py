@@ -16,6 +16,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from src.agents.collectors.protocols import SearchResult
+from src.utils.retry import retry_with_backoff
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +87,13 @@ class ExaSearchProvider:
         }
 
         try:
-            response = await self._client.post("https://api.exa.ai/search", json=payload)
-            response.raise_for_status()
+
+            async def _do_exa() -> httpx.Response:
+                resp = await self._client.post("https://api.exa.ai/search", json=payload)
+                resp.raise_for_status()
+                return resp
+
+            response = await retry_with_backoff(_do_exa, max_retries=2, base_delay=2.0)
         except httpx.HTTPError as exc:
             logger.warning("Exa search failed: %s", exc)
             return []
@@ -150,11 +156,16 @@ class JinaSearchProvider:
         await self._bucket.acquire()
 
         try:
-            response = await self._client.get(
-                f"https://s.jina.ai/{query}",
-                params={"count": num_results},
-            )
-            response.raise_for_status()
+
+            async def _do_jina() -> httpx.Response:
+                resp = await self._client.get(
+                    f"https://s.jina.ai/{query}",
+                    params={"count": num_results},
+                )
+                resp.raise_for_status()
+                return resp
+
+            response = await retry_with_backoff(_do_jina, max_retries=2, base_delay=2.0)
         except httpx.HTTPError as exc:
             logger.warning("Jina search failed: %s", exc)
             return []
