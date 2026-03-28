@@ -80,8 +80,8 @@ class OpenRouterClient(LLMProvider):
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
             default_headers={
-                "HTTP-Referer": "https://foresighting.news",
-                "X-Title": "Foresighting News",
+                "HTTP-Referer": "https://delphi.antopkin.ru",
+                "X-Title": "Delphi Press",
                 **(default_headers or {}),
             },
             max_retries=0,

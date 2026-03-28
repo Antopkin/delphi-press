@@ -1,7 +1,7 @@
 {# src/web/templates/about.html -- Methodology explanation. #}
 {% extends "base.html" %}
 
-{% block title %}О методологии -- Foresighting News{% endblock %}
+{% block title %}О методологии -- Delphi Press{% endblock %}
 
 {% block content %}
 
@@ -16,7 +16,7 @@
 <section>
     <h2>Метод Дельфи</h2>
     <p>
-        В основе Foresighting News лежит
+        В основе Delphi Press лежит
         <strong>метод Дельфи</strong> -- проверенная методика
         группового прогнозирования, разработанная корпорацией RAND
         в 1960-х годах.
@@ -31,10 +31,11 @@
         чем мнение любого отдельного эксперта.
     </p>
     <p>
-        В нашей системе роль экспертов выполняют пять ИИ-агентов,
-        каждый с уникальной аналитической рамкой и работающий
-        на отдельной языковой модели. Это обеспечивает разнообразие
-        перспектив и минимизирует систематические ошибки.
+        В нашей системе роль экспертов выполняют пять ИИ-агентов
+        на базе Claude Opus 4.6 -- каждый с уникальной аналитической рамкой
+        и системным промптом. Разнообразие перспектив обеспечивается
+        не разными моделями, а разными экспертными ролями и методологическими
+        фокусами, что минимизирует систематические ошибки.
     </p>
 </section>
 
@@ -53,7 +54,7 @@
                 базовых ставок и исторических аналогий. Начинает с вопроса:
                 &laquo;Как часто подобное происходило раньше?&raquo;
             </p>
-            <footer><small>Модель: Claude Sonnet</small></footer>
+            <footer><small>Модель: Claude Opus 4.6</small></footer>
         </article>
 
         <article>
@@ -66,7 +67,7 @@
                 призму силовых балансов и стратегических интересов.
                 Ключевой вопрос: &laquo;Cui bono?&raquo;
             </p>
-            <footer><small>Модель: GPT-4o</small></footer>
+            <footer><small>Модель: Claude Opus 4.6</small></footer>
         </article>
     </div>
 
@@ -81,7 +82,7 @@
                 потоки капитала, фискальная политика, санкции. Принцип:
                 &laquo;Следуй за деньгами&raquo;.
             </p>
-            <footer><small>Модель: Gemini Pro</small></footer>
+            <footer><small>Модель: Claude Opus 4.6</small></footer>
         </article>
 
         <article>
@@ -94,7 +95,7 @@
                 &laquo;что попадёт в выпуск&raquo;: новостная ценность,
                 редакционная логика, медиа-насыщенность.
             </p>
-            <footer><small>Модель: YandexGPT</small></footer>
+            <footer><small>Модель: Claude Opus 4.6</small></footer>
         </article>
     </div>
 
@@ -109,7 +110,7 @@
                 что остальные пропустили. Применяет технику pre-mortem:
                 &laquo;Допустим, прогноз провалился -- что пошло не так?&raquo;
             </p>
-            <footer><small>Модель: DeepSeek R1</small></footer>
+            <footer><small>Модель: Claude Opus 4.6</small></footer>
         </article>
         <div>{# Empty grid cell for alignment #}</div>
     </div>
@@ -211,15 +212,30 @@
 <section>
     <h2>Технические детали</h2>
     <p>
-        Для тех, кому интересна архитектура: система представляет собой
-        модульный монолит на Python с асинхронным пайплайном.
+        Delphi Press работает в двух режимах:
+    </p>
+    <ul>
+        <li>
+            <strong>Web UI</strong> -- пользователь вводит API-ключ,
+            выбирает издание и дату. Система запускает асинхронный пайплайн
+            и показывает прогресс в реальном времени.
+        </li>
+        <li>
+            <strong>Claude Code</strong> -- пользователь клонирует репозиторий
+            и запускает команду <code>/predict</code>. Пять персон работают
+            как субагенты Claude Code, каждый на Claude Opus 4.6.
+        </li>
+    </ul>
+    <p>
+        Техническая архитектура: модульный монолит на Python
+        с асинхронным пайплайном.
     </p>
     <ul>
         <li>Backend: FastAPI + ARQ (async task queue)</li>
-        <li>LLM: OpenRouter (Claude, GPT-4o, Gemini, DeepSeek) + YandexGPT</li>
-        <li>Разнообразие моделей: каждый эксперт использует модель от другого провайдера</li>
+        <li>LLM: Claude Opus 4.6 через OpenRouter (все 5 экспертов)</li>
         <li>Прогресс: Server-Sent Events (SSE) через Redis pub/sub</li>
         <li>БД: SQLite + SQLAlchemy 2.0</li>
+        <li>Исходный код: <a href="https://github.com/Antopkin/delphi-press" target="_blank" rel="noopener noreferrer">GitHub</a></li>
     </ul>
 </section>
 
