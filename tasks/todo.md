@@ -50,9 +50,9 @@
 ### Фаза 4: Hardening
 
 - [x] Circuit breaker — `FeedSource.error_count`, disable при 5 ошибках
-- [ ] **[CRITICAL]** Token bucket fix — sleep под локом в `web_search.py` (сериализует запросы)
-- [ ] **[CRITICAL]** Unbounded cache — `web_search.py` кеш растёт без ограничений
-- [ ] **[BUG]** Timezone — `.replace(tzinfo=UTC)` → `.astimezone(UTC)` в `rss.py`
+- [x] **[CRITICAL]** Token bucket fix — sleep вне lock, while-loop (коммит `512aac8`)
+- [x] **[CRITICAL]** Unbounded cache — eviction expired + cap 500 entries (коммит `512aac8`)
+- [x] **[BUG]** Timezone — `.astimezone(UTC)` для aware datetimes (коммит `512aac8`)
 - [ ] Retry 429/5xx в web search (спека требует)
 - [ ] SSRF protection (валидация URL на приватные IP)
 - [ ] E2E тест: запустить полный пайплайн через API
@@ -93,12 +93,16 @@
 
 > Ресёрч: `tasks/research/retrospective_testing.md` — полная методология
 
-- [ ] **Ретроспективное тестирование**:
-  - [ ] Ground truth: Wayback CDX API по 16 RSS URLs (бесплатно, без auth)
-  - [ ] Метрики: CompositeScore = 0.40×TopicMatch + 0.35×BERTScore + 0.25×StyleMatch
-  - [ ] Калибровка: Brier Score < 0.20 = цель v1.0 (уровень Metaculus)
-  - [ ] Пилот: 50 runs × 3 горизонта, стоимость < $1
-  - [ ] Модуль: `src/eval/` (ground_truth.py, bertscore_eval.py, metrics.py, runner.py)
+- **Ретроспективное тестирование**:
+  - [x] Ground truth: `src/eval/ground_truth.py` — Wayback CDX API fetcher (коммит `512aac8`)
+  - [x] Метрики (пилот): `src/eval/metrics.py` — Brier Score + bootstrap CI, Log Score, Composite Score (коммит `512aac8`)
+  - [x] Схемы: `src/eval/schemas.py` — PredictionEval, EvalResult (Pydantic v2, frozen)
+  - [ ] BERTScore eval: `src/eval/bertscore_eval.py` — кешированный scorer (зависимость: bert-score + torch)
+  - [ ] LLM-as-judge: StyleMatch через Claude Sonnet (отдельный промпт от генерации)
+  - [ ] Runner: `src/eval/runner.py` — оркестратор пайплайна оценки
+  - [ ] Report: `src/eval/report.py` — reliability diagram + сводная таблица
+  - [ ] Пилот: 50 runs × 3 горизонта × 3 издания, стоимость < $1
+  - [ ] Калибровка порогов BERTScore на 20-30 аннотированных примерах
 
 ---
 
@@ -108,5 +112,19 @@
 - [x] **User-Agent**: `DelphiPress/1.0 (+https://delphi.antopkin.ru/about)` — в scraper и rss
 
 ---
+
+## Общий статус проекта
+
+| Стадия | Статус | Что готово |
+|--------|--------|-----------|
+| **Stage 1: Collection** | DONE | 4 коллектора, cron jobs, 16 RSS, Metaculus/Polymarket/GDELT |
+| **Stage 2: Analysis** | Спеки готовы | `docs/04-analysts.md` — EventTrendAnalyzer, CrossImpactAnalyzer |
+| **Stage 3: Forecasting** | Спеки готовы | `docs/05-delphi-pipeline.md` — 5 персон, медиатор, судья |
+| **Stage 4: Generation** | Спеки готовы | `docs/06-generators.md` — StyleReplicator, HeadlineGenerator |
+| **LLM Layer** | Спеки готовы | `docs/07-llm-layer.md` — OpenRouter + YandexGPT |
+| **API + Backend** | Частично | JWT auth, predictions API, worker — работают |
+| **Frontend** | Частично | Главная, about, progress, results — работают |
+| **Eval** | Пилот | Brier Score, ground truth — готовы; BERTScore, runner — TODO |
+| **Deploy** | Отложен | Сервер захарденен, Docker готов; ждём полный пайплайн |
 
 *Обновлено: 2026-03-28*
