@@ -10,12 +10,12 @@ Delphi pipeline parse-error fix: personas fallback + orchestrator quorum relaxat
 
 ### Fixed
 
-- **Persona PromptParseError** — `parse_response()` в `personas.py:305` бросал `PromptParseError` на обрезанном JSON (дешёвые модели). Fallback `if parsed else {}` был мёртвым кодом (parse_response никогда не возвращает None). Обёрнуто в try/except → fallback empty assessment. Паттерн аналогичен фиксам в framing, style_replicator, quality_gate (v0.5.1).
+- **Persona PromptParseError** — `parse_response()` в `personas.py:305` бросал `PromptParseError` на обрезанном JSON (дешёвые модели). Первый фикс (fallback `{}`) оказался неверным: пустой assessment попадал в judge → `PersonaAssessment.model_validate({})` → ValidationError. Финальный фикс: re-raise исключения → `BaseAgent.run()` ловит → `AgentResult(success=False)` → `merge_agent_result()` пропускает (строка 223). Judge получает только валидные assessments.
 
 ### Changed
 
 - **Delphi quorum 4→3** — `min_successful` для DELPHI_R1 (StageDefinition) и DELPHI_R2 (hardcoded threshold) снижен с 4 до 3 (majority quorum). При 2 упавших персонах из 5 pipeline продолжает работу — медиатор синтезирует то, что есть.
-- 4 новых теста (personas parse-error R1/R2, orchestrator quorum R1/R2), итого 846/846 зелёных.
+- 4 новых теста, итого 853/853 зелёных.
 
 ---
 

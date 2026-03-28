@@ -190,8 +190,9 @@ evaluation = [
 |--------|-----|
 | `568134d` | `personas.py`: catch PromptParseError → fallback empty assessment (R1/R2) |
 | `e68c9b4` | `orchestrator.py`: Delphi quorum 4→3 (majority of 5) для R1 и R2 |
+| `4d51da1` | `personas.py`: raise вместо fallback {} (пустой dict ломал judge) |
 
-**Причина:** При дешёвых моделях (gemini-flash-lite) parse_response() бросает PromptParseError на обрезанном JSON. Fallback `if parsed else {}` был мёртвым кодом. С quorum=4 выпадение 2 из 5 персон убивало pipeline. Тот же паттерн бага, что и в stages 7-9 (v0.5.1).
+**Причина:** При дешёвых моделях (gemini-flash-lite) parse_response() бросает PromptParseError на обрезанном JSON. Первый фикс (fallback `{}`) ломал judge через `PersonaAssessment.model_validate({})`. Финальный фикс: re-raise → `AgentResult(success=False)` → merge пропускает. Quorum 3/5 обеспечивает tolerantность.
 
 ---
 
