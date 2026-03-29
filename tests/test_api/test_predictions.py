@@ -107,6 +107,17 @@ def test_create_prediction_request_api_key_defaults_none():
     assert req.api_key is None
 
 
+async def test_create_prediction_with_api_key_passes_to_job(test_client, fake_arq_pool):
+    """API key from request body is forwarded to ARQ job kwargs."""
+    await test_client.post(
+        "/api/v1/predictions",
+        json={"outlet": "ТАСС", "target_date": "2026-04-02", "api_key": "sk-or-test-key"},
+    )
+    assert len(fake_arq_pool.jobs) == 1
+    _func_name, _args, kwargs = fake_arq_pool.jobs[0]
+    assert kwargs.get("api_key") == "sk-or-test-key"
+
+
 # ── GET /predictions/{id} ──────────────────────────────────────────
 
 

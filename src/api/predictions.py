@@ -187,7 +187,7 @@ async def create_prediction(
         await session.commit()
 
     try:
-        await arq_pool.enqueue_job("run_prediction_task", prediction_id)
+        await arq_pool.enqueue_job("run_prediction_task", prediction_id, api_key=body.api_key)
         logger.info("Enqueued prediction %s", prediction_id)
     except Exception as exc:
         logger.error("Failed to enqueue prediction %s: %s", prediction_id, exc)

@@ -32,6 +32,7 @@ _WIRE_AGENCY_NAMES = {"тасс", "риа новости", "интерфакс",
 async def run_prediction_task(
     ctx: dict[str, Any],
     prediction_id: str,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     """Главная задача воркера: запуск пайплайна для одного прогноза."""
     redis = ctx["redis"]
@@ -76,8 +77,9 @@ async def run_prediction_task(
     from src.llm.providers import OpenRouterClient
 
     providers: dict = {}
-    if settings.openrouter_api_key:
-        providers["openrouter"] = OpenRouterClient(api_key=settings.openrouter_api_key)
+    or_key = api_key or settings.openrouter_api_key
+    if or_key:
+        providers["openrouter"] = OpenRouterClient(api_key=or_key)
 
     from src.config import get_preset
 
