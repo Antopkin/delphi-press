@@ -14,7 +14,7 @@ import json
 import logging
 from pathlib import Path
 
-from src.inverse.schemas import BettorProfile, BettorTier, ProfileSummary
+from src.inverse.schemas import BettorProfile, ProfileSummary
 
 logger = logging.getLogger(__name__)
 

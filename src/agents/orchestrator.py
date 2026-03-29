@@ -462,6 +462,16 @@ class Orchestrator:
             duration_ms=duration_ms,
             total_cost_usd=context.get_total_cost_usd(),
             headlines=headlines,
+            predicted_timeline=context.predicted_timeline,
+            delphi_summary={
+                "persona_count": context.pipeline_config.get("delphi_agents", 5)
+                if context.pipeline_config
+                else 5,
+                "rounds": context.pipeline_config.get("delphi_rounds", 2)
+                if context.pipeline_config
+                else 2,
+                "event_thread_count": len(context.event_threads),
+            },
             stage_results=stage_results_dicts,
         )
 

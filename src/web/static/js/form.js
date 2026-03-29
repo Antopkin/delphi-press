@@ -220,14 +220,23 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({
-          outlet: outlet,
-          target_date: targetDate,
-          preset: (function () {
-            var r = form.querySelector('input[name="preset"]:checked');
-            return r ? r.value : "standard";
-          })(),
-        }),
+        body: JSON.stringify(
+          (function () {
+            var payload = {
+              outlet: outlet,
+              target_date: targetDate,
+              preset: (function () {
+                var r = form.querySelector('input[name="preset"]:checked');
+                return r ? r.value : "standard";
+              })(),
+            };
+            var apiKeyInput = document.getElementById("api_key");
+            if (apiKeyInput && apiKeyInput.value.trim()) {
+              payload.api_key = apiKeyInput.value.trim();
+            }
+            return payload;
+          })()
+        ),
       });
 
       if (!resp.ok) {

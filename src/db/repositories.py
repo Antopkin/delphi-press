@@ -83,6 +83,8 @@ class PredictionRepository:
         error_message: str | None = None,
         total_duration_ms: int | None = None,
         total_llm_cost_usd: float | None = None,
+        predicted_timeline: dict[str, Any] | None = None,
+        delphi_summary: dict[str, Any] | None = None,
     ) -> None:
         """Обновление статуса прогноза."""
         values: dict[str, Any] = {"status": status}
@@ -96,6 +98,10 @@ class PredictionRepository:
             values["total_duration_ms"] = total_duration_ms
         if total_llm_cost_usd is not None:
             values["total_llm_cost_usd"] = total_llm_cost_usd
+        if predicted_timeline is not None:
+            values["predicted_timeline"] = predicted_timeline
+        if delphi_summary is not None:
+            values["delphi_summary"] = delphi_summary
 
         await self.session.execute(
             update(Prediction).where(Prediction.id == prediction_id).values(**values)

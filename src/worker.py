@@ -254,6 +254,8 @@ async def run_prediction_task(
                 PredictionStatus.COMPLETED,
                 total_duration_ms=duration_ms,
                 total_llm_cost_usd=response.total_cost_usd,
+                predicted_timeline=response.predicted_timeline,
+                delphi_summary=response.delphi_summary,
             )
 
             await redis.publish(

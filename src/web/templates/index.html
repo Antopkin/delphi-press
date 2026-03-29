@@ -79,6 +79,20 @@
             <small id="date-help" class="text-text-muted">От завтра до +30 дней</small>
         </div>
 
+        {# -- API key field -- #}
+        <div>
+            <label for="api_key" class="block text-sm font-semibold mb-1">OpenRouter API Key</label>
+            <input
+                type="password"
+                id="api_key"
+                name="api_key"
+                placeholder="sk-or-..."
+                aria-describedby="api-key-help"
+                class="w-full rounded-md border-border px-3 py-2"
+            >
+            <small id="api-key-help" class="text-text-muted">Ключ для LLM-вызовов. {% if current_user %}У вас есть сохранённые ключи в <a href="/settings" class="underline">настройках</a> — поле необязательно.{% else %}Получите на <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="underline">openrouter.ai</a>.{% endif %}</small>
+        </div>
+
         {# -- Preset selection -- #}
         <fieldset class="border-none p-0 my-4" role="radiogroup" aria-label="Выберите режим прогноза">
             <legend class="font-semibold mb-3">Режим прогноза</legend>

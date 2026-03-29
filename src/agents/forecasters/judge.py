@@ -31,7 +31,6 @@ from src.schemas.headline import (
     RankedPrediction,
 )
 from src.schemas.timeline import (
-    HorizonBand,
     PredictedTimeline,
     TimelineEntry,
     compute_horizon_band,
