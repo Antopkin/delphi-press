@@ -4,7 +4,6 @@ import pytest
 
 from src.llm.pricing import (
     MODEL_PRICING,
-    YANDEX_PRICING,
     calculate_cost,
     estimate_messages_tokens,
     estimate_tokens,
@@ -26,21 +25,6 @@ class TestCalculateCost:
     def test_openrouter_opus(self):
         cost = calculate_cost("anthropic/claude-opus-4", tokens_in=10000, tokens_out=5000)
         expected = (10000 / 1_000_000 * 15.00) + (5000 / 1_000_000 * 75.00)
-        assert cost == pytest.approx(expected)
-
-    def test_yandexgpt(self):
-        cost = calculate_cost("yandexgpt", tokens_in=1000, tokens_out=500)
-        expected = (1000 / 1_000 * 0.0032) + (500 / 1_000 * 0.0032)
-        assert cost == pytest.approx(expected)
-
-    def test_yandexgpt_lite(self):
-        cost = calculate_cost("yandexgpt-lite", tokens_in=2000, tokens_out=1000)
-        expected = (2000 / 1_000 * 0.00075) + (1000 / 1_000 * 0.00075)
-        assert cost == pytest.approx(expected)
-
-    def test_yandexgpt_with_latest_suffix(self):
-        cost = calculate_cost("yandexgpt/latest", tokens_in=1000, tokens_out=500)
-        expected = (1000 / 1_000 * 0.0032) + (500 / 1_000 * 0.0032)
         assert cost == pytest.approx(expected)
 
     def test_unknown_model_returns_zero(self):
@@ -107,10 +91,6 @@ class TestPricingTablesComplete:
             "google/gemini-2.5-flash",
         }
         assert expected.issubset(MODEL_PRICING.keys())
-
-    def test_all_yandex_models_present(self):
-        assert "yandexgpt" in YANDEX_PRICING
-        assert "yandexgpt-lite" in YANDEX_PRICING
 
     def test_prices_are_positive(self):
         for model, (pin, pout) in MODEL_PRICING.items():

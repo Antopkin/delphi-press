@@ -15,7 +15,7 @@ def test_provider_error_attributes():
 
 
 def test_provider_error_optional_status_code():
-    err = LLMProviderError("timeout", provider="yandex")
+    err = LLMProviderError("timeout", provider="openrouter")
     assert err.status_code is None
 
 

@@ -41,7 +41,7 @@ class APIKeyInfo(BaseModel):
 
 
 class APIKeyCreate(BaseModel):
-    provider: Literal["openrouter", "yandex"]
+    provider: Literal["openrouter"]
     api_key: str = Field(..., min_length=10)
     label: str = Field(default="", max_length=100)
 
@@ -180,21 +180,6 @@ async def validate_key(
             if resp.status_code == 200:
                 return ValidateResult(valid=True, message="Ключ OpenRouter валиден.")
             return ValidateResult(valid=False, message=f"OpenRouter вернул {resp.status_code}.")
-
-        elif key.provider == "yandex":
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.post(
-                    "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
-                    headers={"Authorization": f"Api-Key {plaintext_key}"},
-                    json={
-                        "modelUri": "gpt://b1g/yandexgpt-lite/latest",
-                        "completionOptions": {"maxTokens": 1},
-                        "messages": [{"role": "user", "text": "ping"}],
-                    },
-                )
-            if resp.status_code in (200, 400):
-                return ValidateResult(valid=True, message="Ключ Yandex валиден.")
-            return ValidateResult(valid=False, message=f"Yandex вернул {resp.status_code}.")
 
     except httpx.HTTPError as exc:
         return ValidateResult(valid=False, message=f"Ошибка подключения: {exc}")

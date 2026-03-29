@@ -39,17 +39,9 @@ def mock_openrouter():
 
 
 @pytest.fixture
-def mock_yandex():
-    provider = AsyncMock()
-    provider.provider_name = "yandex"
-    provider.complete = AsyncMock(return_value=_make_response(model="yandexgpt", cost=0.002))
-    return provider
-
-
-@pytest.fixture
-def router(mock_openrouter, mock_yandex):
+def router(mock_openrouter):
     return ModelRouter(
-        providers={"openrouter": mock_openrouter, "yandex": mock_yandex},
+        providers={"openrouter": mock_openrouter},
         budget_usd=50.0,
     )
 
@@ -62,7 +54,7 @@ class TestModelRouter:
         mock_openrouter.complete.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_complete_fallback(self, mock_openrouter, mock_yandex):
+    async def test_complete_fallback(self, mock_openrouter):
         # trajectory_analysis: primary=claude-opus-4.6, fallback=claude-sonnet-4.5
         mock_openrouter.complete = AsyncMock(
             side_effect=[
@@ -71,31 +63,28 @@ class TestModelRouter:
             ]
         )
         router = ModelRouter(
-            providers={"openrouter": mock_openrouter, "yandex": mock_yandex},
+            providers={"openrouter": mock_openrouter},
             budget_usd=50.0,
         )
         result = await router.complete(task="trajectory_analysis", messages=_make_messages())
         assert result.model == "anthropic/claude-sonnet-4.5"
 
     @pytest.mark.asyncio
-    async def test_complete_all_fail(self, mock_openrouter, mock_yandex):
+    async def test_complete_all_fail(self, mock_openrouter):
         mock_openrouter.complete = AsyncMock(
             side_effect=LLMProviderError("fail", provider="openrouter", status_code=500)
         )
-        mock_yandex.complete = AsyncMock(
-            side_effect=LLMProviderError("fail", provider="yandex", status_code=500)
-        )
         router = ModelRouter(
-            providers={"openrouter": mock_openrouter, "yandex": mock_yandex},
+            providers={"openrouter": mock_openrouter},
             budget_usd=50.0,
         )
         with pytest.raises(LLMProviderError):
             await router.complete(task="trajectory_analysis", messages=_make_messages())
 
     @pytest.mark.asyncio
-    async def test_budget_exceeded(self, mock_openrouter, mock_yandex):
+    async def test_budget_exceeded(self, mock_openrouter):
         router = ModelRouter(
-            providers={"openrouter": mock_openrouter, "yandex": mock_yandex},
+            providers={"openrouter": mock_openrouter},
             budget_usd=0.0001,
         )
         # Record enough spending to exhaust budget
@@ -136,7 +125,7 @@ class TestDelphi:
 
 class TestBudgetEstimate:
     @pytest.mark.asyncio
-    async def test_budget_estimate_uses_model_price(self, mock_openrouter, mock_yandex):
+    async def test_budget_estimate_uses_model_price(self, mock_openrouter):
         """Budget estimate должен использовать model-specific pricing, не flat rate.
 
         Gemini-3.1-flash-lite ($0.25/$1.50 per 1M) значительно дешевле,
@@ -147,7 +136,7 @@ class TestBudgetEstimate:
         from src.llm.pricing import calculate_cost
 
         router = ModelRouter(
-            providers={"openrouter": mock_openrouter, "yandex": mock_yandex},
+            providers={"openrouter": mock_openrouter},
             budget_usd=50.0,
         )
         messages = _make_messages()

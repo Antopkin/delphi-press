@@ -28,23 +28,12 @@ MODEL_PRICING: dict[str, tuple[float, float]] = {
     "google/gemini-2.5-flash": (0.30, 2.50),
 }
 
-# YandexGPT: $/1K tokens (input, output)
-YANDEX_PRICING: dict[str, tuple[float, float]] = {
-    "yandexgpt": (0.0032, 0.0032),
-    "yandexgpt-lite": (0.00075, 0.00075),
-}
-
 
 def calculate_cost(model: str, tokens_in: int, tokens_out: int) -> float:
     """Рассчитать стоимость вызова в USD. 0.0 если модель неизвестна."""
     if model in MODEL_PRICING:
         price_in, price_out = MODEL_PRICING[model]
         return (tokens_in / 1_000_000 * price_in) + (tokens_out / 1_000_000 * price_out)
-
-    yandex_key = model.replace("/latest", "").replace("yandexgpt/", "yandexgpt")
-    if yandex_key in YANDEX_PRICING:
-        price_in, price_out = YANDEX_PRICING[yandex_key]
-        return (tokens_in / 1_000 * price_in) + (tokens_out / 1_000 * price_out)
 
     return 0.0
 

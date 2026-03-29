@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.llm.providers import OpenRouterClient, YandexGPTClient
+from src.llm.providers import OpenRouterClient
 from src.llm.router import ModelRouter
 from src.schemas.llm import LLMResponse
 
@@ -28,24 +28,8 @@ def mock_openrouter():
 
 
 @pytest.fixture
-def mock_yandex():
-    provider = AsyncMock(spec=YandexGPTClient)
-    provider.provider_name = "yandex"
-    provider.complete.return_value = LLMResponse(
-        content="Тестовый ответ",
-        model="yandexgpt",
-        provider="yandex",
-        tokens_in=80,
-        tokens_out=40,
-        cost_usd=0.00038,
-        duration_ms=800,
-    )
-    return provider
-
-
-@pytest.fixture
-def mock_router(mock_openrouter, mock_yandex):
+def mock_router(mock_openrouter):
     return ModelRouter(
-        providers={"openrouter": mock_openrouter, "yandex": mock_yandex},
+        providers={"openrouter": mock_openrouter},
         budget_usd=50.0,
     )

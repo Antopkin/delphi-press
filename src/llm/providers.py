@@ -1,4 +1,4 @@
-"""LLM-провайдеры: OpenRouter, YandexGPT (stub), retry-логика.
+"""LLM-провайдеры: OpenRouter, retry-логика.
 
 Спека: docs/07-llm-layer.md (§2).
 Контракт: LLMProvider.complete(LLMRequest) → LLMResponse.
@@ -180,26 +180,3 @@ class OpenRouterClient(LLMProvider):
     @property
     def provider_name(self) -> str:
         return "openrouter"
-
-
-class YandexGPTClient(LLMProvider):
-    """Stub для YandexGPT. Полная реализация — после добавления SDK."""
-
-    def __init__(self, folder_id: str, api_key: str, **kwargs: Any) -> None:
-        self._folder_id = folder_id
-        self._api_key = api_key
-
-    async def complete(self, request: LLMRequest) -> LLMResponse:
-        raise NotImplementedError(
-            "YandexGPTClient: полная реализация после добавления yandex-cloud-ml-sdk"
-        )
-
-    async def stream(self, request: LLMRequest) -> AsyncIterator[str]:
-        raise NotImplementedError(
-            "YandexGPTClient: полная реализация после добавления yandex-cloud-ml-sdk"
-        )
-        yield ""  # pragma: no cover — makes this an async generator
-
-    @property
-    def provider_name(self) -> str:
-        return "yandex"

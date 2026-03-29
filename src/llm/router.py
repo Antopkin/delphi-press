@@ -189,13 +189,13 @@ DEFAULT_ASSIGNMENTS: dict[str, ModelAssignment] = {
     ),
     "style_generation": ModelAssignment(
         task="style_generation",
-        primary_model="yandexgpt",
+        primary_model="anthropic/claude-sonnet-4",
         fallback_models=["anthropic/claude-opus-4.6"],
         temperature=0.8,
     ),
     "style_generation_ru": ModelAssignment(
         task="style_generation_ru",
-        primary_model="yandexgpt",
+        primary_model="anthropic/claude-sonnet-4",
         fallback_models=["anthropic/claude-opus-4.6"],
         temperature=0.8,
     ),
@@ -214,7 +214,7 @@ DEFAULT_ASSIGNMENTS: dict[str, ModelAssignment] = {
     ),
     "quality_style": ModelAssignment(
         task="quality_style",
-        primary_model="yandexgpt",
+        primary_model="anthropic/claude-sonnet-4",
         fallback_models=["anthropic/claude-opus-4.6"],
         temperature=0.3,
         json_mode=True,
@@ -378,10 +378,12 @@ class ModelRouter:
     ) -> ModelRouter:
         """Create a new router with all tasks overridden to use the given model.
 
-        YandexGPT-specific tasks are excluded by default to preserve
-        Russian language generation quality.
+        Args:
+            model: Model identifier to use for all tasks.
+            budget_usd: Optional budget override.
+            exclude_tasks: Tasks to keep their original assignments.
         """
-        exclude = exclude_tasks or {"style_generation", "style_generation_ru", "quality_style"}
+        exclude = exclude_tasks or set()
         new_assignments: dict[str, ModelAssignment] = {}
         for task, a in self._assignments.items():
             if task in exclude:
@@ -403,6 +405,4 @@ class ModelRouter:
 
     def _resolve_provider(self, model: str) -> LLMProvider | None:
         """Определить провайдера по имени модели."""
-        if model.startswith("yandexgpt"):
-            return self._providers.get("yandex")
         return self._providers.get("openrouter")

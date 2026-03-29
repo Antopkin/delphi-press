@@ -12,7 +12,7 @@ from src.llm.exceptions import (
     LLMRateLimitError,
 )
 from src.llm.prompts.base import BasePrompt, PromptParseError
-from src.llm.providers import LLMProvider, OpenRouterClient, YandexGPTClient
+from src.llm.providers import LLMProvider, OpenRouterClient
 from src.llm.router import ModelRouter
 
 __all__ = [
@@ -26,5 +26,4 @@ __all__ = [
     "ModelRouter",
     "OpenRouterClient",
     "PromptParseError",
-    "YandexGPTClient",
 ]

@@ -45,7 +45,7 @@ class LLMResponse(BaseModel):
 
     content: str = Field(..., description="Текст ответа модели")
     model: str = Field(..., description="Идентификатор модели: 'anthropic/claude-sonnet-4'")
-    provider: str = Field(..., description="Провайдер: 'openrouter' | 'yandex'")
+    provider: str = Field(..., description="Провайдер: 'openrouter'")
     tokens_in: int = Field(..., ge=0, description="Число входных токенов")
     tokens_out: int = Field(..., ge=0, description="Число выходных токенов")
     cost_usd: float = Field(..., ge=0.0, description="Стоимость вызова в USD")

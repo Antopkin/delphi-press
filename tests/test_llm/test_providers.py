@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.llm.exceptions import LLMProviderError, LLMRateLimitError
-from src.llm.providers import OpenRouterClient, YandexGPTClient, retry_with_backoff
+from src.llm.providers import OpenRouterClient, retry_with_backoff
 from src.schemas.llm import LLMMessage, LLMRequest, LLMResponse, MessageRole
 
 
@@ -79,25 +79,6 @@ class TestOpenRouterClient:
         with patch("src.llm.providers.AsyncOpenAI", return_value=mock_client):
             client = OpenRouterClient(api_key="test-key")
         assert client.provider_name == "openrouter"
-
-
-class TestYandexGPTClient:
-    def test_stub_raises(self):
-        client = YandexGPTClient(folder_id="test", api_key="test")
-        assert client.provider_name == "yandex"
-
-    @pytest.mark.asyncio
-    async def test_complete_not_implemented(self):
-        client = YandexGPTClient(folder_id="test", api_key="test")
-        with pytest.raises(NotImplementedError):
-            await client.complete(_make_request("yandexgpt"))
-
-    @pytest.mark.asyncio
-    async def test_stream_not_implemented(self):
-        client = YandexGPTClient(folder_id="test", api_key="test")
-        with pytest.raises(NotImplementedError):
-            async for _ in client.stream(_make_request("yandexgpt")):
-                pass
 
 
 class TestTruncatedResponse:
