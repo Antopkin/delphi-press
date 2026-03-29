@@ -185,7 +185,7 @@ def _compute_user_metrics(
             continue
 
         outcome = 1.0 if resolutions[market_id] else 0.0
-        position, size = _aggregate_position(mtrades)
+        position, size = aggregate_position(mtrades)
         resolved_results.append((position, outcome))
         sizes.append(size)
         if (position >= 0.5) == (outcome >= 0.5):
@@ -219,7 +219,7 @@ def _compute_user_metrics(
     }
 
 
-def _aggregate_position(trades: list[TradeRecord]) -> tuple[float, float]:
+def aggregate_position(trades: list[TradeRecord]) -> tuple[float, float]:
     """Volume-weighted average position for a user on one market.
 
     YES trades contribute their price as implied YES probability.

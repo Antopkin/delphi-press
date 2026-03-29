@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 
 from src.inverse.profiler import (
-    _aggregate_position,
+    aggregate_position,
     _classify_tier,
     build_bettor_profiles,
 )
@@ -15,7 +15,7 @@ from src.inverse.schemas import BettorTier, TradeRecord
 
 
 # ---------------------------------------------------------------------------
-# _aggregate_position
+# aggregate_position
 # ---------------------------------------------------------------------------
 
 
@@ -31,7 +31,7 @@ class TestAggregatePosition:
                 timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
             ),
         ]
-        pos, size = _aggregate_position(trades)
+        pos, size = aggregate_position(trades)
         assert pos == pytest.approx(0.70)
         assert size == 100.0
 
@@ -46,7 +46,7 @@ class TestAggregatePosition:
                 timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
             ),
         ]
-        pos, size = _aggregate_position(trades)
+        pos, size = aggregate_position(trades)
         # NO at price 0.30 → implied YES = 1 - 0.30 = 0.70
         assert pos == pytest.approx(0.70)
         assert size == 100.0
@@ -70,7 +70,7 @@ class TestAggregatePosition:
                 timestamp=datetime(2026, 1, 2, tzinfo=timezone.utc),
             ),
         ]
-        pos, size = _aggregate_position(trades)
+        pos, size = aggregate_position(trades)
         # (0.60*100 + 0.80*300) / 400 = (60+240)/400 = 0.75
         assert pos == pytest.approx(0.75)
         assert size == 400.0
@@ -94,12 +94,12 @@ class TestAggregatePosition:
                 timestamp=datetime(2026, 1, 2, tzinfo=timezone.utc),
             ),
         ]
-        pos, _ = _aggregate_position(trades)
+        pos, _ = aggregate_position(trades)
         # YES: 0.70*100 = 70, NO: (1-0.40)*100 = 60 → (70+60)/200 = 0.65
         assert pos == pytest.approx(0.65)
 
     def test_empty_trades(self) -> None:
-        pos, size = _aggregate_position([])
+        pos, size = aggregate_position([])
         assert pos == 0.5
         assert size == 0.0
 
@@ -284,3 +284,12 @@ class TestBuildBettorProfiles:
         )
         for p in profiles:
             assert 0.0 < p.recency_weight <= 1.0
+
+
+class TestAggregatePositionPublicAPI:
+    """aggregate_position should be importable without underscore prefix."""
+
+    def testaggregate_position_importable_as_public(self):
+        from src.inverse.profiler import aggregate_position
+
+        assert callable(aggregate_position)

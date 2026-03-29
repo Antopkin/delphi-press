@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from src.inverse.profiler import _aggregate_position
+from src.inverse.profiler import aggregate_position
 from src.inverse.schemas import BettorProfile, BettorTier, InformedSignal, TradeRecord
 
 __all__ = [
@@ -75,7 +75,7 @@ def compute_informed_signal(
         if profile is None or profile.tier != BettorTier.INFORMED:
             continue
 
-        position, size = _aggregate_position(utrades)
+        position, size = aggregate_position(utrades)
         if size <= 0:
             continue
 
