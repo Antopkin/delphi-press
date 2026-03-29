@@ -94,6 +94,17 @@ class OutletCatalogProto(Protocol):
     def get_rss_feeds(self, name: str) -> list[str]: ...
 
 
+class OutletResolverProto(Protocol):
+    """Протокол для динамического резолвера изданий.
+
+    Каскад: статический каталог → DB кэш → Wikidata + RSS discovery.
+    """
+
+    async def resolve(self, name: str) -> OutletInfo | None: ...
+
+    async def resolve_by_url(self, url: str) -> OutletInfo | None: ...
+
+
 class ProfileCacheProto(Protocol):
     """Протокол для кеша профилей изданий."""
 

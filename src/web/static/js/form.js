@@ -79,7 +79,13 @@
     selectedIndex = -1;
 
     if (outlets.length === 0) {
-      hideSuggestions();
+      // Show "not found" hint instead of hiding
+      var hint = document.createElement("li");
+      hint.setAttribute("role", "option");
+      hint.className = "text-text-muted italic";
+      hint.textContent = "Издание не найдено";
+      suggestionsList.appendChild(hint);
+      suggestionsList.hidden = false;
       return;
     }
 

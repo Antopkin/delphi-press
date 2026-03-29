@@ -50,6 +50,10 @@
 - [Фронтенд](docs/09-frontend.md)
 - [Деплой](docs/10-deployment.md)
 
+## Контакты
+
+Telegram: [@Antopkin](https://t.me/Antopkin)
+
 ## Лицензия
 
 Проприетарный. Все права защищены.
