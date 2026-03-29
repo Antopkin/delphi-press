@@ -17,7 +17,7 @@
     {# Tailwind CSS (built from input.css via PostCSS) #}
     <link rel="stylesheet" href="{{ url_for('static', path='css/tailwind.css') }}?v={{ app_version }}">
 
-    <link rel="icon" href="{{ url_for('static', path='img/favicon.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ url_for('static', path='img/favicon.svg') }}?v={{ app_version }}" type="image/svg+xml">
 
     {# Theme: apply saved preference before paint to prevent flash #}
     <script>

@@ -128,5 +128,5 @@
     id="progress-config"
     type="application/json"
 >{"predictionId": "{{ prediction_id }}", "outlet": "{{ outlet }}"}</script>
-<script src="{{ url_for('static', path='js/progress.js') }}"></script>
+<script src="{{ url_for('static', path='js/progress.js') }}?v={{ app_version }}"></script>
 {% endblock %}

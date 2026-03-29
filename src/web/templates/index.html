@@ -208,5 +208,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', path='js/form.js') }}"></script>
+<script src="{{ url_for('static', path='js/form.js') }}?v={{ app_version }}"></script>
 {% endblock %}

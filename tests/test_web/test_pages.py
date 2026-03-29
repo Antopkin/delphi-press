@@ -536,3 +536,9 @@ class TestStaticAssetCacheBusting:
         resp = await web_client.get("/")
         assert resp.status_code == 200
         assert "tailwind.css?v=" in resp.text
+
+    async def test_static_js_has_version_param(self, web_client):
+        """JS scripts must include ?v= for cache-busting after deploy."""
+        resp = await web_client.get("/")
+        assert resp.status_code == 200
+        assert "form.js?v=" in resp.text

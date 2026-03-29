@@ -211,5 +211,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', path='js/reveal.js') }}"></script>
+<script src="{{ url_for('static', path='js/reveal.js') }}?v={{ app_version }}"></script>
 {% endblock %}
