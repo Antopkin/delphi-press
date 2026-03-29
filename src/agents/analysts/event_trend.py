@@ -147,7 +147,9 @@ class EventTrendAnalyzer(BaseAgent):
         """
         from sklearn.feature_extraction.text import TfidfVectorizer
 
-        vectorizer = TfidfVectorizer(max_features=1536, stop_words="english")
+        # No stop_words filter: IDF naturally downweights frequent words,
+        # and "english" stop_words are useless for Russian-language outlets.
+        vectorizer = TfidfVectorizer(max_features=1536)
         matrix = vectorizer.fit_transform(texts)
         return matrix.toarray()
 
