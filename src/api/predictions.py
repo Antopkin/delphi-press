@@ -55,6 +55,9 @@ class CreatePredictionResponse(BaseModel):
     created_at: datetime
     progress_url: str
     result_url: str
+    outlet_resolved: bool = False
+    outlet_language: str = ""
+    outlet_url: str = ""
 
 
 class HeadlineSchema(BaseModel):
@@ -163,6 +166,23 @@ async def create_prediction(
     session_factory = request.app.state.session_factory
     arq_pool = request.app.state.arq_pool
 
+    # Pre-resolve outlet (caches in DB for worker to find later)
+    outlet_resolved = False
+    outlet_language = ""
+    outlet_url = ""
+    try:
+        from src.data_sources.outlet_resolver import OutletResolver
+        from src.data_sources.outlets_catalog import OutletsCatalog
+
+        resolver = OutletResolver(catalog=OutletsCatalog(), session_factory=session_factory)
+        info = await resolver.resolve(body.outlet.strip())
+        if info:
+            outlet_resolved = True
+            outlet_language = info.language
+            outlet_url = info.website_url
+    except Exception as exc:
+        logger.warning("Outlet pre-resolution failed for %r: %s", body.outlet, exc)
+
     async with get_session(session_factory) as session:
         repo = PredictionRepository(session)
 
@@ -204,6 +224,9 @@ async def create_prediction(
         created_at=now,
         progress_url=f"/api/v1/predictions/{prediction_id}/stream",
         result_url=f"/api/v1/predictions/{prediction_id}",
+        outlet_resolved=outlet_resolved,
+        outlet_language=outlet_language,
+        outlet_url=outlet_url,
     )
 
 

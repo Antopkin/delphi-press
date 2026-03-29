@@ -118,6 +118,33 @@ async def test_create_prediction_with_api_key_passes_to_job(test_client, fake_ar
     assert kwargs.get("api_key") == "sk-or-test-key"
 
 
+# ── Outlet resolution on create ────────────────────────────────────
+
+
+async def test_create_prediction_returns_resolved_outlet_info(test_client):
+    """Response includes outlet resolution metadata for known outlets."""
+    resp = await test_client.post(
+        "/api/v1/predictions",
+        json={"outlet": "ТАСС", "target_date": "2026-04-02"},
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["outlet_resolved"] is True
+    assert data["outlet_language"] == "ru"
+    assert "tass" in data["outlet_url"].lower()
+
+
+async def test_create_prediction_unknown_outlet_resolved_false(test_client):
+    """Unknown outlet returns outlet_resolved=False."""
+    resp = await test_client.post(
+        "/api/v1/predictions",
+        json={"outlet": "ывапрол", "target_date": "2026-04-02"},
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["outlet_resolved"] is False
+
+
 # ── GET /predictions/{id} ──────────────────────────────────────────
 
 

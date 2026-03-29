@@ -255,6 +255,15 @@
 
       var data = await resp.json();
 
+      // Show warning if outlet was not resolved (quality may be lower)
+      if (data.outlet_resolved === false) {
+        showError("Издание не найдено в базе. Прогноз будет менее точным.");
+        setTimeout(function () {
+          window.location.href = "/predict/" + data.id;
+        }, 2000);
+        return;
+      }
+
       // Redirect to the progress page
       window.location.href = "/predict/" + data.id;
     } catch (err) {
