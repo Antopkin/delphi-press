@@ -200,3 +200,17 @@ class TestInactiveUser:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 401
+
+
+# ── Password limits ────────────────────────────────────────────────
+
+
+class TestPasswordLimits:
+    async def test_register_rejects_huge_password(self, test_client):
+        """Passwords over 128 chars should be rejected (bcrypt truncates at 72)."""
+        huge_password = "A" * 200
+        resp = await test_client.post(
+            "/api/v1/auth/register",
+            json={"email": "huge@test.com", "password": huge_password},
+        )
+        assert resp.status_code == 422
