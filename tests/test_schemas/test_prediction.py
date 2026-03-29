@@ -94,6 +94,21 @@ def test_prediction_response_with_predicted_timeline():
     assert len(resp.predicted_timeline["entries"]) == 1
 
 
+def test_prediction_response_with_delphi_summary():
+    """PredictionResponse carries optional delphi_summary dict."""
+    summary = {"persona_count": 5, "rounds": 2, "event_thread_count": 10}
+    resp = PredictionResponse(
+        id="abc-123",
+        outlet="TASS",
+        target_date=date(2026, 4, 1),
+        status="completed",
+        delphi_summary=summary,
+    )
+    assert resp.delphi_summary is not None
+    assert resp.delphi_summary["persona_count"] == 5
+    assert resp.delphi_summary["rounds"] == 2
+
+
 def test_prediction_response_predicted_timeline_defaults_none():
     resp = PredictionResponse(
         id="abc-123", outlet="TASS", target_date=date(2026, 4, 1), status="completed"
