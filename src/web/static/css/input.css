@@ -167,11 +167,13 @@
   /* Progress bar (vendor-prefixed) */
   progress {
     appearance: none;
+    -webkit-appearance: none;
     width: 100%;
     height: 0.5rem;
     border-radius: 9999px;
     border: none;
     overflow: hidden;
+    background-color: var(--color-surface-1);
   }
   progress::-webkit-progress-bar {
     background-color: var(--color-surface-1);
