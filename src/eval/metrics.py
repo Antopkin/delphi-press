@@ -167,3 +167,62 @@ def market_brier_comparison(
         "market_brier_7d": bs_7d,
         "delphi_skill_vs_24h": skill,
     }
+
+
+def informed_brier_comparison(
+    raw_probs: list[float],
+    informed_probs: list[float],
+    outcomes: list[float],
+    *,
+    delphi_probs: list[float] | None = None,
+    coverages: list[float] | None = None,
+    dispersions: list[float] | None = None,
+) -> dict:
+    """Compare Brier Scores: raw market vs. informed consensus vs. Delphi.
+
+    Args:
+        raw_probs: Raw market prices (YES probability).
+        informed_probs: Informed consensus probabilities.
+        outcomes: Binary outcomes (1.0=YES resolved, 0.0=NO resolved).
+        delphi_probs: Delphi pipeline probabilities (optional).
+        coverages: Per-event coverage values (optional, for mean_coverage).
+        dispersions: Per-event |informed - raw| values (optional).
+
+    Returns:
+        Dict matching InformedBrierComparison schema fields.
+
+    Raises:
+        ValueError: If input lists have different lengths or are empty.
+    """
+    if len(raw_probs) != len(informed_probs) or len(raw_probs) != len(outcomes):
+        raise ValueError("raw_probs, informed_probs, and outcomes must have same length")
+    if not raw_probs:
+        raise ValueError("Input lists must contain at least one element")
+
+    bs_raw = brier_score(raw_probs, outcomes).score
+    bs_informed = brier_score(informed_probs, outcomes).score
+
+    # Brier Skill Score: how much better informed is vs raw market
+    skill = 1.0 - bs_informed / bs_raw if bs_raw > 0 else 0.0
+
+    result: dict = {
+        "n_events": len(outcomes),
+        "raw_market_brier": bs_raw,
+        "informed_brier": bs_informed,
+        "informed_skill_vs_raw": round(skill, 4),
+        "mean_dispersion": (
+            round(float(np.mean(dispersions)), 4)
+            if dispersions
+            else round(float(np.mean(np.abs(np.array(informed_probs) - np.array(raw_probs)))), 4)
+        ),
+        "mean_coverage": (round(float(np.mean(coverages)), 4) if coverages else 0.0),
+    }
+
+    if delphi_probs is not None:
+        if len(delphi_probs) != len(outcomes):
+            raise ValueError("delphi_probs must have same length as outcomes")
+        result["delphi_brier"] = brier_score(delphi_probs, outcomes).score
+    else:
+        result["delphi_brier"] = None
+
+    return result

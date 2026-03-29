@@ -79,11 +79,15 @@ class ForesightCollector(BaseAgent):
         metaculus_client: MetaculusClientProto,
         polymarket_client: PolymarketClientProto,
         gdelt_client: GdeltClientProto,
+        inverse_profiles: dict[str, Any] | None = None,
+        inverse_trades: dict[str, list[Any]] | None = None,
     ) -> None:
         super().__init__(llm_client)
         self._metaculus = metaculus_client
         self._polymarket = polymarket_client
         self._gdelt = gdelt_client
+        self._inverse_profiles = inverse_profiles
+        self._inverse_trades = inverse_trades or {}
 
     def get_timeout_seconds(self) -> int:
         """Allow 120s for three parallel API calls."""
@@ -256,12 +260,12 @@ class ForesightCollector(BaseAgent):
             )
         return mapped
 
-    @staticmethod
-    def _map_polymarket(markets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _map_polymarket(self, markets: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Map raw Polymarket markets to foresight_signal dicts.
 
         Each dict follows a SignalRecord-like structure enriched with
         market-specific fields (probability, volume, distribution metrics).
+        When inverse_profiles are available, adds informed consensus fields.
         """
         mapped: list[dict[str, Any]] = []
         for market in markets:
@@ -294,6 +298,32 @@ class ForesightCollector(BaseAgent):
                         "ci_high": metrics.ci_high,
                         "liquidity": market.get("liquidity", 0),
                         "distribution_reliable": metrics.distribution_reliable,
+                    }
+                )
+
+            # Inverse problem enrichment: informed consensus from bettor profiles
+            market_id = entry["market_id"]
+            if (
+                self._inverse_profiles
+                and market_id
+                and entry["probability"] is not None
+                and market_id in self._inverse_trades
+            ):
+                from src.inverse.signal import compute_informed_signal
+
+                informed = compute_informed_signal(
+                    trades=self._inverse_trades[market_id],
+                    profiles=self._inverse_profiles,
+                    raw_probability=entry["probability"],
+                    market_id=market_id,
+                )
+                entry.update(
+                    {
+                        "informed_probability": informed.informed_probability,
+                        "informed_dispersion": informed.dispersion,
+                        "informed_n_bettors": informed.n_informed_bettors,
+                        "informed_coverage": informed.coverage,
+                        "informed_confidence": informed.confidence,
                     }
                 )
 

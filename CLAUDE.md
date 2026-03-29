@@ -33,6 +33,7 @@
 - `src/agents/collectors/foresight_collector.py` → `docs/03-collectors.md` + ресёрчи выше
 - `src/web/` → `docs/09-frontend.md`
 - `src/eval/` → `tasks/research/retrospective_testing.md`
+- `src/inverse/` → `tasks/research/polymarket_inverse_problem.md` (обратная задача: профилирование участников, informed consensus)
 - Roadmap (задачи, баги, сессии) → `docs/11-roadmap.md`
 - `scripts/dry_run.py` → E2E dry run без инфраструктуры
 - `tests/fixtures/mock_llm.py` → MockLLMClient для E2E тестов

@@ -15,6 +15,7 @@ __all__ = [
     "BrierComparison",
     "CorrelationResult",
     "EvalResult",
+    "InformedBrierComparison",
     "PredictionEval",
     "PriceMovement",
     "ResolvedMarket",
@@ -140,3 +141,25 @@ class CorrelationResult(BaseModel):
     news_precedes_market_pct: float | None = Field(
         default=None, description="Pct of movements with news in [-24h, 0] window"
     )
+
+
+# ---------------------------------------------------------------------------
+# Informed consensus comparison schemas (Direction D — Inverse Problem)
+# ---------------------------------------------------------------------------
+
+
+class InformedBrierComparison(BaseModel):
+    """Side-by-side comparison: raw market vs. informed consensus vs. Delphi."""
+
+    model_config = ConfigDict(frozen=True)
+
+    n_events: int = Field(..., ge=0, description="Number of resolved events evaluated")
+    raw_market_brier: float = Field(..., ge=0.0, le=1.0, description="BS of raw market price")
+    informed_brier: float = Field(..., ge=0.0, le=1.0, description="BS of informed consensus")
+    delphi_brier: float | None = Field(
+        default=None, ge=0.0, le=1.0, description="BS of Delphi pipeline (if available)"
+    )
+    informed_skill_vs_raw: float = Field(..., description="BSS = 1 - informed_BS / raw_BS")
+    mean_dispersion: float = Field(..., ge=0.0, description="Mean |informed - raw| across events")
+    mean_coverage: float = Field(..., ge=0.0, le=1.0, description="Mean coverage across events")
+    per_event: list[dict] = Field(default_factory=list, description="Per-event detail rows")

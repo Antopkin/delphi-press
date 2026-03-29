@@ -92,6 +92,10 @@ MARKET_MATCH_TIER1_SCORE = 65
 MARKET_MATCH_TIER2_SCORE = 40
 MARKET_MATCH_TIER2_JACCARD = 0.3
 
+# Inverse problem (Phase 5): informed consensus integration
+INFORMED_MIN_COVERAGE = 0.3
+INFORMED_COVERAGE_BONUS_FACTOR = 0.05
+
 logger = logging.getLogger(__name__)
 
 
@@ -201,12 +205,23 @@ class Judge(BaseAgent):
                 except (ValueError, KeyError):
                     weights.append(0.20)
 
-            # Market persona injection (Phase 4)
+            # Market persona injection (Phase 4 + Phase 5 informed consensus)
             market = self._match_market_to_thread(event_id, agent_preds, market_index)
             market_prob = market.get("probability", 0) if market else 0
 
             if market and market_prob >= MARKET_MIN_PROBABILITY:
+                # Phase 5: prefer informed_probability when available with coverage
+                informed_prob = market.get("informed_probability")
+                informed_coverage = market.get("informed_coverage", 0.0)
+                if informed_prob is not None and informed_coverage >= INFORMED_MIN_COVERAGE:
+                    market_prob = informed_prob
+
                 market_weight = self._compute_market_weight(market)
+
+                # Phase 5: coverage bonus for informed signal
+                if informed_coverage >= INFORMED_MIN_COVERAGE:
+                    market_weight += INFORMED_COVERAGE_BONUS_FACTOR * informed_coverage
+
                 probs.append(market_prob)
                 weights.append(market_weight)
 
@@ -240,17 +255,24 @@ class Judge(BaseAgent):
             evidence = self._collect_evidence(agent_preds)
             dissenting = self._collect_dissent(agent_preds, agreement, raw_prob)
 
-            # Market evidence
+            # Market evidence (Phase 4 + Phase 5)
             if market:
-                evidence.append(
-                    {
-                        "source": "polymarket",
-                        "summary": (
-                            f"Market probability: {market_prob:.2f}, "
-                            f"volume: ${market.get('volume_usd', 0):,.0f}"
-                        ),
-                    }
-                )
+                raw_mkt = market.get("probability", 0)
+                informed_p = market.get("informed_probability")
+                informed_n = market.get("informed_n_bettors", 0)
+                if informed_p is not None and informed_n > 0:
+                    summary = (
+                        f"Market: {raw_mkt:.2f}, "
+                        f"Informed traders ({informed_n}): {informed_p:.2f}, "
+                        f"dispersion: {market.get('informed_dispersion', 0):.2f}, "
+                        f"volume: ${market.get('volume_usd', 0):,.0f}"
+                    )
+                else:
+                    summary = (
+                        f"Market probability: {raw_mkt:.2f}, "
+                        f"volume: ${market.get('volume_usd', 0):,.0f}"
+                    )
+                evidence.append({"source": "polymarket", "summary": summary})
 
             # Aggregate temporal fields (NEW)
             pred_date, unc_days = self._aggregate_date(agent_preds, context.target_date)

@@ -142,13 +142,22 @@ Delphi Press уже коллектит оба потока данных:
 - Сравнить: наша предсказанная вероятность vs. рыночная вероятность vs. факт
 - Если наш Brier Score лучше рыночного → мы добавляем ценность поверх рынка
 
-### Не берём (низкая применимость для нас)
+### Упрощённая обратная задача — "Wisdom of the Informed" (реализовано)
 
-| Идея | Почему не берём |
-|------|-----------------|
-| "Клонирование" отдельных трейдеров | Мы прогнозируем заголовки СМИ, не поведение трейдеров |
-| Параметрическая оценка λ | Нам достаточно агрегированных рыночных вероятностей |
-| Обратная задача в чистом виде | Мы consumer рыночных сигналов, не market microstructure analyst |
+Вместо полной параметрической оценки λ для каждого трейдера — практическая реализация:
+
+1. **Профилирование**: Brier Score каждого участника на resolved markets
+2. **Кластеризация**: INFORMED (top 20%) / MODERATE / NOISE (bottom 30%) по перцентилям BS
+3. **Informed consensus**: accuracy-weighted mean позиций INFORMED участников
+4. **Shrinkage**: при малом покрытии → плавный переход к raw market price
+5. **Интеграция**: Judge использует informed_probability вместо raw, если coverage ≥ 0.3
+
+### Не берём (полная обратная задача)
+
+| Идея | Почему не берём в v1 |
+|------|----------------------|
+| Параметрическая оценка λ (Exp/Weibull) | Упрощённый BS-профилинг достаточен |
+| "Клонирование" отдельных трейдеров | Нам нужен агрегированный сигнал, не индивидуальные модели |
 | Иерархические модели ставок | Overengineering для нашей задачи |
 
 **Но**: если Алексей захочет сделать это как отдельный исследовательский проект — датасеты уже найдены (см. §6), а результаты его модели можно подключить к Delphi Press как внешний сигнал через `foresight_signals` (формат уже поддерживает произвольные dict-поля).
@@ -167,7 +176,9 @@ Delphi Press уже коллектит оба потока данных:
 | Шаг 4: News↔market корреляция | **Готово** | `src/eval/correlation.py` (detect, collect, Spearman, Granger), `scripts/eval_news_correlation.py` | 16 |
 | Fuzzy match extraction | **Готово** | `src/utils/fuzzy_match.py` (extracted from Judge) | 8 |
 
-Итого реализовано: **6 фаз, 109 тестов, 6 коммитов на main** (2026-03-28 — 2026-03-29).
+| Шаг 5: Inverse Problem (Wisdom of the Informed) | **Готово** | `src/inverse/` (schemas, profiler, signal, loader, store), Judge Phase 5 integration, `scripts/build_bettor_profiles.py`, `scripts/eval_informed_consensus.py` | 86 |
+
+Итого реализовано: **7 фаз, 195 тестов** (2026-03-28 — 2026-03-29).
 
 ---
 
@@ -210,13 +221,16 @@ Delphi Press уже коллектит оба потока данных:
 
 ## 6. Датасеты
 
-### Для быстрого старта (отправлено Алексейу)
+### Для быстрого старта (отправлено Алексею)
 - **Kaggle**: [ismetsemedov/polymarket-prediction-markets](https://www.kaggle.com/datasets/ismetsemedov/polymarket-prediction-markets) — 300 МБ, 2 CSV, 100K рынков
 - **Kaggle**: [sandeepkumarfromin/full-market-data-from-polymarket](https://www.kaggle.com/datasets/sandeepkumarfromin/full-market-data-from-polymarket) — 215 МБ, CC0, trade-файлы с maker/taker
 
 ### Для серьёзного анализа
 - **HuggingFace**: [SII-WANGZJ/Polymarket_data](https://huggingface.co/datasets/SII-WANGZJ/Polymarket_data) — 107 ГБ, 1.1B записей, users/trades/markets parquet
 - **Kaggle**: [marvingozo/polymarket-tick-level-orderbook-dataset](https://www.kaggle.com/datasets/marvingozo/polymarket-tick-level-orderbook-dataset) — 41 ГБ, тики ордербука с ML-фичами, CC-BY-NC-4.0
+
+### Дополнительно (найдены Алексеем 2026-03-29)
+- **Kaggle**: [gyroflaw/poly-btc-15m](https://www.kaggle.com/datasets/gyroflaw/poly-btc-15m) — 15-минутные свечи BTC-рынков Polymarket
 
 ---
 

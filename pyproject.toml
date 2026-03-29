@@ -37,6 +37,9 @@ ml = [
 eval = [
     "statsmodels>=0.14",
 ]
+inverse = [
+    "pyarrow>=15.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

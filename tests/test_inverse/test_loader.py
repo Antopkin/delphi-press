@@ -1,0 +1,200 @@
+"""Tests for src/inverse/loader.py — CSV loading and parsing."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pytest
+
+from src.inverse.loader import (
+    _normalize_side,
+    _parse_timestamp,
+    load_resolutions_csv,
+    load_trades_csv,
+)
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+# ---------------------------------------------------------------------------
+# Fixtures: tiny CSV files
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def trades_csv(tmp_path: Path) -> Path:
+    """Create a minimal trades CSV file."""
+    p = tmp_path / "trades.csv"
+    p.write_text(
+        "maker_address,market,side,price,size,timestamp\n"
+        "0xAAA,market-1,BUY,0.65,100.0,1711929600\n"
+        "0xBBB,market-1,SELL,0.35,50.0,1711933200\n"
+        "0xAAA,market-2,BUY,0.80,200.0,2026-03-15T12:00:00Z\n"
+        "0xCCC,market-2,BUY,0.50,0.0,1711940400\n"  # size=0 → skip
+        "bad_row,market-3,BUY,not_a_number,100.0,1711944000\n"  # invalid price → skip
+    )
+    return p
+
+
+@pytest.fixture()
+def markets_csv(tmp_path: Path) -> Path:
+    """Create a minimal markets CSV with resolutions."""
+    p = tmp_path / "markets.csv"
+    p.write_text(
+        "id,question,outcomePrices,active,closed\n"
+        'market-1,"Will X happen?","[""1.0"", ""0.0""]",false,true\n'
+        'market-2,"Will Y happen?","[""0.0"", ""1.0""]",false,true\n'
+        'market-3,"Will Z happen?","[""0.65"", ""0.35""]",false,true\n'  # ambiguous
+        'market-4,"Still active?","[""0.50"", ""0.50""]",true,false\n'  # active → skip
+    )
+    return p
+
+
+# ---------------------------------------------------------------------------
+# load_trades_csv
+# ---------------------------------------------------------------------------
+
+
+class TestLoadTradesCsv:
+    def test_loads_valid_trades(self, trades_csv: Path) -> None:
+        trades = load_trades_csv(trades_csv)
+        assert len(trades) == 3  # 5 rows - 1 size=0 - 1 bad price
+
+    def test_first_trade_fields(self, trades_csv: Path) -> None:
+        trades = load_trades_csv(trades_csv)
+        t = trades[0]
+        assert t.user_id == "0xAAA"
+        assert t.market_id == "market-1"
+        assert t.side == "YES"  # BUY → YES
+        assert t.price == 0.65
+        assert t.size == 100.0
+
+    def test_sell_maps_to_no(self, trades_csv: Path) -> None:
+        trades = load_trades_csv(trades_csv)
+        t = trades[1]
+        assert t.side == "NO"
+
+    def test_iso_timestamp_parsed(self, trades_csv: Path) -> None:
+        trades = load_trades_csv(trades_csv)
+        t = trades[2]
+        assert t.timestamp.year == 2026
+        assert t.timestamp.month == 3
+
+    def test_max_rows(self, trades_csv: Path) -> None:
+        trades = load_trades_csv(trades_csv, max_rows=2)
+        assert len(trades) <= 2
+
+    def test_min_size_filter(self, trades_csv: Path) -> None:
+        trades = load_trades_csv(trades_csv, min_size=100.0)
+        assert all(t.size >= 100.0 for t in trades)
+
+    def test_file_not_found(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            load_trades_csv(tmp_path / "nonexistent.csv")
+
+    def test_custom_column_map(self, tmp_path: Path) -> None:
+        p = tmp_path / "custom.csv"
+        p.write_text("wallet,mkt,direction,px,amt,ts\n0xAAA,m1,YES,0.70,100.0,1711929600\n")
+        cmap = {
+            "user_id": "wallet",
+            "market_id": "mkt",
+            "side": "direction",
+            "price": "px",
+            "size": "amt",
+            "timestamp": "ts",
+        }
+        trades = load_trades_csv(p, column_map=cmap)
+        assert len(trades) == 1
+        assert trades[0].user_id == "0xAAA"
+
+    def test_missing_columns_raises(self, tmp_path: Path) -> None:
+        p = tmp_path / "bad.csv"
+        p.write_text("col1,col2\na,b\n")
+        with pytest.raises(ValueError, match="missing required fields"):
+            load_trades_csv(p)
+
+
+# ---------------------------------------------------------------------------
+# load_resolutions_csv
+# ---------------------------------------------------------------------------
+
+
+class TestLoadResolutionsCsv:
+    def test_loads_resolved_markets(self, markets_csv: Path) -> None:
+        res = load_resolutions_csv(markets_csv)
+        assert len(res) == 2  # market-1 YES, market-2 NO; market-3 ambiguous, market-4 active
+
+    def test_yes_resolution(self, markets_csv: Path) -> None:
+        res = load_resolutions_csv(markets_csv)
+        assert res["market-1"] is True
+
+    def test_no_resolution(self, markets_csv: Path) -> None:
+        res = load_resolutions_csv(markets_csv)
+        assert res["market-2"] is False
+
+    def test_ambiguous_skipped(self, markets_csv: Path) -> None:
+        res = load_resolutions_csv(markets_csv)
+        assert "market-3" not in res
+
+    def test_active_skipped(self, markets_csv: Path) -> None:
+        res = load_resolutions_csv(markets_csv)
+        assert "market-4" not in res
+
+    def test_file_not_found(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            load_resolutions_csv(tmp_path / "nonexistent.csv")
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeSide:
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("YES", "YES"),
+            ("BUY", "YES"),
+            ("LONG", "YES"),
+            ("1", "YES"),
+            ("TRUE", "YES"),
+            ("NO", "NO"),
+            ("SELL", "NO"),
+            ("SHORT", "NO"),
+            ("0", "NO"),
+            ("FALSE", "NO"),
+        ],
+    )
+    def test_known_values(self, raw: str, expected: str) -> None:
+        assert _normalize_side(raw) == expected
+
+    def test_unknown_returns_none(self) -> None:
+        assert _normalize_side("MAYBE") is None
+        assert _normalize_side("") is None
+
+
+class TestParseTimestamp:
+    def test_unix_seconds(self) -> None:
+        ts = _parse_timestamp("1711929600")
+        assert ts is not None
+        assert ts.tzinfo == timezone.utc
+
+    def test_unix_milliseconds(self) -> None:
+        ts = _parse_timestamp("1711929600000")
+        assert ts is not None
+        assert ts.year >= 2024
+
+    def test_iso_format(self) -> None:
+        ts = _parse_timestamp("2026-03-15T12:00:00Z")
+        assert ts is not None
+        assert ts.year == 2026
+        assert ts.month == 3
+
+    def test_empty_returns_none(self) -> None:
+        assert _parse_timestamp("") is None
+        assert _parse_timestamp("   ") is None
+
+    def test_garbage_returns_none(self) -> None:
+        assert _parse_timestamp("not-a-date") is None
