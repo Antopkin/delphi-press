@@ -94,6 +94,37 @@ async def run_prediction_task(
         exa_api_key=settings.exa_api_key,
         jina_api_key=settings.jina_api_key,
     )
+    # Inverse problem: load bettor profiles if available
+    inverse_profiles = None
+    inverse_trades: dict = {}
+    profiles_path = getattr(settings, "inverse_profiles_path", "")
+    trades_path = getattr(settings, "inverse_trades_path", "")
+    if profiles_path:
+        from pathlib import Path
+
+        from src.inverse.store import load_profiles
+
+        p = Path(profiles_path)
+        if p.exists():
+            inverse_profiles, _ = load_profiles(p)
+            logger.info("Loaded %d inverse bettor profiles", len(inverse_profiles))
+    if trades_path and inverse_profiles:
+        from collections import defaultdict
+        from pathlib import Path
+
+        from src.inverse.loader import load_trades_csv
+
+        tp = Path(trades_path)
+        if tp.exists():
+            all_trades = load_trades_csv(tp)
+            grouped: dict[str, list] = defaultdict(list)
+            for t in all_trades:
+                grouped[t.market_id].append(t)
+            inverse_trades = dict(grouped)
+            logger.info(
+                "Loaded %d inverse trades across %d markets", len(all_trades), len(inverse_trades)
+            )
+
     collector_deps = {
         "rss_fetcher": rss_fetcher,
         "web_search": web_search,
@@ -106,6 +137,8 @@ async def run_prediction_task(
         ),
         "polymarket_client": PolymarketClient(),
         "gdelt_client": GdeltDocClient(),
+        "inverse_profiles": inverse_profiles,
+        "inverse_trades": inverse_trades,
     }
 
     registry = build_default_registry(llm_client, collector_deps=collector_deps)

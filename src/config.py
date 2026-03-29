@@ -165,6 +165,17 @@ class Settings(LLMConfig):
     static_dir: Path = Field(default=Path("src/web/static"))
     templates_dir: Path = Field(default=Path("src/web/templates"))
 
+    # === Inverse Problem (optional, Polymarket bettor profiling) ===
+
+    inverse_profiles_path: str = Field(
+        default="",
+        description="Path to bettor_profiles.json (built by scripts/build_bettor_profiles.py).",
+    )
+    inverse_trades_path: str = Field(
+        default="",
+        description="Path to trades CSV for inverse problem enrichment.",
+    )
+
     # === Security / Auth ===
 
     jwt_expire_days: int = Field(default=7, ge=1, le=365)

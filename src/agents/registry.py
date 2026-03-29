@@ -165,6 +165,8 @@ def build_default_registry(
                     metaculus_client=collector_deps["metaculus_client"],
                     polymarket_client=collector_deps["polymarket_client"],
                     gdelt_client=collector_deps["gdelt_client"],
+                    inverse_profiles=collector_deps.get("inverse_profiles"),
+                    inverse_trades=collector_deps.get("inverse_trades"),
                 )
             )
 

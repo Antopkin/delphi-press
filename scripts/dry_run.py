@@ -132,6 +132,16 @@ async def main() -> None:
         help="Max event threads (default: 5, production: 20)",
     )
     parser.add_argument("--verbose", action="store_true", help="Debug logging")
+    parser.add_argument(
+        "--profiles",
+        default="",
+        help="Path to bettor_profiles.json (enables inverse problem enrichment)",
+    )
+    parser.add_argument(
+        "--trades",
+        default="",
+        help="Path to trades CSV (for inverse problem; required with --profiles)",
+    )
     args = parser.parse_args()
 
     # Logging
@@ -197,6 +207,46 @@ async def main() -> None:
     polymarket = PolymarketClient()
     gdelt = GdeltDocClient()
 
+    # 3b. Load inverse problem profiles (optional)
+    inverse_profiles = None
+    inverse_trades: dict = {}
+    if args.profiles:
+        from pathlib import Path
+
+        from src.inverse.store import load_profiles
+
+        profiles_path = Path(args.profiles)
+        if profiles_path.exists():
+            inverse_profiles, profile_summary = load_profiles(profiles_path)
+            logger.info(
+                "Loaded %d bettor profiles (%d informed)",
+                profile_summary.profiled_users,
+                profile_summary.informed_count,
+            )
+        else:
+            logger.warning("Profiles file not found: %s", profiles_path)
+
+    if args.trades and inverse_profiles:
+        from collections import defaultdict
+        from pathlib import Path
+
+        from src.inverse.loader import load_trades_csv
+
+        trades_path = Path(args.trades)
+        if trades_path.exists():
+            all_trades = load_trades_csv(trades_path)
+            grouped: dict[str, list] = defaultdict(list)
+            for t in all_trades:
+                grouped[t.market_id].append(t)
+            inverse_trades = dict(grouped)
+            logger.info(
+                "Loaded %d trades across %d markets for inverse problem",
+                len(all_trades),
+                len(inverse_trades),
+            )
+        else:
+            logger.warning("Trades file not found: %s", trades_path)
+
     collector_deps = {
         "rss_fetcher": rss_fetcher,
         "web_search": web_search,
@@ -206,6 +256,8 @@ async def main() -> None:
         "metaculus_client": metaculus,
         "polymarket_client": polymarket,
         "gdelt_client": gdelt,
+        "inverse_profiles": inverse_profiles,
+        "inverse_trades": inverse_trades,
     }
 
     # 4. Build registry and orchestrator
