@@ -77,7 +77,9 @@ async def register(body: RegisterRequest, request: Request) -> AuthResponse:
             raise HTTPException(status_code=409, detail="Email уже зарегистрирован.")
 
     token = create_access_token(user_id, settings.secret_key, settings.jwt_expire_days)
-    logger.info("Registered user %s (%s)", user_id, body.email)
+    # Mask email to avoid PII in logs (GDPR/ФЗ-152)
+    masked = body.email[0] + "***@" + body.email.split("@")[-1] if "@" in body.email else "***"
+    logger.info("Registered user %s (%s)", user_id, masked)
     return AuthResponse(access_token=token)
 
 

@@ -51,7 +51,9 @@ def create_engine(settings: Settings) -> AsyncEngine:
         engine_kwargs["pool_pre_ping"] = True
 
     engine = create_async_engine(settings.database_url, **engine_kwargs)
-    logger.info("Database engine created: %s", settings.database_url)
+    # Mask password in log to prevent credential leak
+    safe_url = str(engine.url.render_as_string(hide_password=True))
+    logger.info("Database engine created: %s", safe_url)
     return engine
 
 
