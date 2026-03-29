@@ -377,12 +377,22 @@ Features: brier_score, win_rate, log1p(position_size), log1p(volume), n_markets,
 - HDBSCAN clustering (нужен полный dataset, optional dep)
 - Clone validation (нужен temporal train/test split)
 
-**Не реализовано:**
-- E2E dry_run с реальными профилями на сервере
-- Walk-forward temporal validation (защита от look-ahead bias)
-- Domain-specific BS (per market category)
-- Bettor-level корреляция с новостями: λ_i = f(news_features) — следующий этап
-- Иерархические модели: "как человек думает о рынке" — исследовательская задача
+**Phase 3 (v0.9.1) — calibration + validation infrastructure:**
+- Adaptive extremizing: d из inter-bettor position_std (Satopää et al.)
+- Soft volume gate: $10K–$100K gradient (Clinton & Huang 2024)
+- `as_of` temporal cutoff + resolution date filtering (no look-ahead bias)
+- `timing_score`: volume-weighted fraction of market lifetime [INFERRED]
+- Murphy decomposition (REL/RES/UNC), calibration slope, ECE
+- 6 crash fixes (extremize bounds, timezone, JSON validation, schema constraints)
+- E2E server verified: Parquet load 348K INFORMED profiles in 7.5s
+
+**Не реализовано (отложено с обоснованием — см. `tasks/inverse_phase3_plan.md` §3):**
+- Walk-forward eval script с DuckDB backend (инфраструктура готова: `as_of` + resolution dates + metrics)
+- Trade-level CSV данные на сервере (блокер для dry run + eval)
+- Domain-specific BS — отложено: data sparsity (1-3% BSS gain, not worth effort)
+- Bettor-level корреляция с новостями — отложено: требует GDELT/RSS pipeline
+- Иерархические модели — отложено: research project, не engineering task
+- `concentration_entropy` — отложено: нет empirical validation, не из Mitts & Ofir
 
 ### 9.8 Соответствие диалогу с Алексеем
 
@@ -391,9 +401,13 @@ Features: brier_score, win_rate, log1p(position_size), log1p(volume), n_markets,
 | Параметрическая λ (Exp/Weibull) | ✅ Реализовано | `parametric.py`: closed-form MLE + scipy L-BFGS-B |
 | Клонирование (train/test) | ✅ Реализовано | `cloning.py`: predict positions → MAE → skill_score |
 | Кластеризация стратегий | ✅ Реализовано | `clustering.py`: HDBSCAN, 6 архетипов |
-| Bettor-level корреляция с новостями | ❌ Не реализовано | λ_i = f(news_features) — следующий этап |
-| Иерархические модели | ❌ Не реализовано | "как человек думает о рынке" — research |
-| Полная обратная задача | ❌ Отложено | Publishable research gap, нет опубликованных работ |
+| Калибровка (adaptive extremizing) | ✅ Phase 3 | position_std → d ∈ [1.0, 2.0], soft volume gate |
+| Temporal validation infrastructure | ✅ Phase 3 | `as_of` + resolution dates + Murphy/ECE metrics |
+| timing_score | ✅ Phase 3 | Volume-weighted, [INFERRED] from Bürgi et al. |
+| Bettor-level корреляция с новостями | ❌ Отложено | Требует GDELT/RSS pipeline, спекулятивная гипотеза |
+| Иерархические модели | ❌ Отложено | Research project, не engineering task |
+| Domain-specific BS | ❌ Отложено | Data sparsity, 1-3% BSS gain (Budescu & Chen 2015) |
+| Полная обратная задача | ❌ Отложено | Publishable research gap |
 
 ### 9.9 Дополнительные академические ссылки (Phase 2)
 

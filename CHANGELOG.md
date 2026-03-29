@@ -4,6 +4,40 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.9.1] - 2026-03-30
+
+### Added
+- **Inverse Problem Phase 3: калибровка, валидация, timing**
+  - `signal.py`: adaptive extremizing — d вычисляется из `position_std` (inter-bettor std, не |informed-raw|). **Почему:** Satopää et al. (2014) показали: оптимальный d зависит от корреляции информации между бетторами (1.16–3.92). Фиксированный d=1.5 был uncalibrated. Формула: `d = 1.0 + 2.0 × std`, clamped [1.0, 2.0]. Новый flag `adaptive_extremize: bool`.
+  - `signal.py`: soft volume gate — линейный градиент $10K–$100K. **Почему:** Clinton & Huang (2024): accuracy Polymarket падает до 61% на тонких рынках. Hard cutoff → discontinuity; soft gate → плавная деградация.
+  - `profiler.py`: `as_of: datetime` — temporal cutoff для walk-forward validation. Фильтрует trades И resolutions по дате. **Почему:** look-ahead bias — профили видели будущие данные, BSS оптимистичен. `reference_time` автоматически = `as_of` (ARCH-3).
+  - `profiler.py`: `timing_score` — volume-weighted mean fraction of market lifetime at bet time. **Почему:** Bürgi et al. (2025): цены точнее ближе к resolution. [INFERRED] — наша операционализация, не validated feature из Mitts & Ofir.
+  - `loader.py`: `load_resolutions_with_dates()` — resolutions с timestamps для walk-forward
+  - `loader.py`: `load_market_timestamps()` — (open, close) пары для timing_score
+  - `metrics.py`: Murphy decomposition (REL, RES, UNC), calibration slope (OLS), ECE
+  - `schemas.py`: `BettorProfile.timing_score`, `ProfileSummary` percentile constraints (ge=0, le=1)
+
+### Fixed
+- **6 crash-багов** (найдены техническим аудитом, 2 агента line-by-line review):
+  - `extremize(d < 1.0)` — was silently producing wrong math (probability shrinkage вместо expansion). Теперь `ValueError`.
+  - `_parse_timestamp()` — timezone offsets (`+05:00`) были либо dropped, либо wrong UTC. Теперь `fromisoformat()` + `astimezone(UTC)`.
+  - `_parse_resolution_row()` — `outcomePrices='{"a":1}'` (object вместо array) → `KeyError`. Теперь type-check `isinstance(prices, list)`.
+  - `ProfileSummary` — percentile поля принимали значения > 1.0 или < 0.0. Добавлены `ge=0.0, le=1.0`.
+  - `compute_enriched_signal()`: guard `total_w == 0` в parametric blend (предотвращает `ZeroDivisionError`).
+  - Citation corrections: Mitts & Ofir 2025 → 2026; `timing_score`/`concentration_entropy` — [INFERRED], не из статьи. Akey et al. 2025 — primary citation для tier profiling.
+
+### Changed
+- `signal.py`: `extremize()` теперь требует `d >= 1.0` (breaking: `d < 1.0` → ValueError)
+- `loader.py`: `_parse_timestamp()` → `fromisoformat()` вместо manual format list (поддержка timezone offsets)
+- `profiler.py`: `build_bettor_profiles()` — 3 новых keyword params: `as_of`, `resolutions_with_dates`, `market_timestamps`
+
+### Metrics
+- Тесты: 1172 → 1226 (+54)
+- Inverse tests: 156 → 210 (+54)
+- E2E server verified: Parquet load 348K INFORMED profiles in 7.5s
+
+---
+
 ## [0.9.0] - 2026-03-30
 
 ### Added
