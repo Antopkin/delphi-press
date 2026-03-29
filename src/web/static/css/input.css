@@ -230,6 +230,20 @@
     }
   }
 
+  /* Dark mode: override surface/text tokens */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-surface-0: oklch(13% 0.005 250);
+      --color-surface-1: oklch(18% 0.008 250);
+      --color-surface-2: oklch(23% 0.010 250);
+      --color-border: oklch(28% 0.012 250);
+      --color-text: oklch(88% 0.010 250);
+      --color-text-heading: oklch(95% 0.008 250);
+      --color-text-muted: oklch(58% 0.010 250);
+      --color-primary-focus: oklch(55% 0.20 250 / 20%);
+    }
+  }
+
   /* Aliases for settings.js inline style references */
   :root {
     --fn-step-done: var(--color-step-done);
@@ -254,7 +268,7 @@
     list-style: none;
     margin: 0;
     padding: 0;
-    background: white;
+    background: var(--color-surface-0);
     border: 1px solid var(--color-border);
     border-top: none;
     border-radius: 0 0 0.375rem 0.375rem;
@@ -286,7 +300,7 @@
     padding: 1rem;
     cursor: pointer;
     transition: border-color 200ms, box-shadow 200ms;
-    background: white;
+    background: var(--color-surface-0);
   }
   .fn-preset-card input[type="radio"] {
     position: absolute;

@@ -35,12 +35,12 @@
                         {% endif %}
                     </td>
                     <td class="space-x-2">
-                        <button class="fn-validate-btn text-sm border border-border rounded-md px-3 py-1 bg-white hover:bg-surface-1 cursor-pointer"
+                        <button class="fn-validate-btn text-sm border border-border rounded-md px-3 py-1 bg-surface-0 hover:bg-surface-1 cursor-pointer"
                                 data-key-id="{{ key.id }}"
                                 type="button">
                             Проверить
                         </button>
-                        <button class="fn-delete-btn text-sm text-confidence-speculative border border-confidence-speculative/30 rounded-md px-3 py-1 bg-white hover:bg-red-50 cursor-pointer"
+                        <button class="fn-delete-btn text-sm text-confidence-speculative border border-confidence-speculative/30 rounded-md px-3 py-1 bg-surface-0 hover:bg-confidence-speculative/10 cursor-pointer"
                                 data-key-id="{{ key.id }}"
                                 type="button">
                             Удалить
@@ -89,7 +89,7 @@
             Добавить
         </button>
 
-        <p id="add-key-error" class="px-4 py-3 bg-red-50 border border-red-200 rounded-md text-confidence-speculative text-sm" role="alert" hidden></p>
+        <p id="add-key-error" class="px-4 py-3 bg-confidence-speculative/10 border border-confidence-speculative/20 rounded-md text-confidence-speculative text-sm" role="alert" hidden></p>
         <p id="add-key-success" class="text-confidence-very-high font-semibold" hidden></p>
     </form>
 </section>

@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light">
+    <meta name="color-scheme" content="light dark">
 
     <title>{% block title %}Delphi Press{% endblock %}</title>
     <meta name="description" content="Прогнозирование заголовков СМИ с помощью мультиагентного ИИ">
@@ -44,7 +44,7 @@
         {# Mobile hamburger nav (CSS-only) #}
         <details class="md:hidden relative">
             <summary class="cursor-pointer list-none text-2xl leading-none p-2 text-text-muted select-none [&::-webkit-details-marker]:hidden">&#9776;</summary>
-            <ul class="absolute right-0 top-full mt-2 bg-white border border-border rounded-md shadow-lg py-2 min-w-[160px] list-none m-0 p-0 z-50">
+            <ul class="absolute right-0 top-full mt-2 bg-surface-0 border border-border rounded-md shadow-lg py-2 min-w-[160px] list-none m-0 p-0 z-50">
                 <li><a href="/" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">Главная</a></li>
                 <li><a href="/about" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">О методологии</a></li>
                 {% if current_user %}
