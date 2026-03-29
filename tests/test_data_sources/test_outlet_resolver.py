@@ -26,6 +26,12 @@ def mock_catalog():
         return known.get(name.lower())
 
     catalog.get_outlet = Mock(side_effect=get_outlet)
+
+    def get_rss_feeds(name):
+        outlet = get_outlet(name)
+        return outlet.rss_feeds if outlet else []
+
+    catalog.get_rss_feeds = Mock(side_effect=get_rss_feeds)
     return catalog
 
 
@@ -174,3 +180,29 @@ class TestResolveByUrl:
         assert result is not None
         assert result.website_url == "https://meduza.io"
         assert "https://meduza.io/rss/all" in result.rss_feeds
+
+
+class TestOutletCatalogProto:
+    """OutletResolver implements OutletCatalogProto (sync methods for collectors)."""
+
+    def test_get_outlet_delegates_to_catalog(self, resolver, mock_catalog):
+        """get_outlet() returns from static catalog (sync, no DB)."""
+        result = resolver.get_outlet("ТАСС")
+        assert result is not None
+        assert result.name == "ТАСС"
+        mock_catalog.get_outlet.assert_called_with("ТАСС")
+
+    def test_get_outlet_unknown_returns_none(self, resolver):
+        """get_outlet() returns None for unknown outlet (sync, no Wikidata)."""
+        result = resolver.get_outlet("Медуза")
+        assert result is None
+
+    def test_get_rss_feeds_known(self, resolver):
+        """get_rss_feeds() returns feeds from static catalog."""
+        feeds = resolver.get_rss_feeds("ТАСС")
+        assert feeds == ["https://tass.ru/rss/v2.xml"]
+
+    def test_get_rss_feeds_unknown(self, resolver):
+        """get_rss_feeds() returns empty list for unknown outlet."""
+        feeds = resolver.get_rss_feeds("Медуза")
+        assert feeds == []

@@ -42,6 +42,22 @@ class OutletResolver:
         self._catalog = catalog
         self._session_factory = session_factory
 
+    # --- Sync methods (OutletCatalogProto) for collector compatibility ---
+
+    def get_outlet(self, name: str) -> OutletInfo | None:
+        """Sync lookup — delegates to static catalog only.
+
+        Used by collectors (NewsScout, OutletHistorian) which need sync access.
+        For async resolution with Wikidata/RSS, use resolve().
+        """
+        return self._catalog.get_outlet(name)
+
+    def get_rss_feeds(self, name: str) -> list[str]:
+        """Sync RSS feeds lookup — delegates to static catalog."""
+        return self._catalog.get_rss_feeds(name)
+
+    # --- Async methods (OutletResolverProto) for enrichment ---
+
     async def resolve(self, name: str) -> OutletInfo | None:
         """Resolve outlet name to OutletInfo.
 

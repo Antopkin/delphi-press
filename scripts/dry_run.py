@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.agents.orchestrator import Orchestrator
 from src.agents.registry import build_default_registry
 from src.data_sources.foresight import GdeltDocClient, MetaculusClient, PolymarketClient
+from src.data_sources.outlet_resolver import OutletResolver
 from src.data_sources.outlets_catalog import OutletsCatalog
 from src.data_sources.rss import RSSFetcher
 from src.data_sources.scraper import NoopScraper
@@ -196,7 +197,33 @@ async def main() -> None:
         exa_api_key=os.environ.get("EXA_API_KEY", ""),
         jina_api_key=os.environ.get("JINA_API_KEY", ""),
     )
+    # Outlet resolution with in-memory SQLite for DB cache
     outlet_catalog = OutletsCatalog()
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import StaticPool
+
+    from src.db.engine import create_session_factory
+    from src.db.models import Base
+
+    _resolver_engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with _resolver_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    _resolver_sf = create_session_factory(_resolver_engine)
+    outlet_resolver = OutletResolver(catalog=outlet_catalog, session_factory=_resolver_sf)
+
+    # Pre-resolve outlet (enriches via Wikidata + RSS for unknown outlets)
+    resolved = await outlet_resolver.resolve(args.outlet)
+    if resolved:
+        logger.info(
+            "Outlet resolved: %s → %s (%s)", args.outlet, resolved.website_url, resolved.language
+        )
+    else:
+        logger.warning("Outlet not resolved: %r — using global fallbacks", args.outlet)
+
     scraper = NoopScraper()  # NoopScraper instead of TrafilaturaScraper for speed
     profile_cache = InMemoryProfileCache()
     _tournaments_str = os.environ.get("METACULUS_TOURNAMENTS", "32977")
@@ -250,7 +277,7 @@ async def main() -> None:
     collector_deps = {
         "rss_fetcher": rss_fetcher,
         "web_search": web_search,
-        "outlet_catalog": outlet_catalog,
+        "outlet_catalog": outlet_resolver,
         "scraper": scraper,
         "profile_cache": profile_cache,
         "metaculus_client": metaculus,

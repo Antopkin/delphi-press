@@ -74,6 +74,7 @@ async def run_prediction_task(
         TrafilaturaScraper,
         WebSearchService,
     )
+    from src.data_sources.outlet_resolver import OutletResolver
     from src.llm.providers import OpenRouterClient
 
     providers: dict = {}
@@ -127,10 +128,35 @@ async def run_prediction_task(
                 "Loaded %d inverse trades across %d markets", len(all_trades), len(inverse_trades)
             )
 
+    # Outlet resolution: resolver wraps static catalog + DB cache + Wikidata
+    outlet_catalog = OutletsCatalog()
+    outlet_resolver = OutletResolver(catalog=outlet_catalog, session_factory=session_factory)
+
+    # Pre-resolve outlet (enriches DB cache for unknown outlets, ~2-5s first time)
+    try:
+        resolved = await outlet_resolver.resolve(outlet_name)
+        if resolved:
+            logger.info(
+                "Outlet resolved: %s → %s (%s)",
+                outlet_name,
+                resolved.website_url,
+                resolved.language,
+            )
+        else:
+            logger.warning(
+                "Outlet not resolved: %r — pipeline will use global fallbacks", outlet_name
+            )
+    except Exception as exc:
+        logger.warning(
+            "Outlet resolution failed for %r: %s — continuing with static catalog",
+            outlet_name,
+            exc,
+        )
+
     collector_deps = {
         "rss_fetcher": rss_fetcher,
         "web_search": web_search,
-        "outlet_catalog": OutletsCatalog(),
+        "outlet_catalog": outlet_resolver,
         "scraper": TrafilaturaScraper(),
         "profile_cache": RedisProfileCache(redis),
         "metaculus_client": MetaculusClient(
@@ -635,6 +661,6 @@ class WorkerSettings:
     _settings = _get_settings()
     max_jobs = _settings.arq_max_jobs
     job_timeout = _settings.arq_job_timeout
-    max_tries = 1
+    max_tries = 2
     health_check_interval = 30
     queue_name = "arq:queue"
