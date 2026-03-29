@@ -43,8 +43,6 @@
 <section class="mb-10">
     <h2 class="text-xl mb-6">Пять экспертов</h2>
 
-    {# ── ВАРИАНТ A: Компактная таблица ── #}
-    <h3 class="text-sm font-semibold uppercase tracking-wide text-text-muted mb-4 mt-8" id="variant-a">Вариант A: Таблица</h3>
     <div class="overflow-x-auto">
         <table class="w-full">
             <thead>
@@ -76,67 +74,12 @@
                     <td class="font-heading italic">&laquo;Что попадёт в выпуск?&raquo;</td>
                 </tr>
                 <tr class="hover:bg-surface-1 transition-colors">
-                    <td class="font-semibold text-confidence-speculative">Адвокат дьявола</td>
+                    <td class="font-semibold">Адвокат дьявола</td>
                     <td class="text-text-muted">Пропущенные риски, pre-mortem, контраргументы</td>
-                    <td class="font-heading italic text-confidence-speculative">&laquo;Допустим, прогноз провалился?&raquo;</td>
+                    <td class="font-heading italic">&laquo;Допустим, прогноз провалился?&raquo;</td>
                 </tr>
             </tbody>
         </table>
-    </div>
-
-    {# ── ВАРИАНТ B: Definition list (книжный) ── #}
-    <h3 class="text-sm font-semibold uppercase tracking-wide text-text-muted mb-4 mt-12" id="variant-b">Вариант B: Книжный</h3>
-    <dl class="space-y-6 max-w-prose">
-        <div>
-            <dt class="font-heading text-lg font-semibold mb-1">Реалист-аналитик</dt>
-            <dd class="m-0 text-text-muted leading-relaxed">Опытный аналитик политических рисков. Мыслит категориями базовых ставок и исторических аналогий. <span class="font-heading italic text-text">&laquo;Как часто подобное происходило раньше?&raquo;</span></dd>
-        </div>
-        <div>
-            <dt class="font-heading text-lg font-semibold mb-1">Геополитический стратег</dt>
-            <dd class="m-0 text-text-muted leading-relaxed">Специалист по международным отношениям. Видит мир через призму силовых балансов и стратегических интересов. <span class="font-heading italic text-text">&laquo;Cui bono?&raquo;</span></dd>
-        </div>
-        <div>
-            <dt class="font-heading text-lg font-semibold mb-1">Экономический аналитик</dt>
-            <dd class="m-0 text-text-muted leading-relaxed">Макроэкономист и рыночный аналитик. Следит за деньгами: потоки капитала, фискальная политика, санкции. <span class="font-heading italic text-text">&laquo;Следуй за деньгами&raquo;</span></dd>
-        </div>
-        <div>
-            <dt class="font-heading text-lg font-semibold mb-1">Медиа-эксперт</dt>
-            <dd class="m-0 text-text-muted leading-relaxed">Бывший редактор крупного агентства. Думает категориями новостной ценности, редакционной логики, медиа-насыщенности. <span class="font-heading italic text-text">&laquo;Что попадёт в выпуск?&raquo;</span></dd>
-        </div>
-        <div class="border-l-3 border-confidence-speculative pl-4">
-            <dt class="font-heading text-lg font-semibold mb-1">Адвокат дьявола</dt>
-            <dd class="m-0 text-text-muted leading-relaxed">Систематический контрариан. Находит то, что остальные пропустили. Применяет технику pre-mortem. <span class="font-heading italic text-confidence-speculative">&laquo;Допустим, прогноз провалился -- что пошло не так?&raquo;</span></dd>
-        </div>
-    </dl>
-
-    {# ── ВАРИАНТ C: 2-колоночный grid с фоном ── #}
-    <h3 class="text-sm font-semibold uppercase tracking-wide text-text-muted mb-4 mt-12" id="variant-c">Вариант C: Карточки 2 колонки</h3>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="bg-surface-1 rounded-lg p-5">
-            <h4 class="font-heading text-base font-semibold m-0 mb-2">Реалист-аналитик</h4>
-            <p class="text-sm text-text-muted leading-relaxed mb-3">Базовые ставки, исторические аналогии, политические риски.</p>
-            <p class="text-sm font-heading italic text-text m-0">&laquo;Как часто подобное происходило раньше?&raquo;</p>
-        </div>
-        <div class="bg-surface-1 rounded-lg p-5">
-            <h4 class="font-heading text-base font-semibold m-0 mb-2">Геополитический стратег</h4>
-            <p class="text-sm text-text-muted leading-relaxed mb-3">Силовые балансы, стратегические интересы, международные отношения.</p>
-            <p class="text-sm font-heading italic text-text m-0">&laquo;Cui bono?&raquo;</p>
-        </div>
-        <div class="bg-surface-1 rounded-lg p-5">
-            <h4 class="font-heading text-base font-semibold m-0 mb-2">Экономический аналитик</h4>
-            <p class="text-sm text-text-muted leading-relaxed mb-3">Потоки капитала, фискальная политика, санкции.</p>
-            <p class="text-sm font-heading italic text-text m-0">&laquo;Следуй за деньгами&raquo;</p>
-        </div>
-        <div class="bg-surface-1 rounded-lg p-5">
-            <h4 class="font-heading text-base font-semibold m-0 mb-2">Медиа-эксперт</h4>
-            <p class="text-sm text-text-muted leading-relaxed mb-3">Новостная ценность, редакционная логика, медиа-насыщенность.</p>
-            <p class="text-sm font-heading italic text-text m-0">&laquo;Что попадёт в выпуск?&raquo;</p>
-        </div>
-        <div class="md:col-span-2 bg-confidence-speculative/5 border border-confidence-speculative/20 rounded-lg p-5">
-            <h4 class="font-heading text-base font-semibold m-0 mb-2">Адвокат дьявола</h4>
-            <p class="text-sm text-text-muted leading-relaxed mb-3">Систематический контрариан. Находит то, что остальные пропустили. Применяет технику pre-mortem.</p>
-            <p class="text-sm font-heading italic text-confidence-speculative m-0">&laquo;Допустим, прогноз провалился -- что пошло не так?&raquo;</p>
-        </div>
     </div>
 </section>
 
