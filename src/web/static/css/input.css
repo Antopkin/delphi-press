@@ -230,9 +230,9 @@
     }
   }
 
-  /* Dark mode: override surface/text tokens */
+  /* Dark mode tokens (system preference OR manual .dark class) */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not(.light) {
       --color-surface-0: oklch(13% 0.005 250);
       --color-surface-1: oklch(18% 0.008 250);
       --color-surface-2: oklch(23% 0.010 250);
@@ -242,6 +242,16 @@
       --color-text-muted: oklch(58% 0.010 250);
       --color-primary-focus: oklch(55% 0.20 250 / 20%);
     }
+  }
+  :root.dark {
+    --color-surface-0: oklch(13% 0.005 250);
+    --color-surface-1: oklch(18% 0.008 250);
+    --color-surface-2: oklch(23% 0.010 250);
+    --color-border: oklch(28% 0.012 250);
+    --color-text: oklch(88% 0.010 250);
+    --color-text-heading: oklch(95% 0.008 250);
+    --color-text-muted: oklch(58% 0.010 250);
+    --color-primary-focus: oklch(55% 0.20 250 / 20%);
   }
 
   /* Aliases for settings.js inline style references */
