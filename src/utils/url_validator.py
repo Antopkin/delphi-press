@@ -78,6 +78,13 @@ def validate_url_safe(url: str) -> None:
             continue
 
 
+async def validate_url_safe_async(url: str) -> None:
+    """Async version of validate_url_safe — runs DNS resolution in a thread pool."""
+    import asyncio
+
+    await asyncio.to_thread(validate_url_safe, url)
+
+
 def _is_blocked(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """Check if an IP address falls within any blocked network."""
     return any(addr in network for network in _BLOCKED_NETWORKS)
