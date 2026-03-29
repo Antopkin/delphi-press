@@ -192,6 +192,38 @@ def seed_prediction(test_app):
 
 
 @pytest.fixture
+def seed_user(test_app):
+    """Factory that creates a User row in test DB and returns (user_id, auth_headers)."""
+
+    async def _seed(
+        *, user_id: str | None = None, email: str | None = None
+    ) -> tuple[str, dict[str, str]]:
+        from src.db.models import User
+        from src.security.jwt import create_access_token
+        from src.security.password import hash_password
+
+        uid = user_id or str(uuid.uuid4())
+        em = email or f"{uid[:8]}@test.com"
+
+        session_factory = test_app.state.session_factory
+        async with session_factory() as session:
+            user = User(
+                id=uid,
+                email=em,
+                hashed_password=hash_password("testpass123"),
+            )
+            session.add(user)
+            await session.commit()
+
+        settings = test_app.state.settings
+        token = create_access_token(uid, settings.secret_key)
+        headers = {"Authorization": f"Bearer {token}"}
+        return uid, headers
+
+    return _seed
+
+
+@pytest.fixture
 def seed_outlet(test_app):
     """Factory that creates an Outlet row in test DB."""
 

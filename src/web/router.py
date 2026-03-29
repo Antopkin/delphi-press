@@ -21,12 +21,12 @@ import logging
 import uuid
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from src.api.dependencies import get_current_user
-from src.db.models import PredictionStatus, User
+from src.db.models import Prediction, PredictionStatus, User
 
 logger = logging.getLogger("web.router")
 
@@ -212,6 +212,29 @@ async def settings_page(
         )
 
 
+# ── Helpers ───────────────────────────────────────────────────────
+
+
+def _check_prediction_ownership(prediction: Prediction, user: User | None) -> None:
+    """Raise 403 if authenticated user does not own the prediction.
+
+    Rules:
+    - prediction.user_id is None → anonymous prediction, accessible to all.
+    - user is None (unauthenticated) → accessible (backward compat).
+    - prediction.user_id == user.id → owner, accessible.
+    - Otherwise → 403 Forbidden.
+    """
+    if prediction.user_id is None:
+        return
+    if user is None:
+        return
+    if prediction.user_id != user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Доступ запрещён: прогноз принадлежит другому пользователю.",
+        )
+
+
 # ── Main pages ────────────────────────────────────────────────────
 
 
@@ -264,6 +287,9 @@ async def prediction_progress(
         repo = PredictionRepository(session)
         prediction = await repo.get_by_id(prediction_id)
 
+        if prediction is not None:
+            _check_prediction_ownership(prediction, user)
+
         if prediction and prediction.status == PredictionStatus.COMPLETED:
             return templates.TemplateResponse(
                 request,
@@ -298,6 +324,9 @@ async def prediction_results(
     async with get_session(session_factory) as session:
         repo = PredictionRepository(session)
         prediction = await repo.get_by_id(prediction_id)
+
+        if prediction is not None:
+            _check_prediction_ownership(prediction, user)
 
         if not prediction or prediction.status != PredictionStatus.COMPLETED:
             return templates.TemplateResponse(
