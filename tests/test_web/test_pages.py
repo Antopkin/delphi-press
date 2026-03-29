@@ -462,3 +462,51 @@ class TestNavigation:
         assert "Настройки" in resp.text
         assert "Выйти" in resp.text
         assert "Войти" not in resp.text
+
+
+# ── CSRF Protection ────────────────────────────────────────────────
+
+
+class TestCSRF:
+    @pytest.fixture
+    async def csrf_app(self, web_engine):
+        """Web app WITH CSRF middleware enabled."""
+        from src.api.router import api_router
+        from src.security.csrf import CSRFMiddleware
+        from src.security.encryption import KeyVault
+        from src.web.router import web_router
+
+        app = FastAPI()
+        app.add_middleware(CSRFMiddleware)
+        app.include_router(api_router)
+        app.include_router(web_router)
+
+        app.mount("/static", StaticFiles(directory="src/web/static"), name="static")
+
+        settings = Settings()
+        app.state.settings = settings
+        app.state.engine = web_engine
+        app.state.session_factory = create_session_factory(web_engine)
+        app.state.redis = FakeRedis()
+        app.state.arq_pool = FakeArqPool()
+        app.state.start_time = time.monotonic()
+        app.state.key_vault = KeyVault(settings.fernet_key)
+
+        return app
+
+    @pytest.fixture
+    async def csrf_client(self, csrf_app):
+        async with AsyncClient(
+            transport=ASGITransport(app=csrf_app),
+            base_url="http://test",
+        ) as client:
+            yield client
+
+    async def test_login_post_without_csrf_rejected(self, csrf_client):
+        """POST /login without CSRF token should be rejected."""
+        resp = await csrf_client.post(
+            "/login",
+            data={"email": "test@test.com", "password": "securepass123"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 403
