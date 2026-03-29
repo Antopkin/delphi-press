@@ -53,7 +53,8 @@ async def health_check(request: Request) -> HealthResponse | JSONResponse:
         latency = int((time.monotonic() - start) * 1000)
         checks["database"] = HealthCheck(status="ok", latency_ms=latency)
     except Exception as exc:
-        checks["database"] = HealthCheck(status="error", error=str(exc))
+        logger.error("Health check: database error: %s", exc, exc_info=True)
+        checks["database"] = HealthCheck(status="error", error="unavailable")
         all_ok = False
 
     # Check Redis
@@ -64,7 +65,8 @@ async def health_check(request: Request) -> HealthResponse | JSONResponse:
         latency = int((time.monotonic() - start) * 1000)
         checks["redis"] = HealthCheck(status="ok", latency_ms=latency)
     except Exception as exc:
-        checks["redis"] = HealthCheck(status="error", error=str(exc))
+        logger.error("Health check: redis error: %s", exc, exc_info=True)
+        checks["redis"] = HealthCheck(status="error", error="unavailable")
         all_ok = False
 
     settings = request.app.state.settings

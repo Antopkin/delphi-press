@@ -40,6 +40,26 @@ async def test_health_returns_503_when_redis_down(test_app, test_engine):
     assert data["checks"]["redis"]["status"] == "error"
 
 
+async def test_health_error_hides_exception_details(test_app, test_engine):
+    """Error messages in /health should not leak connection strings or tracebacks."""
+    from tests.test_api.conftest import BrokenRedis
+
+    test_app.state.redis = BrokenRedis()
+
+    from httpx import ASGITransport, AsyncClient
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        resp = await client.get("/api/v1/health")
+
+    data = resp.json()
+    redis_error = data["checks"]["redis"].get("error", "")
+    # Should NOT contain raw exception message like "Connection refused"
+    assert "Connection refused" not in redis_error
+    assert "Traceback" not in redis_error
+
+
 # ── /health/feeds ────────────────────────────────────────────────────
 
 
