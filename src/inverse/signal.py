@@ -41,6 +41,14 @@ N_FULL_COVERAGE = 20
 #: Minimum Brier Score weight — prevents division by near-zero.
 _MIN_BS_WEIGHT = 0.01
 
+#: Soft volume gate boundaries (Clinton & Huang 2024).
+_VOLUME_GATE_MIN = 10_000.0  # Below → zero enrichment
+_VOLUME_GATE_MAX = 100_000.0  # Above → full enrichment
+
+#: Adaptive extremizing scaling factor: d = 1.0 + k * position_std.
+_ADAPTIVE_D_SCALE = 2.0
+_ADAPTIVE_D_MAX = 2.0
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -191,6 +199,43 @@ def extremize(probability: float, d: float = 1.5) -> float:
 # Enriched signal (Phase 2 — parametric + extremizing)
 # ---------------------------------------------------------------------------
 
+
+def _compute_adaptive_d(
+    trades: list[TradeRecord],
+    profiles: dict[str, BettorProfile],
+) -> float:
+    """Compute adaptive extremizing d from inter-bettor position std.
+
+    d = 1.0 + k × std(informed_positions), clamped to [1.0, _ADAPTIVE_D_MAX].
+
+    When bettors agree (std≈0), d≈1.0 (no extremizing — information overlaps).
+    When bettors disagree (high std), d increases (independent signals — extremize).
+
+    Reference: Satopää et al. (2014) — d depends on information correlation.
+    """
+    user_trades: dict[str, list[TradeRecord]] = defaultdict(list)
+    for t in trades:
+        user_trades[t.user_id].append(t)
+
+    positions: list[float] = []
+    for uid, utrades in user_trades.items():
+        profile = profiles.get(uid)
+        if profile is None or profile.tier != BettorTier.INFORMED:
+            continue
+        pos, size = aggregate_position(utrades)
+        if size > 0:
+            positions.append(pos)
+
+    if len(positions) < 2:
+        return 1.0  # Can't compute std with < 2 bettors
+
+    import statistics
+
+    position_std = statistics.stdev(positions)
+    d = 1.0 + _ADAPTIVE_D_SCALE * position_std
+    return min(_ADAPTIVE_D_MAX, max(1.0, d))
+
+
 #: Maximum weight for parametric blend (adaptive).
 _MAX_PARAMETRIC_WEIGHT = 0.40
 
@@ -209,13 +254,18 @@ def compute_enriched_signal(
     market_horizon_days: float | None = None,
     cluster_assignments: dict | None = None,
     extremize_d: float | None = None,
+    adaptive_extremize: bool = False,
+    market_volume: float | None = None,
 ) -> InformedSignal:
     """Compute enriched informed signal with optional parametric blend.
 
     Calls compute_informed_signal() as base, then optionally:
-    1. Blends parametric probability (adaptive weight based on fit quality).
-    2. Applies extremizing (Satopää et al. 2014).
-    3. Attaches cluster metadata.
+    1. Applies soft volume gate (Clinton & Huang 2024): scales enrichment
+       linearly between $10K (zero) and $100K (full).
+    2. Blends parametric probability (adaptive weight based on fit quality).
+    3. Applies extremizing — either explicit d or adaptive from position_std
+       (Satopää et al. 2014, Akey et al. 2025).
+    4. Attaches cluster metadata.
 
     Does NOT modify the base compute_informed_signal() behavior when
     parametric data is unavailable.
@@ -229,11 +279,22 @@ def compute_enriched_signal(
         lambda_estimates: user_id → ParametricResult (from parametric.py).
         market_horizon_days: Horizon in days for this market.
         cluster_assignments: user_id → ClusterAssignment.
-        extremize_d: Extremizing factor. None = no extremizing.
+        extremize_d: Explicit extremizing factor. None = no explicit extremizing.
+        adaptive_extremize: Compute d from inter-bettor position_std. Cannot be
+            used together with extremize_d.
+        market_volume: Total market volume in USD for soft gate.
+            None = no gate (backward compatible).
 
     Returns:
         InformedSignal with optional parametric_* fields populated.
+
+    Raises:
+        ValueError: If both adaptive_extremize and extremize_d are set.
     """
+    if adaptive_extremize and extremize_d is not None:
+        msg = "Cannot use both adaptive_extremize=True and explicit extremize_d"
+        raise ValueError(msg)
+
     # Base signal (unchanged contract)
     base = compute_informed_signal(
         trades,
@@ -243,10 +304,15 @@ def compute_enriched_signal(
         n_full_coverage=n_full_coverage,
     )
 
+    # Compute adaptive d from inter-bettor position std
+    effective_d: float | None = extremize_d
+    if adaptive_extremize and base.n_informed_bettors > 0:
+        effective_d = _compute_adaptive_d(trades, profiles)
+
     # If no parametric data, optionally extremize and return
     if not lambda_estimates or market_horizon_days is None or market_horizon_days <= 0:
-        if extremize_d is not None and base.n_informed_bettors > 0:
-            ext_prob = extremize(base.informed_probability, extremize_d)
+        if effective_d is not None and base.n_informed_bettors > 0:
+            ext_prob = extremize(base.informed_probability, effective_d)
             return InformedSignal(
                 **{
                     **base.model_dump(),
@@ -255,6 +321,26 @@ def compute_enriched_signal(
                 }
             )
         return base
+
+    # Soft volume gate: scale parametric enrichment by market liquidity
+    volume_gate = 1.0
+    if market_volume is not None:
+        volume_gate = max(
+            0.0,
+            min(1.0, (market_volume - _VOLUME_GATE_MIN) / (_VOLUME_GATE_MAX - _VOLUME_GATE_MIN)),
+        )
+        if volume_gate <= 0.0:
+            # Below minimum volume — skip parametric enrichment entirely
+            if effective_d is not None and base.n_informed_bettors > 0:
+                ext_prob = extremize(base.informed_probability, effective_d)
+                return InformedSignal(
+                    **{
+                        **base.model_dump(),
+                        "informed_probability": round(ext_prob, 6),
+                        "dispersion": round(abs(ext_prob - raw_probability), 6),
+                    }
+                )
+            return base
 
     # Compute parametric consensus from lambda estimates of informed bettors
     user_trades: dict[str, list[TradeRecord]] = defaultdict(list)
@@ -287,8 +373,8 @@ def compute_enriched_signal(
         lambda_values.append(param.exp_fit.lambda_val)
 
     if not parametric_probs:
-        if extremize_d is not None and base.n_informed_bettors > 0:
-            ext_prob = extremize(base.informed_probability, extremize_d)
+        if effective_d is not None and base.n_informed_bettors > 0:
+            ext_prob = extremize(base.informed_probability, effective_d)
             return InformedSignal(
                 **{
                     **base.model_dump(),
@@ -298,8 +384,20 @@ def compute_enriched_signal(
             )
         return base
 
-    # Weighted parametric mean
+    # Weighted parametric mean (guard CRASH-4: total_w=0)
     total_w = sum(w for _, w in parametric_probs)
+    if total_w == 0:
+        if effective_d is not None and base.n_informed_bettors > 0:
+            ext_prob = extremize(base.informed_probability, effective_d)
+            return InformedSignal(
+                **{
+                    **base.model_dump(),
+                    "informed_probability": round(ext_prob, 6),
+                    "dispersion": round(abs(ext_prob - raw_probability), 6),
+                }
+            )
+        return base
+
     parametric_prob = sum(p * w for p, w in parametric_probs) / total_w
 
     # Adaptive blend weight based on coverage and fit quality
@@ -307,6 +405,9 @@ def compute_enriched_signal(
     mean_n_obs = total_w / len(parametric_probs)
     fit_quality = min(1.0, mean_n_obs / 50)
     blend_weight = min(_MAX_PARAMETRIC_WEIGHT, coverage_ratio * fit_quality)
+
+    # Apply soft volume gate to blend weight
+    blend_weight *= volume_gate
 
     # Blend: (1 - w) * brier_informed + w * parametric
     blended = (1 - blend_weight) * base.informed_probability + blend_weight * parametric_prob
@@ -324,8 +425,8 @@ def compute_enriched_signal(
         )
 
     # Apply extremizing
-    if extremize_d is not None:
-        blended = extremize(blended, extremize_d)
+    if effective_d is not None:
+        blended = extremize(blended, effective_d)
 
     # Determine dominant cluster
     dominant_cluster = None
