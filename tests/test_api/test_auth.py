@@ -168,3 +168,35 @@ class TestCookieAuthFallback:
             cookies={"access_token": "invalid.token.here"},
         )
         assert resp.status_code == 401
+
+
+# ── Inactive User ──────────────────────────────────────────────────
+
+
+class TestInactiveUser:
+    async def test_inactive_user_returns_401(self, test_client, test_app):
+        """Deactivated user should be rejected even with a valid JWT."""
+        email = f"inactive-{uuid.uuid4().hex[:8]}@example.com"
+        reg = await test_client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "securepass123"},
+        )
+        token = reg.json()["access_token"]
+
+        # Deactivate the user directly in DB
+        from src.db.engine import get_session
+        from src.db.repositories import UserRepository
+
+        session_factory = test_app.state.session_factory
+        async with get_session(session_factory) as session:
+            repo = UserRepository(session)
+            user = await repo.get_by_email(email)
+            user.is_active = False
+            await session.commit()
+
+        # Should now be rejected
+        resp = await test_client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 401

@@ -59,7 +59,10 @@ async def get_current_user(
     session_factory = request.app.state.session_factory
     async with get_session(session_factory) as session:
         repo = UserRepository(session)
-        return await repo.get_by_id(user_id)
+        user = await repo.get_by_id(user_id)
+        if user is None or not user.is_active:
+            return None
+        return user
 
 
 async def require_user(
