@@ -108,3 +108,36 @@ class TestFetchHeadlinesFromWayback:
             )
 
         assert headlines == []
+
+    @pytest.mark.asyncio
+    async def test_short_window_produces_different_from_to(self) -> None:
+        """window_hours=12 should produce date_to > date_from (not same)."""
+        captured_urls: list[str] = []
+
+        cdx_response = httpx.Response(
+            200,
+            json=CDX_RESPONSE_EMPTY,
+            request=httpx.Request("GET", "https://web.archive.org/cdx/search/cdx"),
+        )
+
+        async def capture_get(url: str, **kwargs) -> httpx.Response:  # noqa: ARG001
+            captured_urls.append(url)
+            return cdx_response
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.get = AsyncMock(side_effect=capture_get)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.eval.ground_truth.httpx.AsyncClient", return_value=mock_client):
+            await fetch_headlines_from_wayback(
+                "https://example.com/rss",
+                date(2025, 3, 24),
+                window_hours=12,
+            )
+
+        # The CDX URL should have different from/to timestamps
+        cdx_url = captured_urls[0]
+        assert "from=20250324000000" in cdx_url
+        # With 12h window, date_to should be 20250324120000 (not same day 000000)
+        assert "to=20250324120000" in cdx_url

@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import xml.etree.ElementTree as ET
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import httpx
 
@@ -41,9 +41,10 @@ async def fetch_headlines_from_wayback(
         Deduplicated list of headline strings. Empty list on any error.
     """
     try:
-        date_from = target_date.strftime("%Y%m%d000000")
-        next_day = target_date + timedelta(hours=window_hours)
-        date_to = next_day.strftime("%Y%m%d000000")
+        start_dt = datetime.combine(target_date, datetime.min.time())
+        end_dt = start_dt + timedelta(hours=window_hours)
+        date_from = start_dt.strftime("%Y%m%d%H%M%S")
+        date_to = end_dt.strftime("%Y%m%d%H%M%S")
 
         cdx_url = (
             f"{_CDX_BASE}?url={rss_url}&output=json"
