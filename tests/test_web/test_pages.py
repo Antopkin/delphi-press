@@ -76,6 +76,12 @@ async def web_app(web_engine):
     )
 
     settings = Settings()
+
+    # Expose app_version to Jinja2 templates (cache-busting)
+    from src.web.router import templates
+
+    templates.env.globals["app_version"] = settings.app_version
+
     app.state.settings = settings
     app.state.engine = web_engine
     app.state.session_factory = create_session_factory(web_engine)
@@ -519,3 +525,14 @@ class TestCSRF:
         )
         # Should NOT be 403. JSON is exempt from CSRF.
         assert resp.status_code != 403
+
+
+# ── Static Asset Cache-Busting (M26) ─────────────────────────────
+
+
+class TestStaticAssetCacheBusting:
+    async def test_static_css_has_version_param(self, web_client):
+        """CSS link must include ?v= for cache-busting after deploy."""
+        resp = await web_client.get("/")
+        assert resp.status_code == 200
+        assert "tailwind.css?v=" in resp.text

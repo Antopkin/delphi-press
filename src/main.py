@@ -70,6 +70,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     key_vault = KeyVault(settings.fernet_key)
 
+    # Expose app_version to Jinja2 templates for cache-busting (?v=)
+    from src.web.router import templates as web_templates
+
+    web_templates.env.globals["app_version"] = settings.app_version
+
     # Store in app.state
     app.state.settings = settings
     app.state.engine = engine

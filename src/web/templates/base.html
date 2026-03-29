@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;0,6..72,700;1,6..72,400&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
 
     {# Tailwind CSS (built from input.css via PostCSS) #}
-    <link rel="stylesheet" href="{{ url_for('static', path='css/tailwind.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/tailwind.css') }}?v={{ app_version }}">
 
     <link rel="icon" href="{{ url_for('static', path='img/favicon.svg') }}" type="image/svg+xml">
 
