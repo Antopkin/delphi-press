@@ -80,9 +80,15 @@ class ProfileSummary(BaseModel):
     informed_count: int = Field(..., ge=0, description="Users in INFORMED tier")
     moderate_count: int = Field(..., ge=0, description="Users in MODERATE tier")
     noise_count: int = Field(..., ge=0, description="Users in NOISE tier")
-    median_brier: float = Field(..., description="Median Brier Score across profiled users")
-    p10_brier: float = Field(..., description="10th percentile BS (best performers)")
-    p90_brier: float = Field(..., description="90th percentile BS (worst performers)")
+    median_brier: float = Field(
+        ..., ge=0.0, le=1.0, description="Median Brier Score across profiled users"
+    )
+    p10_brier: float = Field(
+        ..., ge=0.0, le=1.0, description="10th percentile BS (best performers)"
+    )
+    p90_brier: float = Field(
+        ..., ge=0.0, le=1.0, description="90th percentile BS (worst performers)"
+    )
 
 
 class InformedSignal(BaseModel):

@@ -309,8 +309,19 @@ def _parse_timestamp(raw: str) -> datetime | None:
     except ValueError:
         pass
 
-    # ISO 8601
-    for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d %H:%M:%S"):
+    # ISO 8601 (Python 3.11+ fromisoformat handles timezone offsets)
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        pass
+
+    # Fallback: common formats without timezone
+    for fmt in ("%Y-%m-%d %H:%M:%S",):
         try:
             return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
         except ValueError:
@@ -359,12 +370,12 @@ def _parse_resolution_row(
     except json.JSONDecodeError:
         return None
 
-    if not prices or len(prices) < 1:
+    if not isinstance(prices, list) or not prices:
         return None
 
     try:
         yes_price = float(prices[0])
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, KeyError):
         return None
 
     # Resolved: outcomePrices[0] == 1.0 → YES, == 0.0 → NO

@@ -169,11 +169,17 @@ def extremize(probability: float, d: float = 1.5) -> float:
 
     Args:
         probability: Input probability in (0, 1).
-        d: Extremizing factor. Recommended range [1.2, 1.8].
+        d: Extremizing factor. Must be >= 1.0. Recommended range [1.2, 1.8].
 
     Returns:
         Extremized probability in (0, 1).
+
+    Raises:
+        ValueError: If d < 1.0.
     """
+    if d < 1.0:
+        msg = f"d must be >= 1.0, got {d}"
+        raise ValueError(msg)
     # Clamp to avoid log(0)
     p = max(1e-7, min(1 - 1e-7, probability))
     odds = p / (1 - p)
