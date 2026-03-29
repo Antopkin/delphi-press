@@ -625,8 +625,12 @@ class WorkerSettings:
 
     redis_settings = _parse_redis_settings()
 
-    max_jobs = 10
-    job_timeout = 1800
+    # Use config values instead of hardcoded defaults
+    from src.config import get_settings as _get_settings
+
+    _settings = _get_settings()
+    max_jobs = _settings.arq_max_jobs
+    job_timeout = _settings.arq_job_timeout
     max_tries = 1
     health_check_interval = 30
     queue_name = "arq:queue"
