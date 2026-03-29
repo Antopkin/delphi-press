@@ -4,6 +4,63 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.7.1] - 2026-03-29
+
+Security audit + bugfixes + code quality. Полное ревью кодовой базы (10 параллельных агентов, 214 файлов) выявило 80+ находок. Закрыто 39/40.
+
+**Почему:** Production deploy (v0.7.0) содержал захардкоженные dev-секреты в дефолтах конфигурации, отсутствие CSRF-защиты, IDOR на прогнозах, блокирующий DNS в async-контексте, race condition в бюджет-трекере и рассинхронизацию анонимизации в медиаторе Дельфи. Все critical/high security и correctness issues закрыты перед следующим деплоем.
+
+### Security (12 исправлений)
+
+- **Hardcoded secrets** — Fernet key и JWT secret_key больше не работают в production (`DELPHI_PRODUCTION=1` env). Fail-fast при старте с dev-дефолтами.
+- **CORS** — дефолт `["*"]` → `["http://localhost:8000"]`; wildcard запрещён в production.
+- **CSRF** — Double Submit Cookie middleware (`src/security/csrf.py`). Hidden field `csrf_token` во всех POST-формах (login, register, logout, prediction). JSON API exempt.
+- **IDOR** — `GET /predictions/{id}` и web-маршруты проверяют ownership (`prediction.user_id == user.id`). Анонимные predictions доступны всем.
+- **Rate limiting** — nginx zone `auth:5r/m` для `/login`, `/register`, `/api/v1/auth/*`.
+- **`is_active` check** — деактивированный пользователь отклоняется в `get_current_user`.
+- **Health info leak** — `/health` возвращает `"unavailable"` вместо `str(exc)`.
+- **CSP header** — `Content-Security-Policy` в `nginx/security-headers.conf` (include-паттерн для location inheritance).
+- **HSTS** — `includeSubDomains; preload` добавлен.
+- **Cookie secure** — `secure=True` в non-debug mode.
+- **Open redirect** — `_safe_redirect_url()` валидирует `next` (только relative paths).
+- **JWT `jti`** — UUID claim для будущей token revocation.
+
+### Fixed (7 багов)
+
+- **Mediator anonymization** — единый `_build_label_map()` гарантирует consistent Expert A/B/C между `_anonymize_assessments` и `_build_positions`. Ранее: shuffle без seed давал разные метки → противоречивая R2 обратная связь.
+- **BudgetTracker race condition** — `check_budget()` теперь под `async with self._lock` (TOCTOU fix).
+- **Worker HTTP leak** — закрытие всех 6 HTTP-клиентов (scraper, metaculus, polymarket, gdelt, web_search, rss) после pipeline.
+- **Scraper timezone** — `astimezone(UTC)` вместо `replace(tzinfo=UTC)` для tz-aware datetime (ошибка до 12ч).
+- **Judge init(None)** — logger и tracking attributes инициализируются даже без LLM-клиента.
+- **Blocking DNS** — `validate_url_safe_async()` через `asyncio.to_thread` (не блокирует event loop).
+- **ground_truth window** — `datetime.combine()` для корректного `window_hours < 24`.
+
+### Changed (13 улучшений)
+
+- **Async bcrypt** — `hash_password_async` / `verify_password_async` через `asyncio.to_thread`. Callers обновлены.
+- **Model-specific pricing** — бюджет-оценка использует `calculate_cost()` из `pricing.py` вместо flat $0.02/1K.
+- **Truncated response warning** — `finish_reason="length"` логируется как WARNING.
+- **Parallel framing** — `asyncio.gather` в FramingAnalyzer (5-7x speedup, было 35-45с).
+- **GDELT rate limiter** — `asyncio.Lock` предотвращает concurrent bypass 1 req/sec.
+- **Worker config** — `max_jobs` / `job_timeout` из Settings, не hardcoded.
+- **Worker retry** — `max_tries=2` (было 1).
+- **Cache eviction** — bounded cache (200 items) в MetaculusClient, PolymarketClient, GdeltDocClient.
+- **Password max_length** — `max_length=128` на RegisterRequest (bcrypt truncates at 72).
+- **PII masking** — email маскируется в логах (`j***@example.com`), DB URL — `hide_password=True`.
+- **Stop words** — убран `stop_words="english"` из TfidfVectorizer (бесполезен для русских СМИ).
+- **`aggregate_position`** — public API (убран `_` prefix), callers обновлены.
+- **PipelineContext typing** — `list[Any]` → `list[dict[str, Any]]` для 16 слотов.
+- **Logout** — POST вместо GET (защита от prefetch/img abuse).
+
+### Metrics
+
+- Тесты: **1044 → 1080** (+36 новых)
+- Коммиты: ~40
+- Закрыто: 12 CRITICAL+HIGH security, 7 bugs, 13 medium, 7 infra+perf = **39/40**
+- Отложено: M26 (cache busting) — см. roadmap
+
+---
+
 ## [0.7.0] - 2026-03-29
 
 Архитектурный рефактор: двухуровневые предсказания (event-level timeline) + horizon-aware промпты.
