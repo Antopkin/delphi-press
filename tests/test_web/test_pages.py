@@ -510,3 +510,12 @@ class TestCSRF:
             follow_redirects=False,
         )
         assert resp.status_code == 403
+
+    async def test_json_api_bypasses_csrf(self, csrf_client):
+        """JSON API requests should bypass CSRF (protected by CORS+SameSite)."""
+        resp = await csrf_client.post(
+            "/api/v1/auth/register",
+            json={"email": f"csrf-{uuid.uuid4().hex[:6]}@test.com", "password": "securepass123"},
+        )
+        # Should NOT be 403. JSON is exempt from CSRF.
+        assert resp.status_code != 403

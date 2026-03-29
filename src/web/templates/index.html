@@ -43,6 +43,7 @@
     <h2 class="text-xl mb-4">Новый прогноз</h2>
 
     <form id="prediction-form" action="/api/v1/predictions" method="post" class="space-y-4 max-w-2xl">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token | default('') }}">
 
         {# -- Outlet field with autocomplete -- #}
         <div>

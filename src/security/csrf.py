@@ -23,11 +23,14 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     """Double Submit Cookie CSRF protection for HTML form submissions."""
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        # Make CSRF token available on request.state for Jinja2 templates
+        token = request.cookies.get(_COOKIE_NAME) or secrets.token_urlsafe(32)
+        request.state.csrf_token = token
+
         # Safe methods: just ensure cookie exists on response
         if request.method in _SAFE_METHODS:
             response = await call_next(request)
             if _COOKIE_NAME not in request.cookies:
-                token = secrets.token_urlsafe(32)
                 response.set_cookie(_COOKIE_NAME, token, httponly=False, samesite="lax", path="/")
             return response
 

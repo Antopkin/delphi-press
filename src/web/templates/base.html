@@ -41,7 +41,7 @@
                 <li><a href="/about" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/about' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">О методологии</a></li>
                 {% if current_user %}
                 <li><a href="/settings" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/settings' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">Настройки</a></li>
-                <li><form method="post" action="/logout" class="inline"><button type="submit" class="text-text-muted bg-transparent border-none cursor-pointer transition-colors duration-fast hover:text-primary p-0 font-inherit">Выйти</button></form></li>
+                <li><form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ request.state.csrf_token | default('') }}"><button type="submit" class="text-text-muted bg-transparent border-none cursor-pointer transition-colors duration-fast hover:text-primary p-0 font-inherit">Выйти</button></form></li>
                 {% else %}
                 <li><a href="/login" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/login' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">Войти</a></li>
                 {% endif %}
@@ -67,7 +67,7 @@
                 <li><a href="/about" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">О методологии</a></li>
                 {% if current_user %}
                 <li><a href="/settings" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">Настройки</a></li>
-                <li><form method="post" action="/logout"><button type="submit" class="block w-full text-left px-4 py-2 text-text hover:bg-surface-1 bg-transparent border-none cursor-pointer font-inherit">Выйти</button></form></li>
+                <li><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ request.state.csrf_token | default('') }}"><button type="submit" class="block w-full text-left px-4 py-2 text-text hover:bg-surface-1 bg-transparent border-none cursor-pointer font-inherit">Выйти</button></form></li>
                 {% else %}
                 <li><a href="/login" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">Войти</a></li>
                 {% endif %}

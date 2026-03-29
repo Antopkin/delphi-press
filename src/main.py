@@ -106,6 +106,11 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # CSRF (must be added before CORS — middleware stack is LIFO)
+    from src.security.csrf import CSRFMiddleware
+
+    application.add_middleware(CSRFMiddleware)
+
     # CORS
     application.add_middleware(
         CORSMiddleware,
