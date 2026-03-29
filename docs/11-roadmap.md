@@ -6,7 +6,7 @@
 
 ## Текущее состояние: Production deployed
 
-Все 18 ��гентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-кон��ейнера, TLS). Polymarket enrichment (4 фаз��): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **1105 тестов** з��лёных. OutletResolver v0.8.0: динамическая резолюция СМИ через Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: CSRF middleware, IDOR protection, rate limiting, hardened secrets, **40/40 findings closed** (M26 cache-busting done). Hardening (retry, SSRF, cron, monitoring) завершён. Foresight bugfix v0.5.1: Metaculus API migration, cache key fix, CLOB param fix. Delphi parse-error fix v0.5.2: personas PromptParseError fallback, orchestrator quorum 4→3. Market eval v0.6.0: resolved markets API, historical price, market_brier_comparison, news↔market correlation (Spearman/Granger).
+Все 18 ��гентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-кон��ейнера, TLS). Polymarket enrichment (4 фаз��): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **1142 теста** з��лёных. OutletResolver v0.8.0: динамическая резолюция СМИ через Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: CSRF middleware, IDOR protection, rate limiting, hardened secrets, **40/40 findings closed** (M26 cache-busting done). Hardening (retry, SSRF, cron, monitoring) завершён. Foresight bugfix v0.5.1: Metaculus API migration, cache key fix, CLOB param fix. Delphi parse-error fix v0.5.2: personas PromptParseError fallback, orchestrator quorum 4→3. Market eval v0.6.0: resolved markets API, historical price, market_brier_comparison, news↔market correlation (Spearman/Granger).
 
 ### Реализованные компоненты
 
@@ -44,11 +44,9 @@
 
 - **M26: Cache busting** — Реализован вариант B (`?v={{ app_version }}`). Все 7 static URLs версионированы. nginx: `immutable` убран, `public` + `expires 7d` оставлены. `app_version` в `src/config.py` обновляется при каждом релизе. **40/40 findings closed.**
 
-### Единственный известный stub
+### Известные stubs
 
-| Файл | Что | Причина | Влияние |
-|------|-----|---------|---------|
-| `src/llm/providers.py:172-192` | YandexGPTClient | Ожидает yandex-cloud-ml-sdk | Нулевое — OpenRouter fallback полностью функционален |
+Нет. YandexGPTClient удалён (v0.8.0). Все LLM-задачи через OpenRouter.
 
 ### Ключевые файлы пайплайна
 
@@ -331,7 +329,6 @@ evaluation = [
 
 | # | Задача | Приоритет | Спека |
 |---|--------|-----------|-------|
-| B.1 | YandexGPTClient — реализация | Средний | `docs/07-llm-layer.md` (раздел 3) |
 | B.2 | Foresight Sprint 2: Kalshi, OECD | Низкий | `tasks/research/foresight_centers.md` |
 | B.3 | Foresight Sprint 3: Think-tank RSS | Низкий | — |
 | B.4 | Калибровка порогов BERTScore | Средний | После пилота, 20-30 аннотированных пар |

@@ -20,9 +20,15 @@
 
 ### Fixed
 - **Cache-busting (M26)**: все статические ассеты (CSS, JS, favicon) получили `?v=0.8.0` query param. nginx: убран `immutable` из `Cache-Control`. При деплое новой версии браузеры сразу загружают свежие файлы.
+- **CSRF middleware**: `request.form()` потребляло тело запроса → 422 на `/register` и `/login`. Заменено на `request.body()` + `parse_qs()`.
+
+### Changed
+- **Outlet URL fallback**: опциональное поле URL для неизвестных изданий. Если автокомплит не находит СМИ, пользователь может указать URL сайта → `resolve_by_url()` обнаруживает RSS и кэширует.
+- **Dark mode удалён**: оставлена только светлая тема.
+- **YandexGPT удалён**: stub никогда не работал. Все LLM-задачи через OpenRouter. 3 задачи (`style_generation`, `style_generation_ru`, `quality_style`) переведены с yandexgpt на `anthropic/claude-sonnet-4`.
 
 ### Metrics
-- Тесты: 1096 → 1105
+- Тесты: 1096 → 1142
 - Security audit: 40/40 findings closed
 
 ---
