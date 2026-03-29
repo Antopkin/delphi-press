@@ -54,6 +54,34 @@ TOP_N_HEADLINES = 7
 WILD_CARD_NEWSWORTHINESS_MIN = 0.7
 MAX_WILD_CARDS = 2
 
+# Horizon-adaptive persona weight adjustments (research-driven)
+# Immediate: Media Expert + Economist better (news cycle, schedule) — arXiv 2511.18394
+# Near: Devil's Advocate more valuable (max uncertainty zone) — Tetlock/GJP
+# Medium: Realist + Geostrateg better (base rates, structural) — GJP data
+HORIZON_WEIGHT_ADJUSTMENTS: dict[str, dict[str, float]] = {
+    "immediate": {
+        "realist": -0.02,
+        "geostrateg": -0.02,
+        "economist": +0.02,
+        "media_expert": +0.03,
+        "devils_advocate": -0.01,
+    },
+    "near": {
+        "realist": 0.0,
+        "geostrateg": 0.0,
+        "economist": 0.0,
+        "media_expert": 0.0,
+        "devils_advocate": +0.02,
+    },
+    "medium": {
+        "realist": +0.03,
+        "geostrateg": +0.02,
+        "economist": -0.01,
+        "media_expert": -0.02,
+        "devils_advocate": -0.02,
+    },
+}
+
 # Market persona (Phase 4)
 MARKET_BASE_WEIGHT = 0.15
 MARKET_MIN_LIQUIDITY = 10_000
@@ -154,6 +182,11 @@ class Judge(BaseAgent):
         # Build market index from foresight signals (Phase 4)
         market_index = self._build_market_index(getattr(context, "foresight_signals", []))
 
+        # Compute horizon for weight adjustments
+        horizon_days = max(1, min((context.target_date - date_type.today()).days, 30))
+        horizon_band_val = compute_horizon_band(horizon_days).value
+        horizon_adj = HORIZON_WEIGHT_ADJUSTMENTS.get(horizon_band_val, {})
+
         # Build timeline entries
         entries: list[TimelineEntry] = []
         for event_id, agent_preds in event_data.items():
@@ -162,7 +195,9 @@ class Judge(BaseAgent):
             for pid_str in agent_preds:
                 try:
                     pid = PersonaID(pid_str)
-                    weights.append(PERSONAS[pid].initial_weight)
+                    base_w = PERSONAS[pid].initial_weight
+                    adj = horizon_adj.get(pid_str, 0.0)
+                    weights.append(max(0.01, base_w + adj))
                 except (ValueError, KeyError):
                     weights.append(0.20)
 
@@ -574,7 +609,10 @@ class Judge(BaseAgent):
             ):
                 entry.is_wild_card = True
                 score = self._headline_score(
-                    entry.aggregated_probability, entry.newsworthiness, 0.0, 1.0,
+                    entry.aggregated_probability,
+                    entry.newsworthiness,
+                    0.0,
+                    1.0,
                 )
                 rp = self._entry_to_ranked(entry, round(score, 4))
                 rp.is_wild_card = True

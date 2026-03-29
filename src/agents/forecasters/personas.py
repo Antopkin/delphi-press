@@ -285,6 +285,9 @@ class DelphiPersonaAgent(BaseAgent):
         horizon_days = max(1, min((context.target_date - date_type.today()).days, 7))
         horizon_band = compute_horizon_band(horizon_days).value
 
+        # Collect high-saturation threads for media saturation warning
+        high_saturation_threads = self._collect_high_saturation_threads(context)
+
         prompt = PersonaPrompt(
             persona_id=self.persona.id.value,
             system_prompt_text=self.persona.system_prompt,
@@ -300,6 +303,7 @@ class DelphiPersonaAgent(BaseAgent):
             mediator_feedback=context.mediator_synthesis if round_number == 2 else None,
             horizon_days=horizon_days,
             horizon_band=horizon_band,
+            high_saturation_threads=high_saturation_threads,
             schema_instruction=prompt.render_output_schema_instruction(),
         )
 
@@ -327,3 +331,42 @@ class DelphiPersonaAgent(BaseAgent):
         if round_number == 2:
             return {"revised_assessment": assessment_dict}
         return {"assessment": assessment_dict}
+
+    @staticmethod
+    def _collect_high_saturation_threads(
+        context: PipelineContext,
+        threshold: float = 0.6,
+    ) -> list[dict[str, Any]]:
+        """Extract high-saturation threads from Stage 3 media analyst assessments.
+
+        Returns list of dicts with title, saturation, coverage_days for threads
+        where media saturation exceeds threshold (arXiv 2511.18394).
+        """
+        result: list[dict[str, Any]] = []
+        for thread in context.event_threads:
+            assessments = getattr(thread, "assessments", None)
+            if not assessments:
+                continue
+            media = assessments.get("media_analyst") if isinstance(assessments, dict) else None
+            if not media:
+                continue
+            saturation = (
+                media.get("saturation", 0.0)
+                if isinstance(media, dict)
+                else getattr(media, "saturation", 0.0)
+            )
+            if saturation >= threshold:
+                title = getattr(thread, "title", getattr(thread, "id", "unknown"))
+                coverage_days = (
+                    media.get("coverage_days", 0)
+                    if isinstance(media, dict)
+                    else getattr(media, "coverage_days", 0)
+                )
+                result.append(
+                    {
+                        "title": title,
+                        "saturation": round(saturation, 2),
+                        "coverage_days": coverage_days,
+                    }
+                )
+        return result

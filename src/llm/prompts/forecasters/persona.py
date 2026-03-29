@@ -86,6 +86,17 @@ events, (4) current momentum (as WEAK signal only).
 
 ---
 
+{% if high_saturation_threads %}
+## MEDIA SATURATION WARNING
+
+{% for thread in high_saturation_threads %}
+- Thread "{{ thread.title }}" has been covered for {{ thread.coverage_days }} days \
+(saturation={{ thread.saturation }}). Guard against definition drift and rumor overweighting.
+{% endfor %}
+
+---
+{% endif %}
+
 ## ВХОДНЫЕ ДАННЫЕ: ТРАЕКТОРИИ СОБЫТИЙ
 
 {% for trajectory in event_trajectories %}

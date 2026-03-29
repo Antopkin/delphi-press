@@ -657,3 +657,37 @@ class TestSelectHeadlines:
         # Should be at most 3 (top_n) + wild cards
         non_wild = [r for r in ranked if not r.is_wild_card]
         assert len(non_wild) <= 3
+
+
+# ── Horizon weight adjustments ──────────────────────────────────
+
+
+class TestHorizonWeightAdjustments:
+    """Test that HORIZON_WEIGHT_ADJUSTMENTS are valid."""
+
+    def test_all_bands_sum_adjustments_near_zero(self):
+        from src.agents.forecasters.judge import HORIZON_WEIGHT_ADJUSTMENTS
+
+        for band, adj in HORIZON_WEIGHT_ADJUSTMENTS.items():
+            total = sum(adj.values())
+            assert abs(total) < 0.03, f"Band '{band}' adjustments sum to {total}, expected ~0"
+
+    def test_immediate_boosts_media_expert(self):
+        from src.agents.forecasters.judge import HORIZON_WEIGHT_ADJUSTMENTS
+
+        adj = HORIZON_WEIGHT_ADJUSTMENTS["immediate"]
+        assert adj["media_expert"] > 0
+        assert adj["economist"] > 0
+
+    def test_medium_boosts_realist(self):
+        from src.agents.forecasters.judge import HORIZON_WEIGHT_ADJUSTMENTS
+
+        adj = HORIZON_WEIGHT_ADJUSTMENTS["medium"]
+        assert adj["realist"] > 0
+        assert adj["geostrateg"] > 0
+
+    def test_near_boosts_devils_advocate(self):
+        from src.agents.forecasters.judge import HORIZON_WEIGHT_ADJUSTMENTS
+
+        adj = HORIZON_WEIGHT_ADJUSTMENTS["near"]
+        assert adj["devils_advocate"] > 0

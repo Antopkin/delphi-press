@@ -51,6 +51,7 @@ def _render_persona(horizon_band: str, horizon_days: int, persona_id: str = "rea
         mediator_feedback=None,
         horizon_days=horizon_days,
         horizon_band=horizon_band,
+        high_saturation_threads=[],
         schema_instruction="JSON schema here",
     )
 
@@ -167,6 +168,36 @@ class TestPersonaTemporalFormat:
 
 
 # ── Mediator: Horizon synthesis ──────────────────────────────────
+
+
+# ── Persona: Media saturation warning ────────────────────────────
+
+
+class TestPersonaSaturationWarning:
+    def test_high_saturation_shows_warning(self):
+        prompt = PersonaPrompt(persona_id="realist", system_prompt_text="Expert.")
+        text = prompt.render_user(
+            persona_id="realist",
+            outlet_name="TASS",
+            target_date="2026-04-01",
+            event_trajectories=[_make_trajectory()],
+            cross_impact_matrix=None,
+            round_number=1,
+            mediator_feedback=None,
+            horizon_days=2,
+            horizon_band="immediate",
+            high_saturation_threads=[
+                {"title": "Ukraine conflict", "saturation": 0.85, "coverage_days": 14},
+            ],
+            schema_instruction="JSON",
+        )
+        assert "MEDIA SATURATION WARNING" in text
+        assert "Ukraine conflict" in text
+        assert "14 days" in text
+
+    def test_no_saturation_no_warning(self):
+        text = _render_persona("immediate", 1)
+        assert "MEDIA SATURATION WARNING" not in text
 
 
 class TestMediatorHorizon:
