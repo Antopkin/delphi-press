@@ -535,6 +535,7 @@ class GdeltDocClient:
         self._cache: dict[str, tuple[float, list[dict]]] = {}
         self._cache_ttl = 900  # 15 min
         self._last_request_time: float = 0.0
+        self._rate_lock = asyncio.Lock()
 
     async def search_articles(
         self,
@@ -576,11 +577,13 @@ class GdeltDocClient:
         if cached and (time.monotonic() - cached[0]) < self._cache_ttl:
             return cached[1]
 
-        # Rate limit: wait at least 1 sec between requests
-        now = time.monotonic()
-        elapsed = now - self._last_request_time
-        if elapsed < 1.0:
-            await asyncio.sleep(1.0 - elapsed)
+        # Rate limit: wait at least 1 sec between requests (lock prevents concurrent bypass)
+        async with self._rate_lock:
+            now = time.monotonic()
+            elapsed = now - self._last_request_time
+            if elapsed < 1.0:
+                await asyncio.sleep(1.0 - elapsed)
+            self._last_request_time = time.monotonic()
 
         params = {
             "query": full_query,
@@ -599,10 +602,7 @@ class GdeltDocClient:
             response.raise_for_status()
         except httpx.HTTPError as exc:
             logger.warning("GDELT DOC API failed: %s", exc)
-            self._last_request_time = time.monotonic()
             return []
-
-        self._last_request_time = time.monotonic()
 
         # GDELT returns HTML (not JSON) for invalid queries (e.g. Cyrillic text)
         content_type = response.headers.get("content-type", "")
