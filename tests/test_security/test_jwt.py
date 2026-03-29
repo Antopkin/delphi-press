@@ -40,3 +40,11 @@ def test_decode_access_token_wrong_secret_raises():
     token = create_access_token("user-sec", SECRET)
     with pytest.raises(Exception):
         decode_access_token(token, "wrong-secret-key-that-is-different!")
+
+
+def test_jwt_contains_jti():
+    """JWT should include a unique jti claim for future revocation support."""
+    token = create_access_token("user-jti", SECRET)
+    payload = decode_access_token(token, SECRET)
+    assert "jti" in payload
+    assert len(payload["jti"]) > 10

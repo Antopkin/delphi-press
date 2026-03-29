@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -23,6 +24,7 @@ def create_access_token(
     now = datetime.now(UTC)
     payload = {
         "sub": user_id,
+        "jti": str(uuid.uuid4()),
         "iat": now,
         "exp": now + timedelta(days=expire_days),
     }
