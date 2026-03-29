@@ -100,6 +100,66 @@ class TestYandexGPTClient:
                 pass
 
 
+class TestTruncatedResponse:
+    @pytest.mark.asyncio
+    async def test_truncated_response_warns(self, caplog):
+        """When finish_reason='length', provider must emit a WARNING log.
+
+        A truncated response means the model hit max_tokens and the output
+        is incomplete. Downstream JSON parsing will likely fail — the warning
+        helps diagnose the root cause quickly.
+        """
+        mock_response = _mock_openai_response()
+        mock_response.choices[0].finish_reason = "length"
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with patch("src.llm.providers.AsyncOpenAI", return_value=mock_client):
+            client = OpenRouterClient(api_key="test-key")
+
+            import logging
+
+            with caplog.at_level(logging.WARNING, logger="src.llm.providers"):
+                result = await client.complete(_make_request())
+
+        assert result.finish_reason == "length"
+        # Проверяем, что warning был залогирован
+        warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
+        assert any(
+            "length" in msg.lower() or "truncat" in msg.lower() for msg in warning_messages
+        ), (
+            f"Expected a WARNING log about truncated response (finish_reason='length'), "
+            f"but got: {warning_messages}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_normal_response_no_truncation_warning(self, caplog):
+        """When finish_reason='stop', no truncation warning should appear."""
+        mock_response = _mock_openai_response()
+        mock_response.choices[0].finish_reason = "stop"
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with patch("src.llm.providers.AsyncOpenAI", return_value=mock_client):
+            client = OpenRouterClient(api_key="test-key")
+
+            import logging
+
+            with caplog.at_level(logging.WARNING, logger="src.llm.providers"):
+                result = await client.complete(_make_request())
+
+        assert result.finish_reason == "stop"
+        warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
+        truncation_warnings = [
+            m for m in warning_messages if "length" in m.lower() or "truncat" in m.lower()
+        ]
+        assert not truncation_warnings, (
+            f"No truncation warning expected for finish_reason='stop', got: {truncation_warnings}"
+        )
+
+
 class TestRetryWithBackoff:
     @pytest.mark.asyncio
     async def test_success_on_first_try(self):

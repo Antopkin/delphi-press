@@ -135,6 +135,19 @@ class OpenRouterClient(LLMProvider):
         tokens_in = response.usage.prompt_tokens if response.usage else 0
         tokens_out = response.usage.completion_tokens if response.usage else 0
         cost = calculate_cost(request.model, tokens_in, tokens_out)
+        finish_reason = response.choices[0].finish_reason or "stop"
+
+        # Warn about truncated responses — downstream JSON parsing will likely fail
+        if finish_reason == "length":
+            logger.warning(
+                "llm_response_truncated: finish_reason='length' — response hit max_tokens "
+                "and may be incomplete",
+                extra={
+                    "model": request.model,
+                    "max_tokens": request.max_tokens,
+                    "tokens_out": tokens_out,
+                },
+            )
 
         return LLMResponse(
             content=response.choices[0].message.content or "",
@@ -144,7 +157,7 @@ class OpenRouterClient(LLMProvider):
             tokens_out=tokens_out,
             cost_usd=cost,
             duration_ms=duration_ms,
-            finish_reason=response.choices[0].finish_reason or "stop",
+            finish_reason=finish_reason,
         )
 
     async def stream(self, request: LLMRequest) -> AsyncIterator[str]:
