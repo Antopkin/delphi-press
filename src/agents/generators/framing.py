@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from src.agents.base import BaseAgent
@@ -43,12 +44,21 @@ class FramingAnalyzer(BaseAgent):
         """
 
         profile = self._parse_outlet_profile(context.outlet_profile)
-        briefs: list[dict] = []
 
-        for raw_pred in context.ranked_predictions:
-            prediction = self._parse_prediction(raw_pred)
-            brief = await self._analyze_one(prediction, profile)
-            briefs.append(brief)
+        predictions = [self._parse_prediction(raw) for raw in context.ranked_predictions]
+        results = await asyncio.gather(
+            *[self._analyze_one(pred, profile) for pred in predictions],
+            return_exceptions=True,
+        )
+
+        briefs: list[dict] = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                self.logger.warning(
+                    "Framing failed for prediction %d: %s", i, result, exc_info=result
+                )
+                continue
+            briefs.append(result)
 
         return {"framing_briefs": briefs}
 
