@@ -134,6 +134,64 @@ class TestDelphi:
             assert task_id in DEFAULT_ASSIGNMENTS, f"Missing task: {task_id}"
 
 
+class TestBudgetEstimate:
+    @pytest.mark.asyncio
+    async def test_budget_estimate_uses_model_price(self, mock_openrouter, mock_yandex):
+        """Budget estimate должен использовать model-specific pricing, не flat rate.
+
+        Gemini-3.1-flash-lite ($0.25/$1.50 per 1M) значительно дешевле,
+        чем захардкоженный flat rate $20/1M — estimate должен быть ниже.
+        """
+        from unittest.mock import patch
+
+        from src.llm.pricing import calculate_cost
+
+        router = ModelRouter(
+            providers={"openrouter": mock_openrouter, "yandex": mock_yandex},
+            budget_usd=50.0,
+        )
+        messages = _make_messages()
+
+        # Шпионим за check_budget, чтобы увидеть est_cost
+        captured_costs: list[float] = []
+        original_check = router._budget_tracker.check_budget
+
+        async def spy_check_budget(est_cost: float) -> None:
+            captured_costs.append(est_cost)
+            await original_check(est_cost)
+
+        router._budget_tracker.check_budget = spy_check_budget
+
+        await router.complete(task="event_calendar", messages=messages)
+
+        assert len(captured_costs) == 1
+        est_cost = captured_costs[0]
+
+        # Flat rate $20/1M для ~10 токенов ("Hello" ≈ 5 chars // 4 + overhead)
+        # дал бы est_tokens * 0.00002 ≈ 0.00016 (при ~8 tokens)
+        # Model-specific для gemini-3.1-flash-lite ($0.25 in + $1.50 out per 1M)
+        # даст значительно меньше: ~8/1M * 0.25 + 8/1M * 1.50 ≈ 0.000014
+        # Ключевая проверка: est_cost НЕ равен flat rate формуле
+        from src.llm.pricing import estimate_messages_tokens
+
+        est_tokens = estimate_messages_tokens(messages)
+        flat_rate_cost = est_tokens * 0.00002
+
+        # Цена должна отличаться от flat rate
+        # (gemini-flash-lite значительно дешевле $20/1M)
+        assert est_cost != pytest.approx(flat_rate_cost, rel=0.01), (
+            f"Budget estimate ({est_cost}) should NOT use flat rate ({flat_rate_cost}). "
+            "Expected model-specific pricing via calculate_cost()."
+        )
+
+        # Цена должна соответствовать calculate_cost с моделью задачи
+        model = router.get_model_for_task("event_calendar")
+        expected_cost = calculate_cost(model, tokens_in=est_tokens, tokens_out=est_tokens)
+        assert est_cost == pytest.approx(expected_cost, rel=0.01), (
+            f"Budget estimate ({est_cost}) should match calculate_cost() = {expected_cost}"
+        )
+
+
 class TestDefaultAssignments:
     def test_has_core_tasks(self):
         expected = {

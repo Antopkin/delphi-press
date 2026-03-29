@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 
 from src.llm.budget import BudgetTracker
 from src.llm.exceptions import LLMProviderError
-from src.llm.pricing import estimate_messages_tokens
+from src.llm.pricing import calculate_cost, estimate_messages_tokens
 from src.llm.providers import LLMProvider
 from src.schemas.llm import (
     CostRecord,
@@ -260,9 +260,11 @@ class ModelRouter:
         """Выполнить LLM-вызов с роутингом и fallback."""
         assignment = self._assignments[task]
 
-        # Budget check
+        # Budget check: estimate cost using model-specific pricing
         est_tokens = estimate_messages_tokens(messages)
-        est_cost = est_tokens * 0.00002  # rough estimate
+        est_cost = calculate_cost(
+            assignment.primary_model, tokens_in=est_tokens, tokens_out=est_tokens
+        )
         await self._budget_tracker.check_budget(est_cost)
 
         # Build model chain: primary + fallbacks
