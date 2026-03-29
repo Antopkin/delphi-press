@@ -33,6 +33,7 @@ async def run_prediction_task(
     ctx: dict[str, Any],
     prediction_id: str,
     api_key: str | None = None,
+    outlet_url: str | None = None,
 ) -> dict[str, Any]:
     """Главная задача воркера: запуск пайплайна для одного прогноза."""
     redis = ctx["redis"]
@@ -135,6 +136,8 @@ async def run_prediction_task(
     # Pre-resolve outlet (enriches DB cache for unknown outlets, ~2-5s first time)
     try:
         resolved = await outlet_resolver.resolve(outlet_name)
+        if not resolved and outlet_url:
+            resolved = await outlet_resolver.resolve_by_url(outlet_url)
         if resolved:
             logger.info(
                 "Outlet resolved: %s → %s (%s)",

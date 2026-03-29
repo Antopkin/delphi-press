@@ -17,6 +17,8 @@
   var dateInput = document.getElementById("target_date");
   var submitBtn = document.getElementById("submit-btn");
   var errorDiv = document.getElementById("form-error");
+  var outletUrlGroup = document.getElementById("outlet-url-group");
+  var outletUrlInput = document.getElementById("outlet_url");
 
   if (!form || !outletInput) return;
 
@@ -79,15 +81,19 @@
     selectedIndex = -1;
 
     if (outlets.length === 0) {
-      // Show "not found" hint instead of hiding
+      // Show "not found" hint and reveal URL field
       var hint = document.createElement("li");
       hint.setAttribute("role", "option");
       hint.className = "text-text-muted italic";
       hint.textContent = "Издание не найдено";
       suggestionsList.appendChild(hint);
       suggestionsList.hidden = false;
+      if (outletUrlGroup) outletUrlGroup.hidden = false;
       return;
     }
+
+    // Hide URL field when suggestions are found
+    if (outletUrlGroup) outletUrlGroup.hidden = true;
 
     outlets.forEach(function (outlet, i) {
       var li = document.createElement("li");
@@ -239,6 +245,9 @@
             var apiKeyInput = document.getElementById("api_key");
             if (apiKeyInput && apiKeyInput.value.trim()) {
               payload.api_key = apiKeyInput.value.trim();
+            }
+            if (outletUrlInput && outletUrlInput.value.trim()) {
+              payload.outlet_url = outletUrlInput.value.trim();
             }
             return payload;
           })()

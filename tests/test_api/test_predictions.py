@@ -161,6 +161,23 @@ async def test_create_prediction_with_outlet_url_resolves(test_client):
     assert "example.com" in data["outlet_url"]
 
 
+async def test_create_prediction_url_ignored_when_name_resolved(test_client):
+    """Known outlet + outlet_url → name resolution wins, URL ignored."""
+    resp = await test_client.post(
+        "/api/v1/predictions",
+        json={
+            "outlet": "ТАСС",
+            "target_date": "2026-04-02",
+            "outlet_url": "https://example.com",
+        },
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["outlet_resolved"] is True
+    # ТАСС resolves to tass.ru, not example.com
+    assert "tass" in data["outlet_url"].lower()
+
+
 # ── GET /predictions/{id} ──────────────────────────────────────────
 
 

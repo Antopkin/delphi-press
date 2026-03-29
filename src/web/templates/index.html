@@ -64,6 +64,20 @@
             <small id="outlet-help" class="text-text-muted">Название издания на русском или английском</small>
         </div>
 
+        {# -- Outlet URL field (shown when outlet not found in autocomplete) -- #}
+        <div id="outlet-url-group" hidden>
+            <label for="outlet_url" class="block text-sm font-semibold mb-1">URL сайта издания</label>
+            <input
+                type="url"
+                id="outlet_url"
+                name="outlet_url"
+                placeholder="https://example.com"
+                aria-describedby="outlet-url-help"
+                class="w-full rounded-md border-border px-3 py-2"
+            >
+            <small id="outlet-url-help" class="text-text-muted">Необязательно. Поможет найти RSS и улучшить качество прогноза.</small>
+        </div>
+
         {# -- Target date field -- #}
         <div>
             <label for="target_date" class="block text-sm font-semibold mb-1">Дата прогноза</label>

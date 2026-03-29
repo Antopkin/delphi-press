@@ -562,6 +562,12 @@ class TestStaticAssetCacheBusting:
         assert resp.status_code == 200
         assert "form.js?v=" in resp.text
 
+    async def test_index_contains_outlet_url_field(self, web_client):
+        """Index page must have a hidden outlet_url field for unknown outlets."""
+        resp = await web_client.get("/")
+        assert resp.status_code == 200
+        assert 'id="outlet_url"' in resp.text
+
     async def test_version_param_matches_app_version(self, web_client):
         """Version in ?v= must match Settings().app_version (synced with CHANGELOG)."""
         from src.config import Settings
