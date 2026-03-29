@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from src.api.dependencies import require_user
 from src.db.models import User
 from src.security.jwt import create_access_token
-from src.security.password import hash_password, verify_password
+from src.security.password import hash_password_async, verify_password_async
 
 logger = logging.getLogger("api.auth")
 
@@ -65,7 +65,7 @@ async def register(body: RegisterRequest, request: Request) -> AuthResponse:
     settings = request.app.state.settings
     session_factory = request.app.state.session_factory
 
-    hashed = hash_password(body.password)
+    hashed = await hash_password_async(body.password)
     user_id = str(uuid.uuid4())
 
     async with get_session(session_factory) as session:
@@ -96,7 +96,7 @@ async def login(body: LoginRequest, request: Request) -> AuthResponse:
         repo = UserRepository(session)
         user = await repo.get_by_email(body.email)
 
-    if user is None or not verify_password(body.password, user.hashed_password):
+    if user is None or not await verify_password_async(body.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Неверный email или пароль.")
 
     token = create_access_token(user.id, settings.secret_key, settings.jwt_expire_days)

@@ -97,7 +97,7 @@ async def login_submit(
     from src.db.engine import get_session
     from src.db.repositories import UserRepository
     from src.security.jwt import create_access_token
-    from src.security.password import verify_password
+    from src.security.password import verify_password_async
 
     session_factory = request.app.state.session_factory
     settings = request.app.state.settings
@@ -106,7 +106,7 @@ async def login_submit(
         repo = UserRepository(session)
         user = await repo.get_by_email(email)
 
-    if user is None or not verify_password(password, user.hashed_password):
+    if user is None or not await verify_password_async(password, user.hashed_password):
         return templates.TemplateResponse(
             request,
             "login.html",
@@ -146,7 +146,7 @@ async def register_submit(
     from src.db.engine import get_session
     from src.db.repositories import UserRepository
     from src.security.jwt import create_access_token
-    from src.security.password import hash_password
+    from src.security.password import hash_password_async
 
     session_factory = request.app.state.session_factory
     settings = request.app.state.settings
@@ -158,7 +158,7 @@ async def register_submit(
             {"error": "Пароль должен быть не менее 8 символов.", "current_user": None},
         )
 
-    hashed = hash_password(password)
+    hashed = await hash_password_async(password)
     user_id = str(uuid.uuid4())
 
     async with get_session(session_factory) as session:
