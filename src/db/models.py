@@ -105,6 +105,8 @@ class Prediction(Base):
     total_llm_cost_usd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     pipeline_config: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    predicted_timeline: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    delphi_summary: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     # User link (nullable for backward compatibility)
     user_id: Mapped[Optional[str]] = mapped_column(

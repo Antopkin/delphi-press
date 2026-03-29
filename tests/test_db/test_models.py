@@ -52,6 +52,22 @@ def test_prediction_has_expected_columns():
     assert required.issubset(cols)
 
 
+def test_prediction_has_predicted_timeline_column():
+    """Prediction model has predicted_timeline JSON column."""
+    from src.db.models import Prediction
+
+    cols = {c.name for c in Prediction.__table__.columns}
+    assert "predicted_timeline" in cols
+
+
+def test_prediction_has_delphi_summary_column():
+    """Prediction model has delphi_summary JSON column."""
+    from src.db.models import Prediction
+
+    cols = {c.name for c in Prediction.__table__.columns}
+    assert "delphi_summary" in cols
+
+
 def test_headline_has_expected_columns():
     from src.db.models import Headline
 
