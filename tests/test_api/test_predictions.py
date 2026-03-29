@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import date
+
+import pytest
+from pydantic import ValidationError
+
+from src.api.predictions import CreatePredictionRequest
 from src.db.models import PredictionStatus
 
 # ── POST /predictions ───────────────────────────────────────────────
@@ -85,6 +91,22 @@ async def test_create_prediction_without_preset_defaults_to_full(test_client, te
         assert pred.preset == "full"
 
 
+# ── API key field ──────────────────────────────────────────────────
+
+
+def test_create_prediction_request_accepts_api_key():
+    """CreatePredictionRequest accepts optional api_key field."""
+    req = CreatePredictionRequest(
+        outlet="ТАСС", target_date=date(2026, 4, 2), api_key="sk-or-test-123"
+    )
+    assert req.api_key == "sk-or-test-123"
+
+
+def test_create_prediction_request_api_key_defaults_none():
+    req = CreatePredictionRequest(outlet="ТАСС", target_date=date(2026, 4, 2))
+    assert req.api_key is None
+
+
 # ── GET /predictions/{id} ──────────────────────────────────────────
 
 
@@ -145,3 +167,45 @@ async def test_list_predictions_status_filter(test_client, seed_prediction):
 async def test_list_predictions_invalid_status_returns_400(test_client):
     resp = await test_client.get("/api/v1/predictions", params={"status": "invalid"})
     assert resp.status_code == 400
+
+
+# ── IDOR protection: ownership check ─────────────────────────────────
+
+
+async def test_prediction_access_denied_for_non_owner(test_client, seed_prediction, seed_user):
+    """Authenticated user cannot access another user's prediction (403)."""
+    owner_id, _ = await seed_user()
+    other_id, other_headers = await seed_user()
+
+    pid = await seed_prediction(user_id=owner_id)
+
+    resp = await test_client.get(f"/api/v1/predictions/{pid}", headers=other_headers)
+    assert resp.status_code == 403
+
+
+async def test_prediction_accessible_by_owner(test_client, seed_prediction, seed_user):
+    """Owner can access their own prediction."""
+    owner_id, owner_headers = await seed_user()
+    pid = await seed_prediction(user_id=owner_id)
+
+    resp = await test_client.get(f"/api/v1/predictions/{pid}", headers=owner_headers)
+    assert resp.status_code == 200
+    assert resp.json()["id"] == pid
+
+
+async def test_anonymous_prediction_accessible_by_anyone(test_client, seed_prediction, seed_user):
+    """Prediction with user_id=None is accessible by any authenticated user."""
+    _, user_headers = await seed_user()
+    pid = await seed_prediction()  # user_id=None by default
+
+    resp = await test_client.get(f"/api/v1/predictions/{pid}", headers=user_headers)
+    assert resp.status_code == 200
+
+
+async def test_owned_prediction_accessible_without_auth(test_client, seed_prediction, seed_user):
+    """Unauthenticated user can access any prediction (backward compat)."""
+    owner_id, _ = await seed_user()
+    pid = await seed_prediction(user_id=owner_id)
+
+    resp = await test_client.get(f"/api/v1/predictions/{pid}")
+    assert resp.status_code == 200

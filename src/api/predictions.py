@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field, field_validator
 from sse_starlette.sse import EventSourceResponse
 
 from src.api.dependencies import get_current_user
-from src.db.models import PredictionStatus, User
+from src.db.models import Prediction, PredictionStatus, User
 
 logger = logging.getLogger("api.predictions")
 
@@ -36,6 +36,7 @@ class CreatePredictionRequest(BaseModel):
     outlet: str = Field(..., min_length=1, max_length=200)
     target_date: date = Field(...)
     preset: str = Field(default="full")
+    api_key: str | None = Field(default=None)
 
     @field_validator("preset")
     @classmethod
@@ -109,6 +110,32 @@ class PredictionListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+# === Helpers ===
+
+
+def _check_prediction_ownership(
+    prediction: Prediction,
+    user: User | None,
+) -> None:
+    """Raise 403 if authenticated user does not own the prediction.
+
+    Rules:
+    - prediction.user_id is None → anonymous prediction, accessible to all.
+    - user is None (unauthenticated) → accessible (backward compat).
+    - prediction.user_id == user.id → owner, accessible.
+    - Otherwise → 403 Forbidden.
+    """
+    if prediction.user_id is None:
+        return
+    if user is None:
+        return
+    if prediction.user_id != user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Доступ запрещён: прогноз принадлежит другому пользователю.",
+        )
 
 
 # === Endpoints ===
@@ -188,8 +215,15 @@ async def create_prediction(
 async def get_prediction(
     prediction_id: str,
     request: Request,
+    user: User | None = Depends(get_current_user),
 ) -> PredictionDetailResponse:
-    """Полная информация о прогнозе."""
+    """Полная информация о прогнозе.
+
+    Ownership check (IDOR protection):
+    - prediction.user_id is None → accessible to everyone (anonymous predictions).
+    - user is None (unauthenticated) → accessible (backward compat).
+    - prediction.user_id != user.id → 403 Forbidden.
+    """
     from src.db.engine import get_session
     from src.db.repositories import PredictionRepository
 
@@ -204,6 +238,8 @@ async def get_prediction(
                 status_code=404,
                 detail=f"Прогноз {prediction_id} не найден.",
             )
+
+        _check_prediction_ownership(prediction, user)
 
         return PredictionDetailResponse(
             id=prediction.id,
@@ -253,8 +289,22 @@ async def get_prediction(
 async def stream_prediction_progress(
     prediction_id: str,
     request: Request,
+    user: User | None = Depends(get_current_user),
 ) -> EventSourceResponse:
-    """SSE-стрим прогресса через Redis pub/sub."""
+    """SSE-стрим прогресса через Redis pub/sub.
+
+    Ownership check applied before streaming begins.
+    """
+    from src.db.engine import get_session
+    from src.db.repositories import PredictionRepository
+
+    session_factory = request.app.state.session_factory
+    async with get_session(session_factory) as session:
+        repo = PredictionRepository(session)
+        prediction = await repo.get_by_id(prediction_id)
+        if prediction is not None:
+            _check_prediction_ownership(prediction, user)
+
     redis = request.app.state.redis
     channel_name = f"prediction:{prediction_id}:progress"
 
