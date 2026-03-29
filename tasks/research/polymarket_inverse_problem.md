@@ -177,8 +177,17 @@ Delphi Press уже коллектит оба потока данных:
 | Fuzzy match extraction | **Готово** | `src/utils/fuzzy_match.py` (extracted from Judge) | 8 |
 
 | Шаг 5: Inverse Problem (Wisdom of the Informed) | **Готово** | `src/inverse/` (schemas, profiler, signal, loader, store), Judge Phase 5 integration, `scripts/build_bettor_profiles.py`, `scripts/eval_informed_consensus.py` | 86 |
+| Шаг 5b: HuggingFace full dataset profiling | **Готово** | `scripts/duckdb_build_profiles.py`, `scripts/merge_profiles.py` (DuckDB two-pass на 470M trades) | — |
 
-Итого реализовано: **7 фаз, 195 тестов** (2026-03-28 — 2026-03-29).
+**Результаты профилирования (HuggingFace, 2026-03-29):**
+- Источник: `SII-WANGZJ/Polymarket_data` trades.parquet (33 ГБ, 470M строк)
+- 2,271,883 unique users → 1,742,598 profiled (≥3 resolved bets)
+- 348,519 INFORMED / 871,299 MODERATE / 522,780 NOISE
+- Median BS: 0.295, p10 BS: 0.067, p90 BS: 0.571
+- Best: BS=0.000001 ($404K volume, 4 resolved bets)
+- Файл: `bettor_profiles.json` (506 МБ, на сервере)
+
+Итого реализовано: **8 фаз, 195 тестов** (2026-03-28 — 2026-03-29).
 
 ---
 
