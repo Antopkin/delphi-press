@@ -89,8 +89,7 @@ async def test_all_expected_llm_tasks_called(
         "media_analysis",
         # Stage 5: Mediator
         "mediator",
-        # Stage 6: Judge
-        "judge",
+        # Stage 6: Judge (deterministic — no LLM call)
         # Stage 7: Framing
         "framing",
         # Stage 9: Quality Gate

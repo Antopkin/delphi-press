@@ -400,3 +400,260 @@ class TestComputeMarketWeight:
         market = {"liquidity": 1_000_000, "volatility_7d": 0.0, "distribution_reliable": True}
         weight = Judge._compute_market_weight(market)
         assert weight == 0.15  # no discount
+
+
+# ── Temporal aggregation helpers ────────────────────────────────────
+
+
+class TestAggregateDate:
+    """Test predicted_date aggregation from persona predictions."""
+
+    def test_median_date_from_multiple_personas(self):
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        from src.agents.forecasters.judge import Judge
+
+        judge = Judge.__new__(Judge)
+        judge.a = 1.5
+        judge.b = 0.0
+        judge.llm = None
+        preds = {}
+        for i, d in enumerate([date(2026, 4, 1), date(2026, 4, 3), date(2026, 4, 5)]):
+            p = MagicMock()
+            p.predicted_date = d
+            p.uncertainty_days = 1.0
+            preds[f"persona_{i}"] = p
+
+        result_date, result_unc = judge._aggregate_date(preds, date(2026, 4, 2))
+        assert result_date == date(2026, 4, 3)  # median
+        assert result_unc == 1.0
+
+    def test_fallback_to_target_date_when_no_dates(self):
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        from src.agents.forecasters.judge import Judge
+
+        judge = Judge.__new__(Judge)
+        judge.a = 1.5
+        judge.b = 0.0
+        judge.llm = None
+        preds = {"p1": MagicMock(predicted_date=None, uncertainty_days=1.0)}
+
+        result_date, result_unc = judge._aggregate_date(preds, date(2026, 4, 1))
+        assert result_date == date(2026, 4, 1)
+        assert result_unc == 1.0
+
+    def test_mean_uncertainty(self):
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        from src.agents.forecasters.judge import Judge
+
+        judge = Judge.__new__(Judge)
+        judge.a = 1.5
+        judge.b = 0.0
+        judge.llm = None
+        preds = {}
+        for i, unc in enumerate([0.5, 1.5, 3.0]):
+            p = MagicMock()
+            p.predicted_date = date(2026, 4, 1)
+            p.uncertainty_days = unc
+            preds[f"p_{i}"] = p
+
+        _, result_unc = judge._aggregate_date(preds, date(2026, 4, 1))
+        assert abs(result_unc - (0.5 + 1.5 + 3.0) / 3) < 0.01
+
+
+class TestAggregateCausalDeps:
+    """Test causal dependencies union."""
+
+    def test_union_of_deps(self):
+        from unittest.mock import MagicMock
+
+        from src.agents.forecasters.judge import Judge
+
+        judge = Judge.__new__(Judge)
+        judge.a = 1.5
+        judge.b = 0.0
+        judge.llm = None
+        p1 = MagicMock(causal_dependencies=["t1", "t2"])
+        p2 = MagicMock(causal_dependencies=["t2", "t3"])
+        deps = judge._aggregate_causal_deps({"a": p1, "b": p2})
+        assert deps == ["t1", "t2", "t3"]
+
+    def test_empty_when_no_deps(self):
+        from unittest.mock import MagicMock
+
+        from src.agents.forecasters.judge import Judge
+
+        judge = Judge.__new__(Judge)
+        judge.a = 1.5
+        judge.b = 0.0
+        judge.llm = None
+        p1 = MagicMock(causal_dependencies=[])
+        assert judge._aggregate_causal_deps({"a": p1}) == []
+
+
+# ── Aggregate timeline (Step 6a) ───────────────────────────────────
+
+
+class TestAggregateTimeline:
+    """Test _aggregate_timeline returns PredictedTimeline."""
+
+    def _make_judge(self):
+        from src.agents.forecasters.judge import Judge
+
+        judge = Judge.__new__(Judge)
+        judge.a = 1.5
+        judge.b = 0.0
+        judge.llm = None
+        return judge
+
+    def test_returns_predicted_timeline(self, make_context):
+        from datetime import date, timedelta
+
+        from src.schemas.timeline import PredictedTimeline
+
+        judge = self._make_judge()
+        ctx = make_context()
+        ctx.target_date = date.today() + timedelta(days=2)
+
+        from tests.test_agents.test_forecasters.conftest import make_persona_assessment
+
+        assessments = [
+            make_persona_assessment("realist", predictions=None),
+            make_persona_assessment("economist", predictions=None),
+            make_persona_assessment("geostrateg", predictions=None),
+        ]
+        timeline = judge._aggregate_timeline(assessments, ctx)
+        assert isinstance(timeline, PredictedTimeline)
+        assert len(timeline.entries) > 0
+        assert timeline.target_date == ctx.target_date
+
+    def test_temporal_order_assigned(self, make_context):
+        from datetime import date, timedelta
+
+        judge = self._make_judge()
+        ctx = make_context()
+        ctx.target_date = date.today() + timedelta(days=3)
+
+        from tests.test_agents.test_forecasters.conftest import make_persona_assessment
+
+        assessments = [make_persona_assessment("realist")]
+        timeline = judge._aggregate_timeline(assessments, ctx)
+        for entry in timeline.entries:
+            assert entry.temporal_order >= 1
+
+    def test_horizon_band_computed(self, make_context):
+        from datetime import date, timedelta
+
+        from src.schemas.timeline import HorizonBand
+
+        judge = self._make_judge()
+        ctx = make_context()
+        ctx.target_date = date.today() + timedelta(days=1)
+
+        from tests.test_agents.test_forecasters.conftest import make_persona_assessment
+
+        assessments = [make_persona_assessment("realist")]
+        timeline = judge._aggregate_timeline(assessments, ctx)
+        assert timeline.horizon_band == HorizonBand.IMMEDIATE
+
+
+# ── Select headlines (Step 6b) ─────────────────────────────────────
+
+
+class TestSelectHeadlines:
+    """Test _select_headlines maps timeline → RankedPrediction."""
+
+    def _make_judge(self):
+        from src.agents.forecasters.judge import Judge
+
+        judge = Judge.__new__(Judge)
+        judge.a = 1.5
+        judge.b = 0.0
+        judge.llm = None
+        return judge
+
+    def test_returns_ranked_predictions(self, make_context):
+        from datetime import date, timedelta
+
+        from src.schemas.headline import RankedPrediction
+
+        judge = self._make_judge()
+        ctx = make_context()
+        ctx.target_date = date.today() + timedelta(days=2)
+
+        from tests.test_agents.test_forecasters.conftest import make_persona_assessment
+
+        assessments = [
+            make_persona_assessment("realist"),
+            make_persona_assessment("economist"),
+        ]
+        timeline = judge._aggregate_timeline(assessments, ctx)
+        ranked = judge._select_headlines(timeline, assessments, ctx)
+        assert len(ranked) > 0
+        assert all(isinstance(rp, RankedPrediction) for rp in ranked)
+
+    def test_preserves_ranked_prediction_contract(self, make_context):
+        """All required fields of RankedPrediction must be present."""
+        from datetime import date, timedelta
+
+        judge = self._make_judge()
+        ctx = make_context()
+        ctx.target_date = date.today() + timedelta(days=2)
+
+        from tests.test_agents.test_forecasters.conftest import make_persona_assessment
+
+        assessments = [make_persona_assessment("realist")]
+        timeline = judge._aggregate_timeline(assessments, ctx)
+        ranked = judge._select_headlines(timeline, assessments, ctx)
+
+        rp = ranked[0]
+        assert hasattr(rp, "event_thread_id")
+        assert hasattr(rp, "prediction")
+        assert hasattr(rp, "calibrated_probability")
+        assert hasattr(rp, "raw_probability")
+        assert hasattr(rp, "headline_score")
+        assert hasattr(rp, "newsworthiness")
+        assert hasattr(rp, "confidence_label")
+        assert hasattr(rp, "agreement_level")
+        assert hasattr(rp, "spread")
+        assert hasattr(rp, "reasoning")
+        assert hasattr(rp, "evidence_chain")
+        assert hasattr(rp, "dissenting_views")
+        assert hasattr(rp, "is_wild_card")
+        assert rp.rank >= 1
+
+    def test_top_n_selection(self, make_context):
+        from datetime import date, timedelta
+
+        judge = self._make_judge()
+        ctx = make_context()
+        ctx.target_date = date.today() + timedelta(days=2)
+        ctx.pipeline_config = {"max_headlines": 3}
+
+        from tests.test_agents.test_forecasters.conftest import (
+            make_persona_assessment,
+            make_prediction_item,
+        )
+
+        # Create assessments with many threads
+        preds = [
+            make_prediction_item(f"thread_{i:04d}", probability=0.5 + i * 0.03) for i in range(10)
+        ]
+        assessments = [make_persona_assessment("realist", predictions=preds[:5])]
+        # Add more threads via second persona
+        preds2 = [
+            make_prediction_item(f"thread_{i:04d}", probability=0.6 + i * 0.02)
+            for i in range(5, 10)
+        ]
+        assessments.append(make_persona_assessment("economist", predictions=preds2))
+
+        timeline = judge._aggregate_timeline(assessments, ctx)
+        ranked = judge._select_headlines(timeline, assessments, ctx)
+        # Should be at most 3 (top_n) + wild cards
+        non_wild = [r for r in ranked if not r.is_wild_card]
+        assert len(non_wild) <= 3

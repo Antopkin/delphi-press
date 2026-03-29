@@ -87,6 +87,41 @@ def test_merge_agent_result_quality_gate_empty_list():
     assert isinstance(ctx.final_predictions, list)
 
 
+def test_pipeline_context_has_predicted_timeline_slot():
+    ctx = PipelineContext(outlet="TASS", target_date=date(2026, 4, 1))
+    assert ctx.predicted_timeline is None
+
+
+def test_merge_judge_result_with_timeline():
+    """Judge returns both ranked_predictions and predicted_timeline."""
+    ctx = PipelineContext(outlet="TASS", target_date=date(2026, 4, 1))
+    result = AgentResult(
+        agent_name="judge",
+        success=True,
+        data={
+            "ranked_predictions": [{"rank": 1}, {"rank": 2}],
+            "predicted_timeline": {"entries": [], "target_date": "2026-04-01"},
+        },
+    )
+    ctx.merge_agent_result(result)
+    assert len(ctx.ranked_predictions) == 2
+    assert ctx.predicted_timeline is not None
+    assert ctx.predicted_timeline["target_date"] == "2026-04-01"
+
+
+def test_merge_judge_result_without_timeline():
+    """Backward compat: judge without predicted_timeline still works."""
+    ctx = PipelineContext(outlet="TASS", target_date=date(2026, 4, 1))
+    result = AgentResult(
+        agent_name="judge",
+        success=True,
+        data={"ranked_predictions": [{"rank": 1}]},
+    )
+    ctx.merge_agent_result(result)
+    assert len(ctx.ranked_predictions) == 1
+    assert ctx.predicted_timeline is None
+
+
 def test_merge_agent_result_skips_failed():
     ctx = PipelineContext(outlet="TASS", target_date=date(2026, 4, 1))
     result = AgentResult(

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -126,6 +127,27 @@ class PredictionItem(BaseModel):
     conditional_on: list[str] = Field(
         default_factory=list,
         description="ID других PredictionItem, от которых зависит этот прогноз",
+    )
+
+    # --- Temporal fields (event-level predictions) ---
+
+    predicted_date: date | None = Field(
+        default=None,
+        description="Прогнозируемая дата события (YYYY-MM-DD). None = target_date контекста.",
+    )
+    uncertainty_days: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=30.0,
+        description="Неопределённость в днях (±). 0.5 = высокая точность, 7.0 = тренд.",
+    )
+    causal_dependencies: list[str] = Field(
+        default_factory=list,
+        description="event_thread_id событий, от которых каузально зависит данный прогноз.",
+    )
+    confidence_interval_95: tuple[float, float] | None = Field(
+        default=None,
+        description="95% доверительный интервал для probability (Barrett et al., RAND 2025).",
     )
 
 

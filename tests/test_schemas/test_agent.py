@@ -107,6 +107,40 @@ def test_prediction_item_probability_above_1_rejected():
         PredictionItem(**_prediction_item_kwargs(probability=1.01))
 
 
+def test_prediction_item_temporal_fields_have_defaults():
+    """New temporal fields are Optional with defaults — backward compat."""
+    item = PredictionItem(**_prediction_item_kwargs())
+    assert item.predicted_date is None
+    assert item.uncertainty_days == 1.0
+    assert item.causal_dependencies == []
+    assert item.confidence_interval_95 is None
+
+
+def test_prediction_item_with_predicted_date():
+    from datetime import date
+
+    item = PredictionItem(
+        **_prediction_item_kwargs(
+            predicted_date=date(2026, 4, 1),
+            uncertainty_days=0.5,
+        )
+    )
+    assert item.predicted_date == date(2026, 4, 1)
+    assert item.uncertainty_days == 0.5
+
+
+def test_prediction_item_with_causal_dependencies():
+    item = PredictionItem(
+        **_prediction_item_kwargs(causal_dependencies=["thread_002", "thread_003"])
+    )
+    assert item.causal_dependencies == ["thread_002", "thread_003"]
+
+
+def test_prediction_item_with_confidence_interval():
+    item = PredictionItem(**_prediction_item_kwargs(confidence_interval_95=(0.55, 0.85)))
+    assert item.confidence_interval_95 == (0.55, 0.85)
+
+
 # ── PersonaAssessment ────────────────────────────────────────────────
 
 

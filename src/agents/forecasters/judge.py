@@ -4,7 +4,14 @@
 
 Контракт:
     Вход: PipelineContext с round2_assessments, mediator_synthesis.
-    Выход: AgentResult.data = {"ranked_predictions": list[RankedPrediction]}
+    Выход: AgentResult.data = {
+        "ranked_predictions": list[RankedPrediction],
+        "predicted_timeline": PredictedTimeline.model_dump(),
+    }
+
+Двухшаговый алгоритм (event-level prediction → headline selection):
+    Step 6a: _aggregate_timeline() → PredictedTimeline
+    Step 6b: _select_headlines(timeline) → list[RankedPrediction]
 """
 
 from __future__ import annotations
@@ -12,6 +19,8 @@ from __future__ import annotations
 import logging
 import math
 from collections import defaultdict
+from datetime import date as date_type
+from statistics import mean as stat_mean
 from typing import TYPE_CHECKING, Any
 
 from src.agents.base import BaseAgent
@@ -20,6 +29,12 @@ from src.schemas.headline import (
     ConfidenceLabel,
     DissentingView,
     RankedPrediction,
+)
+from src.schemas.timeline import (
+    HorizonBand,
+    PredictedTimeline,
+    TimelineEntry,
+    compute_horizon_band,
 )
 
 if TYPE_CHECKING:
@@ -72,6 +87,9 @@ class Judge(BaseAgent):
         self.b = bias_b
         if llm_client is not None:
             super().__init__(llm_client)
+        else:
+            # Partial init for unit testing pure math helpers
+            self.llm = None  # type: ignore[assignment]
 
     def validate_context(self, context: PipelineContext) -> str | None:
         if not context.round2_assessments and not context.round1_assessments:
@@ -79,16 +97,32 @@ class Judge(BaseAgent):
         return None
 
     async def execute(self, context: PipelineContext) -> dict[str, Any]:
-        """Агрегация R2 → ранжированные прогнозы.
+        """Two-step aggregation: event timeline → headline selection.
+
+        Step 6a: _aggregate_timeline() → PredictedTimeline (event-level)
+        Step 6b: _select_headlines() → list[RankedPrediction] (headline-level)
 
         Returns:
-            {"ranked_predictions": list[dict]} — RankedPrediction.model_dump() каждый.
+            {
+                "ranked_predictions": list[dict],
+                "predicted_timeline": dict,
+            }
         """
-        from src.agents.forecasters.personas import PERSONAS, PersonaID
-        from src.llm.prompts.forecasters.judge import JudgePrompt
-        from src.schemas.agent import MediatorSynthesis, PersonaAssessment, PredictionItem
+        assessments = self._parse_assessments(context)
+        timeline = self._aggregate_timeline(assessments, context)
+        ranked = self._select_headlines(timeline, assessments, context)
 
-        # Parse assessments: prefer R2, fallback to R1 (single-round presets)
+        return {
+            "ranked_predictions": [rp.model_dump() for rp in ranked],
+            "predicted_timeline": timeline.model_dump(),
+        }
+
+    # === Step 6a: Event-level aggregation ===
+
+    def _parse_assessments(self, context: PipelineContext) -> list[Any]:
+        """Parse R2 (or R1 fallback) assessments into PersonaAssessment objects."""
+        from src.schemas.agent import PersonaAssessment
+
         raw_assessments = context.round2_assessments or context.round1_assessments
         assessments: list[PersonaAssessment] = []
         for raw in raw_assessments:
@@ -96,11 +130,20 @@ class Judge(BaseAgent):
                 assessments.append(raw)
             elif isinstance(raw, dict):
                 assessments.append(PersonaAssessment.model_validate(raw))
+        return assessments
 
-        # Parse mediator synthesis (may be None for single-round presets)
-        synthesis = context.mediator_synthesis
-        if isinstance(synthesis, dict):
-            synthesis = MediatorSynthesis.model_validate(synthesis)
+    def _aggregate_timeline(
+        self,
+        assessments: list[Any],
+        context: PipelineContext,
+    ) -> PredictedTimeline:
+        """Aggregate persona predictions into event-level timeline.
+
+        Deterministic — no LLM call. Groups by event_thread_id, computes
+        weighted median, Platt scaling, date aggregation, causal dependencies.
+        """
+        from src.agents.forecasters.personas import PERSONAS, PersonaID
+        from src.schemas.agent import PredictionItem
 
         # Group predictions by event_thread_id
         event_data: dict[str, dict[str, PredictionItem]] = defaultdict(dict)
@@ -111,8 +154,8 @@ class Judge(BaseAgent):
         # Build market index from foresight signals (Phase 4)
         market_index = self._build_market_index(getattr(context, "foresight_signals", []))
 
-        # Build scored predictions for each event
-        scored: list[RankedPrediction] = []
+        # Build timeline entries
+        entries: list[TimelineEntry] = []
         for event_id, agent_preds in event_data.items():
             probs = [p.probability for p in agent_preds.values()]
             weights: list[float] = []
@@ -132,7 +175,6 @@ class Judge(BaseAgent):
                 probs.append(market_prob)
                 weights.append(market_weight)
 
-                # Alignment boost: personas agreeing with market get +0.04
                 for i, pred in enumerate(agent_preds.values()):
                     if abs(pred.probability - market_prob) < MARKET_ALIGNMENT_THRESHOLD:
                         weights[i] += MARKET_ALIGNMENT_BONUS
@@ -153,13 +195,6 @@ class Judge(BaseAgent):
             calibrated_prob = self._platt_scale(raw_prob)
             newsworthiness = self._mean_newsworthiness(agent_preds)
 
-            headline_score = self._headline_score(
-                calibrated_prob=calibrated_prob,
-                newsworthiness=newsworthiness,
-                saturation=0.0,
-                outlet_relevance=1.0,
-            )
-
             # Select best prediction text (closest to weighted median)
             best_pred = min(
                 agent_preds.values(),
@@ -170,7 +205,7 @@ class Judge(BaseAgent):
             evidence = self._collect_evidence(agent_preds)
             dissenting = self._collect_dissent(agent_preds, agreement, raw_prob)
 
-            # Add market evidence (regardless of whether it was used as persona)
+            # Market evidence
             if market:
                 evidence.append(
                     {
@@ -182,56 +217,153 @@ class Judge(BaseAgent):
                     }
                 )
 
-            scored.append(
-                RankedPrediction(
+            # Aggregate temporal fields (NEW)
+            pred_date, unc_days = self._aggregate_date(agent_preds, context.target_date)
+            causal_deps = self._aggregate_causal_deps(agent_preds)
+            scenario_types = list({p.scenario_type.value for p in agent_preds.values()})
+
+            entries.append(
+                TimelineEntry(
                     event_thread_id=event_id,
                     prediction=best_pred.prediction,
-                    calibrated_probability=calibrated_prob,
+                    aggregated_probability=calibrated_prob,
                     raw_probability=round(raw_prob, 3),
-                    headline_score=round(headline_score, 4),
+                    predicted_date=pred_date,
+                    uncertainty_days=round(unc_days, 1),
                     newsworthiness=round(newsworthiness, 3),
-                    confidence_label=self._prob_to_label(calibrated_prob),
                     agreement_level=agreement,
                     spread=round(spread, 3),
+                    confidence_label=self._prob_to_label(calibrated_prob),
                     reasoning=reasoning,
                     evidence_chain=evidence,
                     dissenting_views=dissenting,
+                    causal_dependencies=causal_deps,
+                    scenario_types=scenario_types,
                     is_wild_card=False,
-                    rank=0,
+                    persona_count=len(agent_preds),
                 )
             )
 
-        # Sort by headline_score descending
+        # Sort by predicted_date and assign temporal_order
+        entries.sort(key=lambda e: e.predicted_date)
+        for i, entry in enumerate(entries, 1):
+            entry.temporal_order = i
+
+        horizon_days = max(1, min((context.target_date - date_type.today()).days, 30))
+
+        return PredictedTimeline(
+            entries=entries,
+            target_date=context.target_date,
+            horizon_band=compute_horizon_band(horizon_days),
+            horizon_days=horizon_days,
+            total_events=len(event_data),
+        )
+
+    # === Step 6b: Headline selection ===
+
+    def _select_headlines(
+        self,
+        timeline: PredictedTimeline,
+        assessments: list[Any],
+        context: PipelineContext,
+    ) -> list[RankedPrediction]:
+        """Select top headlines from timeline and map to RankedPrediction."""
         top_n = context.pipeline_config.get("max_headlines", TOP_N_HEADLINES)
-        scored.sort(key=lambda p: p.headline_score, reverse=True)
+
+        # Compute headline_score with temporal proximity factor
+        scored: list[tuple[float, TimelineEntry]] = []
+        for entry in timeline.entries:
+            base_score = self._headline_score(
+                calibrated_prob=entry.aggregated_probability,
+                newsworthiness=entry.newsworthiness,
+                saturation=0.0,
+                outlet_relevance=1.0,
+            )
+            # Temporal proximity: closer to target_date scores higher
+            days_away = abs((entry.predicted_date - context.target_date).days)
+            temporal_factor = max(0.5, 1.0 - 0.05 * days_away)
+            final_score = round(base_score * temporal_factor, 4)
+            scored.append((final_score, entry))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
         top = scored[:top_n]
 
-        # Wild cards
-        wild_cards = self._select_wild_cards(scored, top, assessments)
-        final = top + wild_cards
+        # Map TimelineEntry → RankedPrediction
+        ranked: list[RankedPrediction] = []
+        for score, entry in top:
+            ranked.append(self._entry_to_ranked(entry, score))
 
-        for i, pred in enumerate(final, 1):
+        # Wild cards
+        top_ids = {rp.event_thread_id for rp in ranked}
+        wild_cards = self._select_wild_cards_from_timeline(timeline, top_ids, assessments)
+        ranked.extend(wild_cards)
+
+        for i, pred in enumerate(ranked, 1):
             pred.rank = i
 
-        # Optional LLM call for reasoning synthesis
-        prompt = JudgePrompt()
-        r2_dict = {a.persona_id: a for a in assessments}
-        messages = prompt.to_messages(
-            outlet_name=context.outlet,
-            target_date=str(context.target_date),
-            mediator_synthesis=synthesis,
-            round2_assessments=r2_dict,
-            schema_instruction=prompt.render_output_schema_instruction(),
-        )
-        response = await self.llm.complete(task="judge", messages=messages, json_mode=True)
-        self.track_llm_usage(
-            model=response.model,
-            tokens_in=response.tokens_in,
-            tokens_out=response.tokens_out,
-            cost_usd=response.cost_usd,
+        return ranked
+
+    @staticmethod
+    def _entry_to_ranked(entry: TimelineEntry, headline_score: float) -> RankedPrediction:
+        """Map TimelineEntry → RankedPrediction (lossless field-by-field)."""
+        return RankedPrediction(
+            event_thread_id=entry.event_thread_id,
+            prediction=entry.prediction,
+            calibrated_probability=entry.aggregated_probability,
+            raw_probability=entry.raw_probability,
+            headline_score=headline_score,
+            newsworthiness=entry.newsworthiness,
+            confidence_label=entry.confidence_label,
+            agreement_level=entry.agreement_level,
+            spread=entry.spread,
+            reasoning=entry.reasoning,
+            evidence_chain=entry.evidence_chain,
+            dissenting_views=entry.dissenting_views,
+            is_wild_card=entry.is_wild_card,
+            rank=0,
         )
 
-        return {"ranked_predictions": [rp.model_dump() for rp in final]}
+    # === Temporal aggregation helpers ===
+
+    @staticmethod
+    def _aggregate_date(
+        agent_preds: dict[str, Any],
+        target_date: date_type,
+    ) -> tuple[date_type, float]:
+        """Aggregate predicted_date from persona predictions.
+
+        Returns median date and mean uncertainty. Falls back to target_date
+        if no persona provided a predicted_date.
+        """
+        dates = [
+            p.predicted_date
+            for p in agent_preds.values()
+            if getattr(p, "predicted_date", None) is not None
+        ]
+        if not dates:
+            return target_date, 1.0
+
+        ordinals = sorted(d.toordinal() for d in dates)
+        median_ord = ordinals[len(ordinals) // 2]
+        median_date = date_type.fromordinal(median_ord)
+
+        uncertainties = [
+            p.uncertainty_days
+            for p in agent_preds.values()
+            if getattr(p, "predicted_date", None) is not None
+        ]
+        mean_unc = stat_mean(uncertainties) if uncertainties else 1.0
+
+        return median_date, mean_unc
+
+    @staticmethod
+    def _aggregate_causal_deps(agent_preds: dict[str, Any]) -> list[str]:
+        """Union of causal_dependencies from all personas."""
+        deps: set[str] = set()
+        for pred in agent_preds.values():
+            for dep in getattr(pred, "causal_dependencies", []):
+                deps.add(dep)
+        return sorted(deps)
 
     # === Pure math helpers ===
 
@@ -417,18 +549,15 @@ class Judge(BaseAgent):
                 )
         return dissenting
 
-    @staticmethod
-    def _select_wild_cards(
-        all_preds: list[RankedPrediction],
-        top_preds: list[RankedPrediction],
+    def _select_wild_cards_from_timeline(
+        self,
+        timeline: PredictedTimeline,
+        top_ids: set[str],
         assessments: list[Any],
     ) -> list[RankedPrediction]:
-        """Отобрать wild cards от Адвоката дьявол��."""
+        """Select wild cards from timeline (Devil's Advocate black_swan scenarios)."""
         from src.schemas.events import ScenarioType
 
-        top_ids = {p.event_thread_id for p in top_preds}
-
-        # Find black_swan events from devils_advocate
         devils_events: set[str] = set()
         for a in assessments:
             if a.persona_id == "devils_advocate":
@@ -437,14 +566,19 @@ class Judge(BaseAgent):
                         devils_events.add(pred.event_thread_id)
 
         wild_cards: list[RankedPrediction] = []
-        for pred in all_preds:
+        for entry in timeline.entries:
             if (
-                pred.event_thread_id not in top_ids
-                and pred.event_thread_id in devils_events
-                and pred.newsworthiness >= WILD_CARD_NEWSWORTHINESS_MIN
+                entry.event_thread_id not in top_ids
+                and entry.event_thread_id in devils_events
+                and entry.newsworthiness >= WILD_CARD_NEWSWORTHINESS_MIN
             ):
-                pred.is_wild_card = True
-                wild_cards.append(pred)
+                entry.is_wild_card = True
+                score = self._headline_score(
+                    entry.aggregated_probability, entry.newsworthiness, 0.0, 1.0,
+                )
+                rp = self._entry_to_ranked(entry, round(score, 4))
+                rp.is_wild_card = True
+                wild_cards.append(rp)
                 if len(wild_cards) >= MAX_WILD_CARDS:
                     break
         return wild_cards

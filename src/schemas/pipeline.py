@@ -131,7 +131,14 @@ class PipelineContext(BaseModel):
         description="List[PersonaAssessment]. Пересмотренные оценки после медиации.",
     )
 
-    # === Stage 6: Consensus & Selection ===
+    # === Stage 6a: Timeline (event-level predictions) ===
+
+    predicted_timeline: Any | None = Field(
+        default=None,
+        description="PredictedTimeline. Промежуточный event-level timeline до headline selection.",
+    )
+
+    # === Stage 6b: Consensus & Selection ===
 
     ranked_predictions: list[Any] = Field(
         default_factory=list,
@@ -227,7 +234,6 @@ class PipelineContext(BaseModel):
             "news_scout": "signals",
             "event_calendar": "scheduled_events",
             "outlet_historian": "outlet_profile",
-            "judge": "ranked_predictions",
             "framing": "framing_briefs",
             "style_replicator": "generated_headlines",
             "quality_gate": "final_predictions",
@@ -242,6 +248,18 @@ class PipelineContext(BaseModel):
                 current.extend(value)
             else:
                 setattr(self, slot, value)
+            return
+
+        # Judge returns two slots: ranked_predictions + predicted_timeline
+        if result.agent_name == "judge":
+            if "ranked_predictions" in result.data:
+                rp = result.data["ranked_predictions"]
+                if isinstance(rp, list):
+                    self.ranked_predictions.extend(rp)
+                else:
+                    self.ranked_predictions = rp
+            if "predicted_timeline" in result.data:
+                self.predicted_timeline = result.data["predicted_timeline"]
             return
 
         # ForesightCollector returns foresight_events + foresight_signals
