@@ -55,7 +55,7 @@ def test_settings_app_version():
     from src.config import Settings
 
     s = Settings()
-    assert s.app_version == "0.1.0"
+    assert s.app_version == "0.8.0"
 
 
 def test_settings_pipeline_tuning_fields():
