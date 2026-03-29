@@ -439,8 +439,8 @@ npm run css:dev     # Development: input.css → tailwind.css (watch mode)
 Фронтенд развёртывается вместе с бэком:
 - Шаблоны загружаются из `src/web/templates/`
 - CSS компилируется в `src/web/static/css/tailwind.css` (committed в repo)
-- JS загружается с `{{ url_for('static', path='js/form.js') }}`
-- В production: static файлы сервируются через nginx (кеширование с Cache-Control)
+- JS загружается с `{{ url_for('static', path='js/form.js') }}?v={{ app_version }}`
+- **Cache-busting**: все static URLs содержат `?v={{ app_version }}` (Jinja2 global из `Settings.app_version`). nginx: `Cache-Control: public` + `expires 7d`. При обновлении версии браузеры загружают свежие файлы.
 - Docker: `css-builder` stage выполняет `npm run css:build` при сборке образа
 
 **Локальная разработка:**

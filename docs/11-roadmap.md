@@ -6,7 +6,7 @@
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **1102 теста** зелёных. OutletResolver v0.8.0: динамическая резолюция СМИ через Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: CSRF middleware, IDOR protection, rate limiting, hardened secrets, 39/40 findings closed. Hardening (retry, SSRF, cron, monitoring) завершён. Foresight bugfix v0.5.1: Metaculus API migration, cache key fix, CLOB param fix. Delphi parse-error fix v0.5.2: personas PromptParseError fallback, orchestrator quorum 4→3. Market eval v0.6.0: resolved markets API, historical price, market_brier_comparison, news↔market correlation (Spearman/Granger).
+Все 18 ��гентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-кон��ейнера, TLS). Polymarket enrichment (4 фаз��): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **1105 тестов** з��лёных. OutletResolver v0.8.0: динамическая резолюция СМИ через Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: CSRF middleware, IDOR protection, rate limiting, hardened secrets, **40/40 findings closed** (M26 cache-busting done). Hardening (retry, SSRF, cron, monitoring) завершён. Foresight bugfix v0.5.1: Metaculus API migration, cache key fix, CLOB param fix. Delphi parse-error fix v0.5.2: personas PromptParseError fallback, orchestrator quorum 4→3. Market eval v0.6.0: resolved markets API, historical price, market_brier_comparison, news↔market correlation (Spearman/Granger).
 
 ### Реализованные компоненты
 
@@ -40,35 +40,9 @@
 | **Security Headers** | `nginx/security-headers.conf` — CSP, HSTS+preload, include pattern | DONE | — |
 | **OutletResolver** | wikidata_client, feed_discovery, outlet_resolver (3-layer: catalog → DB 30d → Wikidata + RSS) | DONE | 18 тестов |
 
-### Отложенные задачи (tech debt из security audit v0.7.1)
+### Закрытые отложенные задачи (security audit v0.7.1)
 
-#### M26: Cache busting для статических файлов
-
-**Проблема:** nginx отдаёт CSS/JS с `Cache-Control: public, immutable` и `expires 7d`. Файлы (`tailwind.css`, `form.js`, `results.js`) подключаются без content hash в URL:
-```html
-<link rel="stylesheet" href="/static/css/tailwind.css">
-```
-После обновления кода на сервере пользователи продолжают видеть старые CSS/JS до 7 дней. `immutable` означает, что браузер даже не отправляет conditional request (If-Modified-Since).
-
-**Затронутые файлы:**
-- `nginx/nginx.conf` — location `/static/` с `Cache-Control: public, immutable`
-- `src/web/templates/base.html` — подключение CSS/JS
-- `postcss.config.mjs` / `package.json` — build pipeline (если выбран вариант A)
-
-**Вариант A (полноценный, рекомендуется):** Content hash в имени файла.
-- `tailwind.css` → `tailwind.a1b2c3.css` при сборке
-- Требует: PostCSS plugin или npm-скрипт для rename + Jinja2 helper для resolve
-- `immutable` остаётся корректным (новый hash = новый URL)
-- Сложность: M (~1.5ч)
-
-**Вариант B (быстрый):** Query parameter `?v={{ app_version }}`.
-- `<link href="/static/css/tailwind.css?v=0.7.1">`
-- Убрать `immutable` из nginx (оставить `max-age=604800`)
-- Менять `app_version` в `src/config.py` при каждом релизе
-- Сложность: S (~15 мин)
-- Минус: `?v=` не работает с некоторыми CDN и `immutable`
-
-**Когда делать:** при следующем изменении CSS/JS или фронтенд-редизайне. Не блокирует текущую работу — CSS/JS меняются редко, а при деплое можно вручную очистить кэш (Ctrl+Shift+R или `curl -H "Cache-Control: no-cache"`).
+- **M26: Cache busting** — Реализован вариант B (`?v={{ app_version }}`). Все 7 static URLs версионированы. nginx: `immutable` убран, `public` + `expires 7d` оставлены. `app_version` в `src/config.py` обновляется при каждом релизе. **40/40 findings closed.**
 
 ### Единственный известный stub
 

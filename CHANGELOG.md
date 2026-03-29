@@ -18,15 +18,18 @@
   - Frontend: "Издание не найдено" hint + 2s warning при unresolved outlet
 - Telegram @Antopkin в футере сайта и README
 
+### Fixed
+- **Cache-busting (M26)**: все статические ассеты (CSS, JS, favicon) получили `?v=0.8.0` query param. nginx: убран `immutable` из `Cache-Control`. При деплое новой версии браузеры сразу загружают свежие файлы.
+
 ### Metrics
-- Тесты: 1096 → 1102
-- Коммиты: 5d417e4..e5f56ef (8 коммитов)
+- Тесты: 1096 → 1105
+- Security audit: 40/40 findings closed
 
 ---
 
 ## [0.7.1] - 2026-03-29
 
-Security audit + bugfixes + code quality. Полное ревью кодовой базы (10 параллельных агентов, 214 файлов) выявило 80+ находок. Закрыто 39/40.
+Security audit + bugfixes + code quality. Полное ревью кодовой базы (10 параллельных агентов, 214 файлов) выявило 80+ находок. Закрыто 40/40 (M26 cache-busting перенесён в v0.8.0).
 
 **Почему:** Production deploy (v0.7.0) содержал захардкоженные dev-секреты в дефолтах конфигурации, отсутствие CSRF-защиты, IDOR на прогнозах, блокирующий DNS в async-контексте, race condition в бюджет-трекере и рассинхронизацию анонимизации в медиаторе Дельфи. Все critical/high security и correctness issues закрыты перед следующим деплоем.
 
