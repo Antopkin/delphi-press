@@ -242,6 +242,13 @@
       --color-text-muted: oklch(58% 0.010 250);
       --color-primary-focus: oklch(55% 0.20 250 / 20%);
     }
+    :root:not(.light) input,
+    :root:not(.light) select,
+    :root:not(.light) textarea {
+      background-color: var(--color-surface-1);
+      color: var(--color-text);
+      border-color: var(--color-border);
+    }
   }
   :root.dark {
     --color-surface-0: oklch(13% 0.005 250);
@@ -252,6 +259,13 @@
     --color-text-heading: oklch(95% 0.008 250);
     --color-text-muted: oklch(58% 0.010 250);
     --color-primary-focus: oklch(55% 0.20 250 / 20%);
+  }
+  :root.dark input,
+  :root.dark select,
+  :root.dark textarea {
+    background-color: var(--color-surface-1);
+    color: var(--color-text);
+    border-color: var(--color-border);
   }
 
   /* Aliases for settings.js inline style references */
