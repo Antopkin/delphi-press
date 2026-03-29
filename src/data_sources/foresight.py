@@ -24,6 +24,14 @@ from src.utils.retry import retry_with_backoff
 logger = logging.getLogger(__name__)
 
 _USER_AGENT = "DelphiPress/1.0 (+https://delphi.antopkin.ru/about)"
+_MAX_CACHE_SIZE = 200
+
+
+def _evict_oldest(cache: dict[str, tuple[float, Any]], max_size: int = _MAX_CACHE_SIZE) -> None:
+    """Remove oldest entries when cache exceeds max_size."""
+    while len(cache) > max_size:
+        oldest_key = min(cache, key=lambda k: cache[k][0])
+        del cache[oldest_key]
 
 
 class MetaculusClient:
@@ -143,6 +151,7 @@ class MetaculusClient:
             )
 
         self._cache[cache_key] = (time.monotonic(), results)
+        _evict_oldest(self._cache)
         return results
 
     async def close(self) -> None:
@@ -282,6 +291,7 @@ class PolymarketClient:
             )
 
         self._cache[cache_key] = (time.monotonic(), results)
+        _evict_oldest(self._cache)
         return results
 
     async def fetch_price_history(
@@ -421,6 +431,7 @@ class PolymarketClient:
             )
 
         self._cache[cache_key] = (time.monotonic(), results)
+        _evict_oldest(self._cache)
         return results
 
     async def fetch_historical_price(
@@ -644,6 +655,7 @@ class GdeltDocClient:
             )
 
         self._cache[cache_key] = (time.monotonic(), results)
+        _evict_oldest(self._cache)
         return results
 
     async def fetch_articles(
