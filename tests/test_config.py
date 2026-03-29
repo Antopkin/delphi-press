@@ -91,7 +91,7 @@ def test_settings_cors_origins():
     from src.config import Settings
 
     s = Settings()
-    assert s.cors_origins == ["*"]
+    assert s.cors_origins == ["http://localhost:8000"]
 
 
 # ── Validators ──────────────────────────────────────────────────────

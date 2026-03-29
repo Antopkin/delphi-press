@@ -44,6 +44,7 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+      - DELPHI_PRODUCTION=1
     depends_on:
       redis:
         condition: service_healthy
@@ -82,6 +83,7 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+      - DELPHI_PRODUCTION=1
     depends_on:
       redis:
         condition: service_healthy

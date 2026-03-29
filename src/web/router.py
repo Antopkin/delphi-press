@@ -38,13 +38,28 @@ templates = Jinja2Templates(directory="src/web/templates")
 web_router = router
 
 
+def _safe_redirect_url(url: str) -> str:
+    """Sanitize redirect URL to prevent open redirect attacks.
+
+    Only allows relative paths starting with /. Rejects protocol-relative
+    URLs (//evil.com), absolute URLs, and paths with embedded newlines.
+    """
+    if not url or not url.startswith("/") or url.startswith("//") or "\n" in url or "\r" in url:
+        return "/"
+    return url
+
+
 def _set_auth_cookie(response: RedirectResponse, token: str) -> RedirectResponse:
     """Set JWT token as HttpOnly cookie."""
+    from src.config import get_settings
+
+    settings = get_settings()
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
         samesite="lax",
+        secure=not settings.debug,
         path="/",
         max_age=7 * 24 * 3600,
     )
@@ -99,7 +114,7 @@ async def login_submit(
         )
 
     token = create_access_token(user.id, settings.secret_key, settings.jwt_expire_days)
-    response = RedirectResponse(url=next, status_code=302)
+    response = RedirectResponse(url=_safe_redirect_url(next), status_code=302)
     return _set_auth_cookie(response, token)
 
 

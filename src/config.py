@@ -8,11 +8,12 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import SettingsConfigDict
 
 from src.llm.config import LLMConfig
@@ -186,9 +187,45 @@ class Settings(LLMConfig):
 
     # === CORS ===
 
-    cors_origins: list[str] = Field(default=["*"])
+    cors_origins: list[str] = Field(
+        default=["http://localhost:8000"],
+        description="Allowed CORS origins. Set explicitly in production.",
+    )
 
     # === Validators ===
+
+    _INSECURE_SECRET_KEY = "dev-insecure-key-change-in-production-32ch"
+    _INSECURE_FERNET_KEY = "3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o="
+
+    @model_validator(mode="after")
+    def _reject_insecure_defaults_in_production(self) -> Settings:
+        """Fail-fast if production runs with hardcoded dev secrets.
+
+        Only enforced when DEBUG=False AND running in Docker (DELPHI_PRODUCTION=1).
+        This avoids breaking local dev and test environments while catching
+        misconfigured production deployments.
+        """
+        if self.debug or not os.environ.get("DELPHI_PRODUCTION"):
+            return self
+        if self.secret_key == self._INSECURE_SECRET_KEY:
+            msg = (
+                "SECRET_KEY is set to the insecure dev default. "
+                "Set a strong SECRET_KEY in .env for production (min 32 chars)."
+            )
+            raise ValueError(msg)
+        if self.fernet_key == self._INSECURE_FERNET_KEY:
+            msg = (
+                "FERNET_KEY is set to the insecure dev default. "
+                "Generate a new key: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+            )
+            raise ValueError(msg)
+        if ["*"] == self.cors_origins:
+            msg = (
+                "CORS_ORIGINS=['*'] is not allowed in production. "
+                "Set explicit origins: CORS_ORIGINS='[\"https://yourdomain.com\"]'"
+            )
+            raise ValueError(msg)
+        return self
 
     @field_validator("log_level")
     @classmethod

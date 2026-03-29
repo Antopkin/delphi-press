@@ -286,6 +286,23 @@ async def run_prediction_task(
 
         await session.commit()
 
+    # --- 7. Cleanup HTTP clients ---
+    for key in ("scraper", "metaculus_client", "polymarket_client", "gdelt_client"):
+        client = collector_deps.get(key)
+        if client and hasattr(client, "close"):
+            try:
+                await client.close()
+            except Exception:
+                logger.warning("Failed to close %s", key, exc_info=True)
+    try:
+        await web_search.close()
+    except Exception:
+        logger.warning("Failed to close web_search", exc_info=True)
+    try:
+        await rss_fetcher.close()
+    except Exception:
+        logger.warning("Failed to close rss_fetcher", exc_info=True)
+
     logger.info(
         "Prediction %s finished: status=%s, duration=%d ms",
         prediction_id,

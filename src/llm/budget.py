@@ -37,8 +37,9 @@ class BudgetTracker:
 
     async def check_budget(self, estimated_cost: float) -> None:
         """Проверить бюджет. Raises LLMBudgetExceededError если не хватает."""
-        if estimated_cost > self.remaining:
-            raise LLMBudgetExceededError(self._budget, self.spent)
+        async with self._lock:
+            if estimated_cost > self.remaining:
+                raise LLMBudgetExceededError(self._budget, self.spent)
 
     def summary_by_stage(self) -> dict[str, float]:
         """Группировка расходов по стадиям."""

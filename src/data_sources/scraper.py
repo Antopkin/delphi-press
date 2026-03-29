@@ -332,11 +332,18 @@ class TrafilaturaScraper:
 
 
 def _parse_trafilatura_date(raw: str | None) -> datetime | None:
-    """Parse date string from trafilatura metadata (typically YYYY-MM-DD)."""
+    """Parse date string from trafilatura metadata (typically YYYY-MM-DD).
+
+    Uses astimezone(UTC) for tz-aware inputs to correctly convert,
+    and replace(tzinfo=UTC) only for naive inputs.
+    """
     if not raw:
         return None
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00")).replace(tzinfo=UTC)
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            return dt.astimezone(UTC)
+        return dt.replace(tzinfo=UTC)
     except (ValueError, TypeError):
         pass
     # Trafilatura often returns YYYY-MM-DD without timezone

@@ -65,8 +65,11 @@ class Mediator(BaseAgent):
             elif isinstance(raw, dict):
                 assessments.append(PersonaAssessment.model_validate(raw))
 
+        # Build a single label map used by all anonymization methods
+        label_map = self._build_label_map(assessments)
+
         # Step 1: Algorithmic classification
-        consensus_areas, disputes, gaps = self._classify_events(assessments)
+        consensus_areas, disputes, gaps = self._classify_events(assessments, label_map)
 
         # Step 2: Cross-impact check
         cross_flags = self._check_cross_impacts(assessments, disputes)
@@ -80,7 +83,7 @@ class Mediator(BaseAgent):
         horizon_days = max(1, min((context.target_date - date_type.today()).days, 7))
         horizon_band = compute_horizon_band(horizon_days).value
 
-        anonymized = self._anonymize_assessments(assessments)
+        anonymized = self._anonymize_assessments(assessments, label_map)
         prompt = MediatorPrompt()
         messages = prompt.to_messages(
             outlet_name=context.outlet,
@@ -120,7 +123,7 @@ class Mediator(BaseAgent):
     # === Algorithmic helpers ===
 
     def _classify_events(
-        self, assessments: list[PersonaAssessment]
+        self, assessments: list[PersonaAssessment], label_map: dict[str, str]
     ) -> tuple[list[ConsensusArea], list[DisputeArea], list[GapArea]]:
         """Group predictions by event, compute spreads, classify."""
         event_groups: dict[str, list[PredictionItem]] = defaultdict(list)
@@ -162,7 +165,7 @@ class Mediator(BaseAgent):
                     )
                 )
             else:
-                positions = self._build_positions(event_id, assessments)
+                positions = self._build_positions(event_id, assessments, label_map)
                 disputes.append(
                     DisputeArea(
                         event_thread_id=event_id,
@@ -175,31 +178,41 @@ class Mediator(BaseAgent):
 
         return consensus_areas, disputes, gaps
 
-    def _anonymize_assessments(self, assessments: list[PersonaAssessment]) -> dict[str, dict]:
+    def _build_label_map(self, assessments: list[PersonaAssessment]) -> dict[str, str]:
+        """Create a stable persona_id → 'Expert A/B/C...' mapping.
+
+        Uses a deterministic seed based on sorted persona IDs so the mapping
+        is shuffled (hides persona order) but consistent across all methods.
+        """
+        labels = [f"Expert {c}" for c in string.ascii_uppercase[: len(assessments)]]
+        seed = hash(tuple(sorted(a.persona_id for a in assessments)))
+        rng = random.Random(seed)
+        rng.shuffle(labels)
+        return {a.persona_id: label for label, a in zip(labels, assessments)}
+
+    def _anonymize_assessments(
+        self, assessments: list[PersonaAssessment], label_map: dict[str, str]
+    ) -> dict[str, dict]:
         """Replace persona_id with anonymous Expert A, B, C... labels.
 
         Returns dicts (not Pydantic models) to strip persona_id from output.
         """
-        labels = [f"Expert {c}" for c in string.ascii_uppercase[: len(assessments)]]
-        rng = random.Random()
-        rng.shuffle(labels)
-
         anonymized: dict[str, dict] = {}
-        for label, assessment in zip(labels, assessments):
+        for assessment in assessments:
+            label = label_map[assessment.persona_id]
             data = assessment.model_dump()
             data.pop("persona_id", None)
             anonymized[label] = data
         return anonymized
 
     def _build_positions(
-        self, event_id: str, assessments: list[PersonaAssessment]
+        self, event_id: str, assessments: list[PersonaAssessment], label_map: dict[str, str]
     ) -> list[AnonymizedPosition]:
         """Build anonymized positions for a disputed event."""
-        labels_iter = iter(string.ascii_uppercase)
         positions: list[AnonymizedPosition] = []
 
         for assessment in assessments:
-            label = f"Expert {next(labels_iter)}"
+            label = label_map[assessment.persona_id]
             for pred in assessment.predictions:
                 if pred.event_thread_id == event_id:
                     positions.append(

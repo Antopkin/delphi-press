@@ -35,7 +35,8 @@ class TestMediatorClassification:
             )
             for i in range(5)
         ]
-        consensus, disputes, gaps = mediator._classify_events(assessments)
+        label_map = mediator._build_label_map(assessments)
+        consensus, disputes, gaps = mediator._classify_events(assessments, label_map)
         consensus_ids = [c.event_thread_id for c in consensus]
         assert "thread_0001" in consensus_ids
 
@@ -50,7 +51,8 @@ class TestMediatorClassification:
             )
             for i in range(5)
         ]
-        consensus, disputes, gaps = mediator._classify_events(assessments)
+        label_map = mediator._build_label_map(assessments)
+        consensus, disputes, gaps = mediator._classify_events(assessments, label_map)
         dispute_ids = [d.event_thread_id for d in disputes]
         assert "thread_0001" in dispute_ids
 
@@ -90,7 +92,8 @@ class TestMediatorClassification:
                 predictions=self._make_5_preds("thread_common", probability=0.51),
             ),
         ]
-        consensus, disputes, gaps = mediator._classify_events(assessments)
+        label_map = mediator._build_label_map(assessments)
+        consensus, disputes, gaps = mediator._classify_events(assessments, label_map)
         gap_ids = [g.event_thread_id for g in gaps]
         assert "thread_rare" in gap_ids
 
@@ -103,7 +106,8 @@ class TestMediatorAnonymize:
 
         mediator = Mediator.__new__(Mediator)
         assessments = [make_persona_assessment(f"persona_{i}") for i in range(3)]
-        anonymized = mediator._anonymize_assessments(assessments)
+        label_map = mediator._build_label_map(assessments)
+        anonymized = mediator._anonymize_assessments(assessments, label_map)
         labels = list(anonymized.keys())
         assert len(labels) == 3
         for label in labels:
@@ -117,7 +121,8 @@ class TestMediatorAnonymize:
 
         mediator = Mediator.__new__(Mediator)
         assessments = [make_persona_assessment("secret_persona")]  # uses default 5 preds
-        anonymized = mediator._anonymize_assessments(assessments)
+        label_map = mediator._build_label_map(assessments)
+        anonymized = mediator._anonymize_assessments(assessments, label_map)
         serialized = json.dumps(anonymized, default=str)
         assert "secret_persona" not in serialized
 
