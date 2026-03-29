@@ -526,6 +526,25 @@ class TestCSRF:
         # Should NOT be 403. JSON is exempt from CSRF.
         assert resp.status_code != 403
 
+    async def test_register_with_csrf_preserves_form_body(self, csrf_client):
+        """CSRF middleware must not consume request body — Form(...) must still work."""
+        # Get CSRF token via GET
+        get_resp = await csrf_client.get("/register")
+        csrf_token = get_resp.cookies.get("csrf_token", "")
+
+        resp = await csrf_client.post(
+            "/register",
+            data={
+                "email": f"csrf-reg-{uuid.uuid4().hex[:6]}@test.com",
+                "password": "securepass123",
+                "csrf_token": csrf_token,
+            },
+            cookies={"csrf_token": csrf_token},
+            follow_redirects=False,
+        )
+        # Must redirect (302) on success, NOT return 422 "Field required"
+        assert resp.status_code == 302, f"Expected redirect, got {resp.status_code}"
+
 
 # ── Static Asset Cache-Busting (M26) ─────────────────────────────
 

@@ -47,10 +47,14 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 content={"detail": "CSRF cookie missing. Reload the page."},
             )
 
-        # Read form field
-        form = await request.form()
-        form_token = form.get(_FIELD_NAME, "")
-        await request.close()  # release form body
+        # Read raw body bytes (cached in request._body for downstream handlers).
+        # Must NOT use request.form() here — BaseHTTPMiddleware would consume
+        # the body stream, making Form(...) in route handlers return empty.
+        from urllib.parse import parse_qs
+
+        body = await request.body()
+        params = parse_qs(body.decode("utf-8", errors="replace"))
+        form_token = params.get(_FIELD_NAME, [""])[0]
 
         if not secrets.compare_digest(str(cookie_token), str(form_token)):
             return JSONResponse(
