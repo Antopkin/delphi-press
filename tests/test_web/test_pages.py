@@ -542,3 +542,14 @@ class TestStaticAssetCacheBusting:
         resp = await web_client.get("/")
         assert resp.status_code == 200
         assert "form.js?v=" in resp.text
+
+    async def test_version_param_matches_app_version(self, web_client):
+        """Version in ?v= must match Settings().app_version (synced with CHANGELOG)."""
+        from src.config import Settings
+
+        resp = await web_client.get("/")
+        version = Settings().app_version
+        assert f"tailwind.css?v={version}" in resp.text
+        assert f"form.js?v={version}" in resp.text
+        # Version must not be the placeholder "0.1.0"
+        assert version != "0.1.0", f"app_version still at placeholder {version}"
