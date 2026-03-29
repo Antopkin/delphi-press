@@ -16,14 +16,11 @@ class LLMConfig(BaseSettings):
 
     # Провайдеры
     openrouter_api_key: str = ""
-    yandex_folder_id: str = ""
-    yandex_api_key: str = ""
 
     # Дефолтные модели
     default_model_cheap: str = "google/gemini-3.1-flash-lite-preview"
     default_model_reasoning: str = "anthropic/claude-opus-4.6"
     default_model_strong: str = "anthropic/claude-opus-4.6"
-    default_model_russian: str = "yandexgpt"
 
     # Retry
     llm_max_retries: int = 3

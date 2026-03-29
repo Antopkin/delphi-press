@@ -6,15 +6,11 @@ from src.llm.config import LLMConfig
 class TestLLMConfig:
     def test_defaults(self, monkeypatch):
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-        monkeypatch.delenv("YANDEX_API_KEY", raising=False)
-        monkeypatch.delenv("YANDEX_FOLDER_ID", raising=False)
         config = LLMConfig()
         assert config.openrouter_api_key == ""
-        assert config.yandex_api_key == ""
         assert config.default_model_cheap == "google/gemini-3.1-flash-lite-preview"
         assert config.default_model_reasoning == "anthropic/claude-opus-4.6"
         assert config.default_model_strong == "anthropic/claude-opus-4.6"
-        assert config.default_model_russian == "yandexgpt"
         assert config.llm_max_retries == 3
         assert config.max_budget_usd == 50.0
         assert config.budget_warning_threshold == 0.8
@@ -31,3 +27,10 @@ class TestLLMConfig:
         assert config.llm_retry_base_delay == 1.0
         assert config.llm_retry_max_delay == 30.0
         assert config.llm_timeout_seconds == 120.0
+
+    def test_no_yandex_provider_in_config(self):
+        """LLMConfig must not have yandex-related fields (OpenRouter-only)."""
+        config = LLMConfig()
+        assert not hasattr(config, "yandex_folder_id")
+        assert not hasattr(config, "yandex_api_key")
+        assert not hasattr(config, "default_model_russian")
