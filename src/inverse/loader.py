@@ -26,8 +26,10 @@ from src.inverse.schemas import TradeRecord
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "load_trades_csv",
+    "load_holders_from_dataset",
+    "load_market_prices",
     "load_resolutions_csv",
+    "load_trades_csv",
 ]
 
 # ---------------------------------------------------------------------------
@@ -214,7 +216,8 @@ def _detect_market_columns(path: Path) -> dict[str, str]:
     header_lower = {col.strip().lower(): col.strip() for col in header}
 
     cmap: dict[str, str] = {}
-    for candidate in ("id", "market_id", "condition_id"):
+    # Prefer conditionId over id — conditionId matches holder NDJSON data
+    for candidate in ("conditionid", "condition_id", "id", "market_id"):
         if candidate in header_lower:
             cmap["market_id"] = header_lower[candidate]
             break
@@ -330,17 +333,20 @@ def _parse_resolution_row(
         return None
 
     # Check if market is closed/resolved
-    active_col = cmap.get("active")
+    # Priority: closed=True means resolved (regardless of active flag).
+    # On Polymarket, active=True can coexist with closed=True.
     closed_col = cmap.get("closed")
-    if active_col:
-        active_val = row.get(active_col, "").strip().lower()
-        if active_val in ("true", "1", "yes"):
-            return None  # Still active
-
     if closed_col:
         closed_val = row.get(closed_col, "").strip().lower()
         if closed_val in ("false", "0", "no"):
             return None  # Not closed yet
+    else:
+        # Fallback: check active only if closed column is missing
+        active_col = cmap.get("active")
+        if active_col:
+            active_val = row.get(active_col, "").strip().lower()
+            if active_val in ("true", "1", "yes"):
+                return None  # Still active
 
     # Parse outcomePrices — JSON-stringified array: '["1.0", "0.0"]' or '[1.0, 0.0]'
     raw_prices = row.get(outcome_col, "").strip()
@@ -368,3 +374,201 @@ def _parse_resolution_row(
 
     # Ambiguous (e.g. 0.65) — market not clearly resolved
     return None
+
+
+# ---------------------------------------------------------------------------
+# Market prices loader (for holder enrichment)
+# ---------------------------------------------------------------------------
+
+
+def load_market_prices(path: Path) -> dict[str, float]:
+    """Load last trade prices from markets CSV.
+
+    Returns mapping conditionId → YES probability (lastTradePrice or outcomePrices[0]).
+    Used to enrich holder positions with realistic price data.
+
+    Args:
+        path: Path to markets CSV (ismetsemedov dataset).
+
+    Returns:
+        Dict mapping conditionId → float price in [0, 1].
+    """
+    path = Path(path)
+    if not path.exists():
+        return {}
+
+    cmap = _detect_market_columns(path)
+    market_id_col = cmap.get("market_id")
+    if not market_id_col:
+        return {}
+
+    prices: dict[str, float] = {}
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            mid = row.get(market_id_col, "").strip()
+            if not mid:
+                continue
+
+            # Try lastTradePrice first, then outcomePrices[0]
+            ltp = row.get("lastTradePrice", "").strip()
+            if ltp:
+                try:
+                    p = float(ltp)
+                    if 0.0 < p < 1.0:
+                        prices[mid] = p
+                        continue
+                except ValueError:
+                    pass
+
+            # Fallback to outcomePrices
+            outcome_col = cmap.get("outcome_prices")
+            if outcome_col:
+                raw = row.get(outcome_col, "").strip()
+                if raw:
+                    try:
+                        parsed = json.loads(raw)
+                        p = float(parsed[0])
+                        if 0.0 < p < 1.0:
+                            prices[mid] = p
+                    except (json.JSONDecodeError, ValueError, IndexError, TypeError):
+                        pass
+
+    logger.info("Loaded prices for %d markets from %s", len(prices), path.name)
+    return prices
+
+
+# ---------------------------------------------------------------------------
+# Holder NDJSON loader (sandeepkumarfromin Polymarket_dataset)
+# ---------------------------------------------------------------------------
+
+
+def load_holders_from_dataset(
+    dataset_dir: Path,
+    *,
+    market_prices: dict[str, float] | None = None,
+    min_amount: float = 0.0,
+) -> list[TradeRecord]:
+    """Load holder positions from Polymarket_dataset NDJSON files.
+
+    Walks market=0x.../holder/*.ndjson directories and converts each
+    holder position into a TradeRecord.
+
+    Args:
+        dataset_dir: Root of Polymarket_dataset (contains market=0x... dirs).
+        market_prices: Optional mapping conditionId → last market price (YES).
+            Used as trade price. If not provided, defaults to 0.5.
+        min_amount: Minimum holder amount to include.
+
+    Returns:
+        List of TradeRecord objects (one per holder per token per market).
+
+    Raises:
+        FileNotFoundError: If dataset_dir does not exist.
+    """
+    dataset_dir = Path(dataset_dir)
+    if not dataset_dir.exists():
+        msg = f"Dataset directory not found: {dataset_dir}"
+        raise FileNotFoundError(msg)
+
+    records: list[TradeRecord] = []
+    market_dirs = [d for d in dataset_dir.iterdir() if d.is_dir() and d.name.startswith("market=")]
+
+    for market_dir in market_dirs:
+        holder_dir = market_dir / "holder"
+        if not holder_dir.exists():
+            continue
+
+        for ndjson_file in holder_dir.iterdir():
+            if ndjson_file.suffix != ".ndjson":
+                continue
+
+            parsed = _parse_holder_ndjson(
+                ndjson_file,
+                market_prices=market_prices,
+                min_amount=min_amount,
+            )
+            records.extend(parsed)
+
+    logger.info(
+        "Loaded %d holder positions from %d markets in %s",
+        len(records),
+        len(market_dirs),
+        dataset_dir.name,
+    )
+    return records
+
+
+def _parse_holder_ndjson(
+    path: Path,
+    *,
+    market_prices: dict[str, float] | None = None,
+    min_amount: float = 0.0,
+) -> list[TradeRecord]:
+    """Parse a single holder NDJSON file.
+
+    Each file contains space-separated JSON objects (not newline-separated).
+    Each object has: conditionId, token_id, holders[].
+    Each holder has: proxyWallet, amount, outcomeIndex, name.
+    """
+    raw = path.read_text(encoding="utf-8")
+    if not raw.strip():
+        return []
+
+    records: list[TradeRecord] = []
+    decoder = json.JSONDecoder()
+    pos = 0
+    length = len(raw)
+
+    while pos < length:
+        # Skip whitespace
+        while pos < length and raw[pos] in " \n\r\t":
+            pos += 1
+        if pos >= length:
+            break
+
+        try:
+            obj, end = decoder.raw_decode(raw, pos)
+            pos = end
+        except json.JSONDecodeError:
+            break
+
+        condition_id = obj.get("conditionId", "")
+        capture_ts = obj.get("capture_ts_ms")
+        timestamp = (
+            datetime.fromtimestamp(capture_ts / 1000, tz=timezone.utc)
+            if capture_ts
+            else datetime(2026, 1, 1, tzinfo=timezone.utc)
+        )
+
+        # Default price: use market_prices if available, else 0.5
+        default_price = 0.5
+        if market_prices and condition_id in market_prices:
+            default_price = market_prices[condition_id]
+
+        for holder in obj.get("holders", []):
+            wallet = holder.get("proxyWallet", "").strip()
+            amount = holder.get("amount", 0)
+            outcome_index = holder.get("outcomeIndex", 0)
+
+            if not wallet or amount <= min_amount:
+                continue
+
+            side = "YES" if outcome_index == 0 else "NO"
+            # For holders: price = confidence proxy.
+            # YES holder → implied YES probability = default_price
+            # NO holder → implied YES probability = 1 - default_price
+            price = max(0.01, min(0.99, default_price if side == "YES" else (1.0 - default_price)))
+
+            records.append(
+                TradeRecord(
+                    user_id=wallet,
+                    market_id=condition_id,
+                    side=side,
+                    price=price,
+                    size=float(amount),
+                    timestamp=timestamp,
+                )
+            )
+
+    return records

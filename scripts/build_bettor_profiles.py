@@ -31,11 +31,16 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build Polymarket bettor profiles.")
-    parser.add_argument(
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument(
         "--trades",
         type=Path,
-        required=True,
-        help="Path to trades CSV (e.g. sandeepkumarfromin dataset)",
+        help="Path to trades CSV (flat CSV with user_id, market_id, side, price, size, timestamp)",
+    )
+    source.add_argument(
+        "--dataset-dir",
+        type=Path,
+        help="Path to Polymarket_dataset directory (with market=0x.../holder/*.ndjson)",
     )
     parser.add_argument(
         "--markets",
@@ -63,10 +68,24 @@ def main() -> None:
     )
 
     # Step 1: Load data
-    logger.info("Loading trades from %s ...", args.trades)
     t0 = time.perf_counter()
-    trades = load_trades_csv(args.trades, min_size=args.min_size, max_rows=args.max_rows)
-    logger.info("Loaded %d trades in %.1fs", len(trades), time.perf_counter() - t0)
+    if args.dataset_dir:
+        from src.inverse.loader import load_holders_from_dataset, load_market_prices
+
+        logger.info("Loading market prices from %s ...", args.markets)
+        market_prices = load_market_prices(args.markets)
+        logger.info("Loaded prices for %d markets", len(market_prices))
+
+        logger.info("Loading holders from %s ...", args.dataset_dir)
+        trades = load_holders_from_dataset(
+            args.dataset_dir,
+            market_prices=market_prices,
+            min_amount=args.min_size,
+        )
+    else:
+        logger.info("Loading trades from %s ...", args.trades)
+        trades = load_trades_csv(args.trades, min_size=args.min_size, max_rows=args.max_rows)
+    logger.info("Loaded %d records in %.1fs", len(trades), time.perf_counter() - t0)
 
     logger.info("Loading resolutions from %s ...", args.markets)
     resolutions = load_resolutions_csv(args.markets)
