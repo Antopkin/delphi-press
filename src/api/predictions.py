@@ -37,6 +37,7 @@ class CreatePredictionRequest(BaseModel):
     target_date: date = Field(...)
     preset: str = Field(default="full")
     api_key: str | None = Field(default=None)
+    outlet_url: str | None = Field(default=None)
 
     @field_validator("preset")
     @classmethod
@@ -176,6 +177,8 @@ async def create_prediction(
 
         resolver = OutletResolver(catalog=OutletsCatalog(), session_factory=session_factory)
         info = await resolver.resolve(body.outlet.strip())
+        if not info and body.outlet_url:
+            info = await resolver.resolve_by_url(body.outlet_url.strip())
         if info:
             outlet_resolved = True
             outlet_language = info.language
