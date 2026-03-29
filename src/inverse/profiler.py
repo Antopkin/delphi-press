@@ -64,6 +64,8 @@ def build_bettor_profiles(
     recency_half_life_days: int = RECENCY_HALF_LIFE_DAYS,
     reference_time: datetime | None = None,
     shrinkage_strength: int = SHRINKAGE_PRIOR_STRENGTH,
+    as_of: datetime | None = None,
+    resolutions_with_dates: dict[str, tuple[bool, datetime]] | None = None,
 ) -> tuple[list[BettorProfile], ProfileSummary]:
     """Build accuracy profiles for all bettors with sufficient history.
 
@@ -80,14 +82,39 @@ def build_bettor_profiles(
         noise_percentile: Fraction below which users are classified as NOISE.
         recency_half_life_days: Exponential decay half-life for recency weight.
         reference_time: Reference time for recency calculation (default: now UTC).
+            When as_of is provided and reference_time is not, defaults to as_of.
         shrinkage_strength: Bayesian prior strength (pseudo-observations).
             0 disables shrinkage (use raw BS).
+        as_of: Temporal cutoff for walk-forward validation. When set:
+            - Only trades with timestamp < as_of are included.
+            - Only resolutions before as_of are used (if resolutions_with_dates provided).
+            - reference_time defaults to as_of (not now).
+        resolutions_with_dates: Optional mapping market_id → (outcome, resolution_date).
+            Used with as_of to filter out future resolutions.
 
     Returns:
         Tuple of (profiles, summary). Profiles are sorted by brier_score ascending.
     """
+    # as_of defaults reference_time when not explicitly set
+    if as_of is not None and reference_time is None:
+        reference_time = as_of
+
     if reference_time is None:
         reference_time = datetime.now(tz=timezone.utc)
+
+    # Temporal filtering: only trades before as_of
+    if as_of is not None:
+        trades = [t for t in trades if t.timestamp < as_of]
+
+    # Resolution filtering: only markets resolved before as_of
+    if as_of is not None and resolutions_with_dates is not None:
+        resolutions = {
+            mid: outcome
+            for mid, (outcome, res_date) in resolutions_with_dates.items()
+            if res_date < as_of
+        }
+    elif resolutions_with_dates is not None:
+        resolutions = {mid: outcome for mid, (outcome, _) in resolutions_with_dates.items()}
 
     # Step 1: Group trades by user
     user_trades: dict[str, list[TradeRecord]] = defaultdict(list)

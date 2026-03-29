@@ -30,6 +30,7 @@ __all__ = [
     "load_market_horizons",
     "load_market_prices",
     "load_resolutions_csv",
+    "load_resolutions_with_dates",
     "load_trades_csv",
 ]
 
@@ -151,6 +152,66 @@ def load_resolutions_csv(
 
     logger.info("Loaded %d resolved markets from %s", len(resolutions), path.name)
     return resolutions
+
+
+def load_resolutions_with_dates(
+    path: Path,
+    *,
+    column_map: dict[str, str] | None = None,
+) -> dict[str, tuple[bool, datetime]]:
+    """Load market resolutions with resolution timestamps.
+
+    Like load_resolutions_csv but includes the resolution date for each market.
+    Required for walk-forward validation to filter resolutions by as_of cutoff.
+
+    Args:
+        path: Path to CSV with market data.
+        column_map: Maps logical names to CSV columns.
+
+    Returns:
+        Dict mapping market_id → (resolved_yes, resolution_date).
+    """
+    path = Path(path)
+    if not path.exists():
+        msg = f"Market CSV not found: {path}"
+        raise FileNotFoundError(msg)
+
+    cmap = column_map or _detect_market_columns(path)
+    date_cmap = _detect_date_columns(path) if column_map is None else {}
+    merged = {**date_cmap, **cmap}
+    if column_map:
+        merged.update(column_map)
+
+    end_col = merged.get("end_date")
+
+    results: dict[str, tuple[bool, datetime]] = {}
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            parsed = _parse_resolution_row(row, cmap)
+            if parsed is None:
+                continue
+
+            market_id, resolved_yes = parsed
+
+            # Parse resolution date
+            res_date = None
+            if end_col:
+                res_date = _parse_timestamp(row.get(end_col, ""))
+
+            if res_date is not None:
+                results[market_id] = (resolved_yes, res_date)
+            else:
+                # No date available — still include with a sentinel far-past date
+                # so walk-forward without dates degrades gracefully
+                results[market_id] = (resolved_yes, datetime.min.replace(tzinfo=timezone.utc))
+
+    logger.info(
+        "Loaded %d resolved markets with dates from %s",
+        len(results),
+        path.name,
+    )
+    return results
 
 
 # ---------------------------------------------------------------------------
