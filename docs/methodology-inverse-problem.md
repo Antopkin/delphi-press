@@ -399,6 +399,9 @@ Features: brier_score, win_rate, log1p(position_size), log1p(volume), n_markets,
 
 - Ferro, C.A.T. & Fricker, T.E. (2012). "Sampling Uncertainty and Confidence Intervals for the Brier Score." *Weather and Forecasting*.
 - Satopää, V.A. et al. (2014). "Combining and Extremizing Real-Valued Forecasts." arXiv:1506.06405.
-- Mitts, J. & Ofir, M. (2025). "From Iran to Taylor Swift: Informed Trading in Prediction Markets." *Harvard Law Forum*.
+- Mitts, J. & Ofir, M. (2026). "From Iran to Taylor Swift: Informed Trading in Prediction Markets." *Harvard Law Corporate Governance Forum*. 5-signal composite score; flagged traders: 69.9% win rate, $143M anomalous profit.
+- Akey, P., Grégoire, V., Harvie, C. & Martineau, C. (2025). "Who Wins and Who Loses in Prediction Markets? Evidence from Polymarket." SSRN 6443103. Top 1% of users capture 84% of gains — primary citation for tier-based profiling.
+- Bürgi, C., Deng, L. & Whelan, K. (2025). "Makers and Takers: The Economics of the Kalshi Prediction Market." CEPR. Prices become more accurate near resolution — timing signal justification.
+- Clinton, J. & Huang, T. (2024). Polymarket accuracy study, Vanderbilt. Polymarket 67% accuracy vs PredictIt 93% — volume gate justification.
 - Fishe, R.P.H. & Smith, A. (2012). "Identifying informed traders in futures markets." *Journal of Financial Markets*.
 - Burnham, K.P. & Anderson, D.R. (2002). *Model Selection and Multimodel Inference*. Springer.

@@ -68,6 +68,14 @@ class BettorProfile(BaseModel):
         le=1.0,
         description="Exponential decay weight based on last trade time",
     )
+    timing_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Volume-weighted mean fraction of market lifetime elapsed at bet time. "
+        "[INFERRED] from Bürgi et al. 2025 (timing → accuracy) and Mitts & Ofir 2026 "
+        "(pre-event timing principle).",
+    )
 
 
 class ProfileSummary(BaseModel):

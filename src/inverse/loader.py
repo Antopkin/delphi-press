@@ -29,6 +29,7 @@ __all__ = [
     "load_holders_from_dataset",
     "load_market_horizons",
     "load_market_prices",
+    "load_market_timestamps",
     "load_resolutions_csv",
     "load_resolutions_with_dates",
     "load_trades_csv",
@@ -152,6 +153,57 @@ def load_resolutions_csv(
 
     logger.info("Loaded %d resolved markets from %s", len(resolutions), path.name)
     return resolutions
+
+
+def load_market_timestamps(
+    path: Path,
+    *,
+    column_map: dict[str, str] | None = None,
+) -> dict[str, tuple[datetime, datetime]]:
+    """Load market open/close timestamps for timing_score computation.
+
+    Returns (start_datetime, end_datetime) pairs for each market.
+    Markets without both dates are skipped.
+
+    Args:
+        path: Path to markets CSV.
+        column_map: Maps logical names to CSV columns. Auto-detected if None.
+
+    Returns:
+        Dict mapping market_id → (start_dt, end_dt).
+    """
+    path = Path(path)
+    if not path.exists():
+        msg = f"Market CSV not found: {path}"
+        raise FileNotFoundError(msg)
+
+    market_cmap = column_map or _detect_market_columns(path)
+    date_cmap = _detect_date_columns(path) if column_map is None else {}
+    merged = {**date_cmap, **market_cmap}
+    if column_map:
+        merged.update(column_map)
+
+    market_id_col = merged.get("market_id")
+    end_col = merged.get("end_date")
+    start_col = merged.get("start_date")
+
+    if not market_id_col or not end_col or not start_col:
+        return {}
+
+    results: dict[str, tuple[datetime, datetime]] = {}
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            mid = row.get(market_id_col, "").strip()
+            if not mid:
+                continue
+            start_dt = _parse_timestamp(row.get(start_col, ""))
+            end_dt = _parse_timestamp(row.get(end_col, ""))
+            if start_dt is not None and end_dt is not None and end_dt > start_dt:
+                results[mid] = (start_dt, end_dt)
+
+    logger.info("Loaded timestamps for %d markets from %s", len(results), path.name)
+    return results
 
 
 def load_resolutions_with_dates(

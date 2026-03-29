@@ -66,6 +66,7 @@ def build_bettor_profiles(
     shrinkage_strength: int = SHRINKAGE_PRIOR_STRENGTH,
     as_of: datetime | None = None,
     resolutions_with_dates: dict[str, tuple[bool, datetime]] | None = None,
+    market_timestamps: dict[str, tuple[datetime, datetime]] | None = None,
 ) -> tuple[list[BettorProfile], ProfileSummary]:
     """Build accuracy profiles for all bettors with sufficient history.
 
@@ -91,6 +92,9 @@ def build_bettor_profiles(
             - reference_time defaults to as_of (not now).
         resolutions_with_dates: Optional mapping market_id → (outcome, resolution_date).
             Used with as_of to filter out future resolutions.
+        market_timestamps: Optional mapping market_id → (open_dt, close_dt).
+            When provided, computes volume-weighted timing_score per bettor.
+            [INFERRED] from Bürgi et al. 2025, Mitts & Ofir 2026.
 
     Returns:
         Tuple of (profiles, summary). Profiles are sorted by brier_score ascending.
@@ -127,7 +131,11 @@ def build_bettor_profiles(
     raw_profiles: list[dict] = []
     for user_id, utrades in user_trades.items():
         metrics = _compute_user_metrics(
-            utrades, resolutions, reference_time, recency_half_life_days
+            utrades,
+            resolutions,
+            reference_time,
+            recency_half_life_days,
+            market_timestamps=market_timestamps,
         )
         if metrics is not None and metrics["n_resolved_bets"] >= min_resolved_bets:
             raw_profiles.append({"user_id": user_id, **metrics})
@@ -179,6 +187,7 @@ def build_bettor_profiles(
                 n_markets=p["n_markets"],
                 win_rate=p["win_rate"],
                 recency_weight=p["recency_weight"],
+                timing_score=p.get("timing_score"),
             )
         )
 
@@ -208,6 +217,8 @@ def _compute_user_metrics(
     resolutions: dict[str, bool],
     reference_time: datetime,
     half_life_days: int,
+    *,
+    market_timestamps: dict[str, tuple[datetime, datetime]] | None = None,
 ) -> dict | None:
     """Compute accuracy metrics for a single user.
 
@@ -260,6 +271,27 @@ def _compute_user_metrics(
         recency = math.exp(-0.693 * days_ago / half_life_days)  # ln(2) ≈ 0.693
         recency = min(1.0, max(0.0, recency))
 
+    # Timing score: volume-weighted mean of (bet_time - open) / (close - open)
+    timing_score = None
+    if market_timestamps is not None:
+        timing_weighted_sum = 0.0
+        timing_total_size = 0.0
+        for market_id, mtrades in market_trades.items():
+            ts = market_timestamps.get(market_id)
+            if ts is None:
+                continue
+            market_open, market_close = ts
+            market_duration = (market_close - market_open).total_seconds()
+            if market_duration <= 0:
+                continue
+            for t in mtrades:
+                elapsed = (t.timestamp - market_open).total_seconds()
+                frac = max(0.0, min(1.0, elapsed / market_duration))
+                timing_weighted_sum += frac * t.size
+                timing_total_size += t.size
+        if timing_total_size > 0:
+            timing_score = round(timing_weighted_sum / timing_total_size, 4)
+
     return {
         "n_resolved_bets": n,
         "brier_score": round(brier_score, 6),
@@ -268,6 +300,7 @@ def _compute_user_metrics(
         "n_markets": len(market_trades),
         "win_rate": round(win_rate, 4),
         "recency_weight": round(recency, 4),
+        "timing_score": timing_score,
     }
 
 
