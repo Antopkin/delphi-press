@@ -72,6 +72,35 @@ def test_headline_output_dissenting_views_with_float_probability():
 # ── PredictionResponse JSON roundtrip ────────────────────────────────
 
 
+def test_prediction_response_with_predicted_timeline():
+    """PredictionResponse carries optional predicted_timeline dict."""
+    timeline = {
+        "entries": [
+            {"event_thread_id": "e1", "prediction": "Test event", "aggregated_probability": 0.6}
+        ],
+        "horizon_band": "near",
+        "horizon_days": 4,
+        "total_events": 1,
+    }
+    resp = PredictionResponse(
+        id="abc-123",
+        outlet="TASS",
+        target_date=date(2026, 4, 1),
+        status="completed",
+        predicted_timeline=timeline,
+    )
+    assert resp.predicted_timeline is not None
+    assert resp.predicted_timeline["horizon_band"] == "near"
+    assert len(resp.predicted_timeline["entries"]) == 1
+
+
+def test_prediction_response_predicted_timeline_defaults_none():
+    resp = PredictionResponse(
+        id="abc-123", outlet="TASS", target_date=date(2026, 4, 1), status="completed"
+    )
+    assert resp.predicted_timeline is None
+
+
 def test_prediction_response_json_roundtrip():
     resp = PredictionResponse(
         id="abc-123",

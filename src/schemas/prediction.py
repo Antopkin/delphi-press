@@ -60,4 +60,6 @@ class PredictionResponse(BaseModel):
     headlines: list[HeadlineOutput] = Field(default_factory=list)
     error: str | None = None
     failed_stage: str | None = None
+    predicted_timeline: dict[str, Any] | None = None
+    delphi_summary: dict[str, Any] | None = None
     stage_results: list[dict[str, Any]] = Field(default_factory=list)
