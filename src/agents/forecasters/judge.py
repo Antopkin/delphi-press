@@ -120,8 +120,11 @@ class Judge(BaseAgent):
         if llm_client is not None:
             super().__init__(llm_client)
         else:
-            # Partial init for unit testing pure math helpers
+            # Partial init for unit testing pure math helpers.
+            # Still call base setup for logger and tracking attributes.
             self.llm = None  # type: ignore[assignment]
+            self.logger = logging.getLogger(f"agent.{self.name}")
+            self._reset_tracking()
 
     def validate_context(self, context: PipelineContext) -> str | None:
         if not context.round2_assessments and not context.round1_assessments:

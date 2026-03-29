@@ -691,3 +691,15 @@ class TestHorizonWeightAdjustments:
 
         adj = HORIZON_WEIGHT_ADJUSTMENTS["near"]
         assert adj["devils_advocate"] > 0
+
+
+class TestJudgeInitNoLLM:
+    """Judge(None) should still have base attributes from BaseAgent."""
+
+    def test_judge_no_llm_has_logger(self):
+        from src.agents.forecasters.judge import Judge
+
+        judge = Judge(llm_client=None)
+        assert hasattr(judge, "logger")
+        assert hasattr(judge, "_tokens_in")
+        assert hasattr(judge, "_cost_usd")
