@@ -1088,6 +1088,15 @@ class MediatorSynthesis(BaseModel):
 
 Judge -- финальная стадия Дельфи. Принимает результаты обоих раундов и производит калиброванный, ранжированный список прогнозов для передачи генераторам.
 
+> **v0.7.0**: Judge разделён на два детерминистических шага (без LLM-вызова):
+> - **Step 6a** `_aggregate_timeline()` → `PredictedTimeline` (event-level aggregation с predicted_date, uncertainty_days, causal_dependencies)
+> - **Step 6b** `_select_headlines(timeline)` → `RankedPrediction[]` (headline scoring с temporal proximity factor)
+>
+> `PredictedTimeline` сохраняется в `PipelineContext.predicted_timeline` для eval pipeline.
+> `RankedPrediction` output contract сохранён — Stages 7-9 не затронуты.
+>
+> **Horizon-aware**: Judge применяет `HORIZON_WEIGHT_ADJUSTMENTS` — persona weights адаптируются по горизонту (immediate: Media Expert↑, medium: Realist↑).
+
 ### 5.1 Алгоритм агрегации
 
 **Шаг 1: Взвешенная медиана**

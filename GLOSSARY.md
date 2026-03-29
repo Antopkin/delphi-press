@@ -61,6 +61,9 @@
 | Ранжированный прогноз | RankedPrediction | Выход судьи: событие + калиброванная вероятность + новостная ценность + agreement_level + reasoning. |
 | Дикий карт | Wild Card | Прогноз от адвоката дьявола вне top-7, но с newsworthiness > 0.7. Макс. 2 шт. в финальных результатах. |
 | Уровень согласия | Agreement Level | consensus (spread < 0.15), contested (spread > 0.30), majority with dissent (0.15-0.30). |
+| Предсказанный timeline | PredictedTimeline | Промежуточный артефакт Judge (Stage 6a): список event-level предсказаний, упорядоченных по predicted_date. Содержит aggregated_probability, temporal_order, causal_dependencies. Сохраняется в PipelineContext.predicted_timeline. |
+| Запись timeline | TimelineEntry | Одно событие в PredictedTimeline: event_thread_id + calibrated probability + predicted_date + uncertainty_days. Маппится 1:1 в RankedPrediction при headline selection (Stage 6b). |
+| Горизонтный band | HorizonBand | Классификация горизонта прогноза: immediate (1-2d, оперативный режим), near (3-4d, зона максимальной неопределённости), medium (5-7d, структурный режим). Определяет аналитический mode, evidence priority, probability constraints для каждой персоны. |
 
 ## Генерация и качество
 

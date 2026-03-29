@@ -24,7 +24,7 @@
 | DelphiMediaExpert | `delphi_media_expert` | 4/5 DELPHI | `delphi_r1_media`, `delphi_r2_media` | `round1_assessments`, `round2_assessments` | `src/agents/forecasters/personas.py` |
 | DelphiDevilsAdvocate | `delphi_devils_advocate` | 4/5 DELPHI | `delphi_r1_devils`, `delphi_r2_devils` | `round1_assessments`, `round2_assessments` | `src/agents/forecasters/personas.py` |
 | Mediator | `mediator` | 5 DELPHI_R2 | `mediator` | `mediator_synthesis` | `src/agents/forecasters/mediator.py` |
-| Judge | `judge` | 6 CONSENSUS | `judge` | `ranked_predictions` | `src/agents/forecasters/judge.py` |
+| Judge | `judge` | 6 CONSENSUS | _(deterministic — no LLM)_ | `predicted_timeline`, `ranked_predictions` | `src/agents/forecasters/judge.py` |
 | FramingAnalyzer | `framing` | 7 FRAMING | `framing` | `framing_briefs` | `src/agents/generators/framing.py` |
 | StyleReplicator | `style_replicator` | 8 GENERATION | `style_generation`, `style_generation_ru`, `style_generation_en` | `generated_headlines` | `src/agents/generators/style_replicator.py` |
 | QualityGate | `quality_gate` | 9 QUALITY_GATE | `quality_factcheck`, `quality_style` | `final_predictions` | `src/agents/generators/quality_gate.py` |
@@ -42,7 +42,7 @@ Defined in `src/agents/orchestrator.py:58-115` as `Orchestrator.STAGES`.
 | 3 | `TRAJECTORY` | geopolitical_analyst, economic_analyst, media_analyst | Yes | 2/3 | 600s |
 | 4 | `DELPHI_R1` | 5 delphi_* personas | Yes | 4/5 | 600s |
 | 5 | `DELPHI_R2` | mediator (seq) → 5 delphi_* personas (par, min=4) | Mixed | 4/5 | 900s |
-| 6 | `CONSENSUS` | judge | No | — | 300s |
+| 6 | `CONSENSUS` | judge (6a: timeline, 6b: headlines) | No | — | 300s |
 | 7 | `FRAMING` | framing | No | — | 300s |
 | 8 | `GENERATION` | style_replicator | No | — | 300s |
 | 9 | `QUALITY_GATE` | quality_gate | No | — | 300s |
@@ -104,7 +104,7 @@ All R2: primary `claude-opus-4.6`, fallback `claude-sonnet-4.5`.
 
 | Task ID | Agent | Primary Model | Fallback | Temp | JSON |
 |---|---|---|---|---|---|
-| `judge` | Judge | claude-opus-4.6 | claude-sonnet-4.5 | 0.3 | Yes |
+| ~~`judge`~~ | Judge | _(deterministic since v0.7.0 — no LLM call)_ | — | — | — |
 | `framing` | FramingAnalyzer | claude-opus-4.6 | claude-sonnet-4.5 | 0.5 | Yes |
 | `style_generation` | StyleReplicator | yandexgpt | claude-opus-4.6 | 0.8 | No |
 | `style_generation_ru` | StyleReplicator | yandexgpt | claude-opus-4.6 | 0.8 | No |
@@ -131,7 +131,8 @@ Defined in `src/schemas/pipeline.py`. Merge logic: `PipelineContext.merge_agent_
 | `round1_assessments` | `list[PersonaAssessment]` | 5 Delphi personas (R1) | Mediator | 4→5 |
 | `mediator_synthesis` | `MediatorSynthesis` | Mediator | Delphi personas (R2), Judge | 5→5,6 |
 | `round2_assessments` | `list[PersonaAssessment]` | 5 Delphi personas (R2) | Judge | 5→6 |
-| `ranked_predictions` | `list[RankedPrediction]` | Judge | FramingAnalyzer, StyleReplicator, QualityGate | 6→7,8,9 |
+| `predicted_timeline` | `PredictedTimeline` | Judge (6a) | _(persisted for eval, not consumed by stages 7-9)_ | 6a |
+| `ranked_predictions` | `list[RankedPrediction]` | Judge (6b) | FramingAnalyzer, StyleReplicator, QualityGate | 6b→7,8,9 |
 | `framing_briefs` | `list[FramingBrief]` | FramingAnalyzer | StyleReplicator, QualityGate | 7→8,9 |
 | `generated_headlines` | `list[GeneratedHeadline]` | StyleReplicator | QualityGate | 8→9 |
 | `final_predictions` | `list[FinalPrediction]` | QualityGate | Orchestrator._build_response() | 9→output |
@@ -141,7 +142,8 @@ Defined in `src/schemas/pipeline.py`. Merge logic: `PipelineContext.merge_agent_
 
 | Agent name pattern | Merge strategy |
 |---|---|
-| `news_scout`, `event_calendar`, `judge`, `framing`, `style_replicator`, `quality_gate` | Direct slot mapping: `data[slot_name]` → `context.slot` |
+| `news_scout`, `event_calendar`, `framing`, `style_replicator`, `quality_gate` | Direct slot mapping: `data[slot_name]` → `context.slot` |
+| `judge` | Multi-key: `data["ranked_predictions"]` + `data["predicted_timeline"]` |
 | `outlet_historian` | Direct: `data["outlet_profile"]` → `context.outlet_profile` |
 | `foresight_collector` | Multi-key: `data["foresight_events"]` + `data["foresight_signals"]` |
 | `event_trend_analyzer` | Multi-key: `data["event_threads"]` + `data["trajectories"]` + `data["cross_impact_matrix"]` |

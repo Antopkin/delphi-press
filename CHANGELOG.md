@@ -4,6 +4,56 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.7.0] - 2026-03-29
+
+Архитектурный рефактор: двухуровневые предсказания (event-level timeline) + horizon-aware промпты.
+
+**Почему:** Judge смешивал event aggregation и headline scoring в одном шаге. Event-level predictions терялись, блокируя market eval (E.1). Промпты не адаптировались к горизонту прогноза — одни инструкции для 1 дня и 7 дней, что противоречит литературе (Tetlock/GJP, AIA Forecaster, Scalable Delphi).
+
+### Added
+
+- **`src/schemas/timeline.py`** (NEW) — `HorizonBand` (immediate/near/medium), `TimelineEntry` (event-level prediction с temporal fields), `PredictedTimeline` (промежуточный артефакт Judge 6a), `compute_horizon_band()`.
+- **PredictionItem**: +4 Optional поля — `predicted_date`, `uncertainty_days`, `causal_dependencies`, `confidence_interval_95` (Barrett et al., RAND 2025). Backward-compatible через defaults.
+- **PipelineContext**: `predicted_timeline` slot + dedicated merge branch для Judge (два ключа: `ranked_predictions` + `predicted_timeline`).
+- **Horizon-aware промпты персон** (английский, 3 bands):
+  - IMMEDIATE (1-2d): operational mode, overestimation warning, signals-first evidence priority
+  - NEAR (3-4d): mixed mode, scope sensitivity check, Devil's Advocate circuit breaker hunt
+  - MEDIUM (5-7d): structural mode, anti-hedge-to-0.5 warning, base rates first
+  - Per-band probability constraints: [0.05,0.95] / [0.06,0.94] / [0.07,0.93]
+  - Temporal output format: `predicted_date`, `uncertainty_days`, `confidence_interval_95`
+- **Horizon-aware промпт медиатора**: scheduled events audit (immediate), equal weight (near), news decay check (medium).
+- **Horizon-weighted persona weights в Judge**: Media Expert/Economist↑ (immediate), Devil's Advocate↑ (near), Realist/Geostrateg↑ (medium). Источник: arXiv 2511.18394, Tetlock/GJP.
+- **Media saturation propagation**: threads с saturation > 0.6 получают warning в промптах персон (guard against definition drift, arXiv 2511.18394).
+- 56 новых тестов, итого **958/958** зелёных.
+
+### Changed
+
+- **Judge** (`src/agents/forecasters/judge.py`) — execute() разделён на два шага:
+  - `_aggregate_timeline()` → `PredictedTimeline` (deterministic, no LLM)
+  - `_select_headlines(timeline)` → `RankedPrediction[]` (temporal proximity factor)
+- **Judge**: удалён неиспользуемый LLM-вызов (строки 217-232 старого кода — response дискардился, только cost tracking). Экономия $0.005-0.02/run.
+- **Judge**: fix conditional `super().__init__` (partial init для unit tests).
+- **Judge**: extracted `_parse_assessments()`, `_aggregate_date()`, `_aggregate_causal_deps()`.
+- **RankedPrediction output contract**: сохранён без изменений → Stages 7-9 не затронуты.
+
+### Доказательная база (14 источников)
+
+| Источник | Влияние |
+|----------|---------|
+| AIA Forecaster (arXiv 2511.07678) | Anti-hedge инструкция для medium band |
+| Halawi et al. (NeurIPS 2024) | Scratchpad protocol |
+| arXiv 2511.18394 | Evidence priority по горизонту, saturation propagation |
+| Scalable Delphi (RAND 2025) | Evidence type determines calibration |
+| Tetlock/GJP | Scope sensitivity, bias stratification by horizon |
+| arXiv 2410.06707 | Two-phase extraction (deferred — Step 10) |
+| Boydstun et al. 2014 | Media storm cycle 7-21d |
+
+### Deferred
+
+- **Two-phase probability extraction** (Step 10) — opt-in feature, doubles LLM cost per Delphi round. Отложен в отдельный PR.
+
+---
+
 ## [0.6.0] - 2026-03-29
 
 Market-calibrated eval (Direction B) + news↔market correlation (Direction C).

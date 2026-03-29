@@ -191,11 +191,27 @@ Delphi Press предсказывает на двух уровнях:
 
 | # | Задача | Зависимости | Горизонт |
 |---|--------|-------------|----------|
-| E.1 | Сохранять event-level predictions (event_thread + probability + timestamp) в JSON после каждого run | Изменить Judge / dry_run.py | Ближайшая сессия |
+| E.1 | Сохранять event-level predictions в JSON после каждого run. **Частично выполнено (v0.7.0)**: PredictedTimeline сохраняется в PipelineContext, но ещё не экспортируется в файл/DB. Осталось: добавить JSON export в dry_run.py и API response. | dry_run.py, orchestrator | Ближайшая сессия |
 | E.2 | Накопить 5-10 real runs с сохранёнными predictions | E.1 + Opus/Claude runs | 1-2 недели |
 | E.3 | Подключить event predictions к eval_market_calibration.py (вместо placeholder) | E.1, E.2 | После накопления данных |
 | E.4 | Расширить resolved markets выборку (сейчас 17 markets, нужно 50+) | HuggingFace dataset или Gamma API pagination | Когда нужна статистика |
 | E.5 | News correlation на mainstream markets (сейчас 0 GDELT покрытие — crypto/esports markets) | Дождаться political resolved markets или использовать dataset | Не блокирует |
+
+---
+
+### Event-Level Predictions + Horizon-Aware: DONE (v0.7.0, 2026-03-29)
+
+- [x] PredictedTimeline schema (HorizonBand, TimelineEntry, PredictedTimeline)
+- [x] PredictionItem: +4 temporal fields (predicted_date, uncertainty_days, causal_dependencies, confidence_interval_95)
+- [x] Judge refactor: _aggregate_timeline() → _select_headlines(), wasted LLM call removed
+- [x] PipelineContext: predicted_timeline slot
+- [x] Horizon-aware промпты персон (3 bands, English, research-driven, 14 источников)
+- [x] Horizon-aware медиатор prompt
+- [x] Horizon-weighted persona weights в Judge
+- [x] Media saturation propagation
+- [ ] **E.1 completion**: JSON export of PredictedTimeline в dry_run.py + API response
+- [ ] Two-phase probability extraction (Step 10, deferred — doubles LLM cost)
+- [ ] A/B тест: dry run с horizon-aware prompts vs без (measure Brier delta)
 
 ---
 
