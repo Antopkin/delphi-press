@@ -182,3 +182,16 @@ def test_get_total_duration_ms():
         StageResult(stage_name="delphi_r1", success=True, duration_ms=2500),
     ]
     assert ctx.get_total_duration_ms() == 3500
+
+
+def test_pipeline_context_slots_not_typed_as_any():
+    """All PipelineContext data slots should use concrete types, not Any."""
+    import typing
+
+    hints = typing.get_type_hints(PipelineContext)
+    any_slots = []
+    for name, hint in hints.items():
+        hint_str = str(hint)
+        if hint_str == "list[typing.Any]" or hint_str == "typing.Any | None":
+            any_slots.append(name)
+    assert any_slots == [], f"Slots still typed as Any: {any_slots}"

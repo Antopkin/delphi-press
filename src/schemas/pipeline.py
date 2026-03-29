@@ -68,100 +68,100 @@ class PipelineContext(BaseModel):
 
     # === Stage 1: Collection ===
 
-    signals: list[Any] = Field(
+    signals: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List[SignalRecord]. Сырые сигналы из NewsScout.",
     )
 
-    scheduled_events: list[Any] = Field(
+    scheduled_events: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List[ScheduledEvent]. Запланированные события на target_date.",
     )
 
-    outlet_profile: Any | None = Field(
+    outlet_profile: dict[str, Any] | None = Field(
         default=None,
         description="OutletProfile. Стилевой и редакционный профиль издания.",
     )
 
-    foresight_events: list[Any] = Field(
+    foresight_events: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Metaculus prediction questions (foresight data).",
     )
 
-    foresight_signals: list[Any] = Field(
+    foresight_signals: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Polymarket + GDELT foresight signals.",
     )
 
     # === Stage 2: Event Identification ===
 
-    event_threads: list[Any] = Field(
+    event_threads: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List[EventThread]. Top-20 кластеризованных событийных нитей.",
     )
 
     # === Stage 3: Trajectory Analysis ===
 
-    trajectories: list[Any] = Field(
+    trajectories: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List[EventTrajectory]. Сценарные траектории для каждого EventThread.",
     )
 
-    cross_impact_matrix: Any | None = Field(
+    cross_impact_matrix: dict[str, Any] | None = Field(
         default=None,
         description="CrossImpactMatrix. Матрица перекрёстных влияний между событиями.",
     )
 
     # === Stage 4: Delphi Round 1 ===
 
-    round1_assessments: list[Any] = Field(
+    round1_assessments: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List[PersonaAssessment]. Независимые оценки от 5 экспертных персон.",
     )
 
     # === Stage 5: Delphi Round 2 ===
 
-    mediator_synthesis: Any | None = Field(
+    mediator_synthesis: dict[str, Any] | None = Field(
         default=None,
         description="MediatorSynthesis. Обобщение Раунда 1: консенсус, расхождения.",
     )
 
-    round2_assessments: list[Any] = Field(
+    round2_assessments: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List[PersonaAssessment]. Пересмотренные оценки после медиации.",
     )
 
     # === Stage 6a: Timeline (event-level predictions) ===
 
-    predicted_timeline: Any | None = Field(
+    predicted_timeline: dict[str, Any] | None = Field(
         default=None,
         description="PredictedTimeline. Промежуточный event-level timeline до headline selection.",
     )
 
     # === Stage 6b: Consensus & Selection ===
 
-    ranked_predictions: list[Any] = Field(
+    ranked_predictions: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List[RankedPrediction]. Top-7 прогнозов + wild cards.",
     )
 
     # === Stage 7: Framing ===
 
-    framing_briefs: list[Any] = Field(
+    framing_briefs: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List[FramingBrief]. Анализ фрейминга для каждого RankedPrediction.",
     )
 
     # === Stage 8: Generation ===
 
-    generated_headlines: list[Any] = Field(
+    generated_headlines: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List[GeneratedHeadline]. Заголовки (2-3 варианта на прогноз).",
     )
 
     # === Stage 9: Quality Gate ===
 
-    final_predictions: list[Any] = Field(
+    final_predictions: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List[FinalPrediction]. Финальные прогнозы, прошедшие все проверки.",
     )
