@@ -60,8 +60,24 @@ def main() -> None:
     resolutions = load_resolutions_csv(args.markets)
     logger.info("Loaded %d trades, %d resolved markets", len(trades), len(resolutions))
 
-    # Step 2: Train/test split (by market_id sorted order as proxy for time)
-    all_market_ids = sorted(resolutions.keys())
+    # Step 2: Train/test split by close timestamp (prevents look-ahead bias).
+    # Load close timestamps from markets CSV for temporal ordering.
+    close_times: dict[str, str] = {}
+    import csv
+
+    with open(args.markets, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            mid = (row.get("conditionId") or row.get("condition_id") or row.get("id", "")).strip()
+            ts = (row.get("endDate") or row.get("end_date") or row.get("closed_at", "")).strip()
+            if mid and mid in resolutions and ts:
+                close_times[mid] = ts
+
+    # Sort by close timestamp; markets without timestamp go to end
+    all_market_ids = sorted(
+        resolutions.keys(),
+        key=lambda mid: close_times.get(mid, "9999"),
+    )
     split_idx = int(len(all_market_ids) * (1 - args.test_fraction))
     train_ids = set(all_market_ids[:split_idx])
     test_ids = set(all_market_ids[split_idx:])
