@@ -153,7 +153,7 @@ async def run_prediction_task(
         progress_pct: float,
     ) -> None:
         event_data = {
-            "event": "stage_progress",
+            "event": "progress",
             "stage": stage_name,
             "message": message,
             "progress": round(progress_pct, 3),

@@ -45,9 +45,12 @@
             <h4 class="text-xs text-text-muted uppercase tracking-wide mt-4 mb-2">Особые мнения</h4>
             {% for dv in headline.dissenting_views %}
             <blockquote class="border-l-3 border-confidence-low pl-4 py-2 my-2 text-sm not-italic">
-                <p>{{ dv.view }}</p>
-                <footer class="text-xs text-text-muted mt-1 p-0 border-0">
-                    <cite>-- {{ dv.agent }}</cite>
+                <p>{{ dv.reasoning }}</p>
+                <footer class="flex items-center gap-2 text-xs text-text-muted mt-1 p-0 border-0">
+                    <cite>-- {{ dv.agent_label }}</cite>
+                    {% if dv.probability is defined %}
+                    <span class="inline-block px-1.5 py-0.5 rounded bg-surface-1 tabular-nums">{{ (dv.probability * 100) | round(0) | int }}%</span>
+                    {% endif %}
                 </footer>
             </blockquote>
             {% endfor %}
