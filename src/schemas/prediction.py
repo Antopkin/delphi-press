@@ -45,7 +45,7 @@ class HeadlineOutput(BaseModel):
     reasoning: str
     evidence_chain: list[dict[str, str]] = Field(default_factory=list)
     agent_agreement: str
-    dissenting_views: list[dict[str, str]] = Field(default_factory=list)
+    dissenting_views: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class PredictionResponse(BaseModel):

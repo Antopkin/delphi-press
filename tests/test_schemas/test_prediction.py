@@ -58,6 +58,17 @@ def test_headline_output_rank_above_10_rejected():
         HeadlineOutput(**_headline_output_kwargs(rank=11))
 
 
+def test_headline_output_dissenting_views_with_float_probability():
+    """Bug 1: dissenting_views dicts contain float probability — must not raise."""
+    dv = [
+        {"agent_label": "realist", "probability": 0.72, "reasoning": "Low evidence base"},
+        {"agent_label": "economist", "probability": 0.08, "reasoning": "Market signals weak"},
+    ]
+    ho = HeadlineOutput(**_headline_output_kwargs(dissenting_views=dv))
+    assert len(ho.dissenting_views) == 2
+    assert ho.dissenting_views[0]["probability"] == 0.72
+
+
 # ── PredictionResponse JSON roundtrip ────────────────────────────────
 
 
