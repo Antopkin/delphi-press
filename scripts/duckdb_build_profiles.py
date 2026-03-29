@@ -40,8 +40,8 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("data/inverse/bettor_profiles.json"),
-        help="Output profiles JSON path",
+        default=Path("data/inverse/bettor_profiles.parquet"),
+        help="Output profiles path (.parquet or .json)",
     )
     parser.add_argument("--min-bets", type=int, default=3)
     parser.add_argument("--memory-limit", default="2GB", help="DuckDB memory limit")
@@ -281,18 +281,21 @@ def main() -> None:
 
     if not rows:
         logger.warning("No profiles built!")
-        summary = {
-            "total_users": n_users,
-            "profiled_users": 0,
-            "informed_count": 0,
-            "moderate_count": 0,
-            "noise_count": 0,
-            "median_brier": 0.0,
-            "p10_brier": 0.0,
-            "p90_brier": 0.0,
-        }
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps({"summary": summary, "profiles": []}, indent=2))
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from src.inverse.schemas import ProfileSummary
+        from src.inverse.store import save_profiles
+
+        summary_obj = ProfileSummary(
+            total_users=n_users,
+            profiled_users=0,
+            informed_count=0,
+            moderate_count=0,
+            noise_count=0,
+            median_brier=0.0,
+            p10_brier=0.0,
+            p90_brier=0.0,
+        )
+        save_profiles([], summary_obj, args.output)
         return
 
     # Classify tiers
@@ -343,10 +346,14 @@ def main() -> None:
         "p90_brier": round(brier_scores[min(n - 1, int(n * 0.90))], 6),
     }
 
-    # Save
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    data = {"summary": summary, "profiles": profiles}
-    args.output.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    # Save via store.py (supports Parquet + JSON based on extension)
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from src.inverse.schemas import BettorProfile, ProfileSummary
+    from src.inverse.store import save_profiles
+
+    profile_objs = [BettorProfile(**p) for p in profiles]
+    summary_obj = ProfileSummary(**summary)
+    save_profiles(profile_objs, summary_obj, args.output)
     logger.info("Saved %d profiles to %s", len(profiles), args.output)
 
     elapsed = time.perf_counter() - t_total

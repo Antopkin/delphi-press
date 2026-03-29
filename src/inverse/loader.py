@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "load_holders_from_dataset",
+    "load_market_horizons",
     "load_market_prices",
     "load_resolutions_csv",
     "load_trades_csv",
@@ -436,6 +437,109 @@ def load_market_prices(path: Path) -> dict[str, float]:
 
     logger.info("Loaded prices for %d markets from %s", len(prices), path.name)
     return prices
+
+
+# ---------------------------------------------------------------------------
+# Market horizons loader
+# ---------------------------------------------------------------------------
+
+
+def load_market_horizons(
+    path: Path,
+    *,
+    column_map: dict[str, str] | None = None,
+) -> dict[str, float]:
+    """Load market horizons (duration in days) from markets CSV.
+
+    Horizon = endDate - createdDate (or first available date).
+    Markets without both dates are skipped.
+
+    Args:
+        path: Path to markets CSV (e.g., ismetsemedov dataset).
+        column_map: Maps logical names to CSV columns. Auto-detected if None.
+            Recognised logical keys: ``market_id``, ``end_date``, ``start_date``.
+
+    Returns:
+        Dict mapping market_id → horizon_days.
+
+    Raises:
+        FileNotFoundError: If the CSV file does not exist.
+    """
+    path = Path(path)
+    if not path.exists():
+        msg = f"Market CSV not found: {path}"
+        raise FileNotFoundError(msg)
+
+    market_cmap = column_map or _detect_market_columns(path)
+    date_cmap = _detect_date_columns(path) if column_map is None else {}
+
+    # Merge: explicit column_map may supply end_date/start_date directly
+    merged: dict[str, str] = {**date_cmap, **market_cmap}
+    if column_map:
+        merged.update(column_map)
+
+    market_id_col = merged.get("market_id")
+    end_col = merged.get("end_date")
+    start_col = merged.get("start_date")
+
+    if not market_id_col or not end_col or not start_col:
+        logger.warning(
+            "load_market_horizons: could not resolve required columns "
+            "(market_id=%r, end_date=%r, start_date=%r) in %s",
+            market_id_col,
+            end_col,
+            start_col,
+            path.name,
+        )
+        return {}
+
+    horizons: dict[str, float] = {}
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            market_id = row.get(market_id_col, "").strip()
+            if not market_id:
+                continue
+
+            end_dt = _parse_timestamp(row.get(end_col, ""))
+            start_dt = _parse_timestamp(row.get(start_col, ""))
+
+            if end_dt is None or start_dt is None:
+                continue
+
+            horizon_days = (end_dt - start_dt).total_seconds() / 86400.0
+            if horizon_days <= 0:
+                continue
+
+            horizons[market_id] = horizon_days
+
+    logger.info("Loaded horizons for %d markets from %s", len(horizons), path.name)
+    return horizons
+
+
+def _detect_date_columns(path: Path) -> dict[str, str]:
+    """Auto-detect end_date and start_date columns for market CSV."""
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+
+    header_lower = {col.strip().lower(): col.strip() for col in header}
+
+    cmap: dict[str, str] = {}
+
+    # end_date: endDate / end_date / closeTime / close_time / closedTime
+    for candidate in ("enddate", "end_date", "closetime", "close_time", "closedtime"):
+        if candidate in header_lower:
+            cmap["end_date"] = header_lower[candidate]
+            break
+
+    # start_date: createdAt / created_at / startDate / start_date / created_time
+    for candidate in ("createdat", "created_at", "startdate", "start_date", "created_time"):
+        if candidate in header_lower:
+            cmap["start_date"] = header_lower[candidate]
+            break
+
+    return cmap
 
 
 # ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ import pytest
 from src.inverse.loader import (
     _normalize_side,
     _parse_timestamp,
+    load_market_horizons,
     load_resolutions_csv,
     load_trades_csv,
 )
@@ -198,3 +199,71 @@ class TestParseTimestamp:
 
     def test_garbage_returns_none(self) -> None:
         assert _parse_timestamp("not-a-date") is None
+
+
+# ---------------------------------------------------------------------------
+# load_market_horizons
+# ---------------------------------------------------------------------------
+
+
+class TestLoadMarketHorizons:
+    def test_basic_horizons(self, tmp_path: Path) -> None:
+        """CSV with endDate and createdAt columns, 2 markets with known dates."""
+        p = tmp_path / "markets.csv"
+        p.write_text(
+            "id,endDate,createdAt\n"
+            "market-1,2026-01-11T00:00:00Z,2026-01-01T00:00:00Z\n"  # 10 days
+            "market-2,2026-02-01T00:00:00Z,2026-01-01T00:00:00Z\n"  # 31 days
+        )
+        horizons = load_market_horizons(p)
+        assert len(horizons) == 2
+        assert abs(horizons["market-1"] - 10.0) < 0.01
+        assert abs(horizons["market-2"] - 31.0) < 0.01
+
+    def test_missing_dates_skipped(self, tmp_path: Path) -> None:
+        """Markets without end/start dates are excluded."""
+        p = tmp_path / "markets.csv"
+        p.write_text(
+            "id,endDate,createdAt\n"
+            "market-1,2026-01-11T00:00:00Z,2026-01-01T00:00:00Z\n"
+            "market-2,,\n"  # both missing → skip
+            "market-3,2026-01-11T00:00:00Z,\n"  # start missing → skip
+        )
+        horizons = load_market_horizons(p)
+        assert list(horizons.keys()) == ["market-1"]
+
+    def test_negative_horizon_skipped(self, tmp_path: Path) -> None:
+        """endDate before startDate → skipped."""
+        p = tmp_path / "markets.csv"
+        p.write_text(
+            "id,endDate,createdAt\n"
+            "market-bad,2026-01-01T00:00:00Z,2026-01-11T00:00:00Z\n"  # end < start
+            "market-ok,2026-01-11T00:00:00Z,2026-01-01T00:00:00Z\n"
+        )
+        horizons = load_market_horizons(p)
+        assert "market-bad" not in horizons
+        assert "market-ok" in horizons
+
+    def test_auto_detect_columns(self, tmp_path: Path) -> None:
+        """closeTime + startDate column names are auto-detected."""
+        p = tmp_path / "markets.csv"
+        p.write_text(
+            "id,closeTime,startDate\n"
+            "market-1,2026-03-01T00:00:00Z,2026-02-01T00:00:00Z\n"  # 28 days
+        )
+        horizons = load_market_horizons(p)
+        assert "market-1" in horizons
+        assert abs(horizons["market-1"] - 28.0) < 0.01
+
+    def test_file_not_found(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            load_market_horizons(tmp_path / "nonexistent.csv")
+
+    def test_unix_timestamp_dates(self, tmp_path: Path) -> None:
+        """Horizons computed correctly when dates are stored as Unix timestamps."""
+        p = tmp_path / "markets.csv"
+        # 1711929600 = 2024-04-01T00:00:00Z, +7 days = 1712534400
+        p.write_text("id,endDate,createdAt\nmarket-1,1712534400,1711929600\n")
+        horizons = load_market_horizons(p)
+        assert "market-1" in horizons
+        assert abs(horizons["market-1"] - 7.0) < 0.01

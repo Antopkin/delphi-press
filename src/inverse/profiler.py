@@ -43,6 +43,11 @@ NOISE_PERCENTILE = 0.70
 #: Half-life for recency decay (days). Trades older than this get 0.5 weight.
 RECENCY_HALF_LIFE_DAYS = 90
 
+#: Bayesian shrinkage prior strength (pseudo-observations).
+#: Pulls low-N profiles toward population median BS (Ferro & Fricker 2012).
+#: At n=3: heavy shrinkage. At n=100: minimal effect.
+SHRINKAGE_PRIOR_STRENGTH = 15
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -58,8 +63,14 @@ def build_bettor_profiles(
     noise_percentile: float = NOISE_PERCENTILE,
     recency_half_life_days: int = RECENCY_HALF_LIFE_DAYS,
     reference_time: datetime | None = None,
+    shrinkage_strength: int = SHRINKAGE_PRIOR_STRENGTH,
 ) -> tuple[list[BettorProfile], ProfileSummary]:
     """Build accuracy profiles for all bettors with sufficient history.
+
+    Applies Bayesian shrinkage to Brier Scores to stabilize estimates for
+    bettors with few resolved bets. Formula (Ferro & Fricker 2012):
+        adjusted_BS = (n × observed_BS + k × population_median) / (n + k)
+    where k = shrinkage_strength (default 15).
 
     Args:
         trades: All trade records from the dataset.
@@ -69,6 +80,8 @@ def build_bettor_profiles(
         noise_percentile: Fraction below which users are classified as NOISE.
         recency_half_life_days: Exponential decay half-life for recency weight.
         reference_time: Reference time for recency calculation (default: now UTC).
+        shrinkage_strength: Bayesian prior strength (pseudo-observations).
+            0 disables shrinkage (use raw BS).
 
     Returns:
         Tuple of (profiles, summary). Profiles are sorted by brier_score ascending.
@@ -103,6 +116,18 @@ def build_bettor_profiles(
             p10_brier=0.0,
             p90_brier=0.0,
         )
+
+    # Step 4b: Bayesian shrinkage — stabilize BS for low-N bettors.
+    # adjusted_BS = (n × BS + k × median_BS) / (n + k)
+    if shrinkage_strength > 0:
+        raw_brier_values = sorted(p["brier_score"] for p in raw_profiles)
+        population_median = float(statistics.median(raw_brier_values))
+        for p in raw_profiles:
+            n = p["n_resolved_bets"]
+            k = shrinkage_strength
+            raw_bs = p["brier_score"]
+            adjusted = (n * raw_bs + k * population_median) / (n + k)
+            p["brier_score"] = round(min(1.0, max(0.0, adjusted)), 6)
 
     # Step 5: Classify into tiers by Brier Score percentile
     brier_scores = sorted(p["brier_score"] for p in raw_profiles)

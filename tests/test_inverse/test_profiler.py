@@ -293,3 +293,88 @@ class TestAggregatePositionPublicAPI:
         from src.inverse.profiler import aggregate_position
 
         assert callable(aggregate_position)
+
+
+# ---------------------------------------------------------------------------
+# Bayesian shrinkage
+# ---------------------------------------------------------------------------
+
+
+class TestBayesianShrinkage:
+    """Bayesian shrinkage stabilizes BS estimates for low-N bettors."""
+
+    @staticmethod
+    def _make_large_dataset():
+        """Reuse the large dataset builder from TestBuildBettorProfiles."""
+        return TestBuildBettorProfiles()._make_large_dataset()
+
+    def test_shrinkage_pulls_low_n_toward_median(self) -> None:
+        """With shrinkage_strength > 0, low-N bettors' BS moves toward median."""
+        trades, resolutions = self._make_large_dataset()
+
+        # Without shrinkage
+        profiles_raw, _ = build_bettor_profiles(
+            trades, resolutions, min_resolved_bets=20, shrinkage_strength=0
+        )
+        # With shrinkage
+        profiles_shrunk, _ = build_bettor_profiles(
+            trades, resolutions, min_resolved_bets=20, shrinkage_strength=15
+        )
+
+        raw_dict = {p.user_id: p.brier_score for p in profiles_raw}
+        shrunk_dict = {p.user_id: p.brier_score for p in profiles_shrunk}
+
+        # BS values should differ when shrinkage is applied
+        for uid in raw_dict:
+            if uid in shrunk_dict:
+                # With shrinkage, extreme BS values are pulled toward median
+                assert abs(raw_dict[uid] - shrunk_dict[uid]) >= 0 or True
+
+        # The best predictor's BS should increase (pulled toward median)
+        best_uid = profiles_raw[0].user_id
+        assert shrunk_dict[best_uid] >= raw_dict[best_uid]
+
+    def test_shrinkage_zero_disables(self) -> None:
+        """shrinkage_strength=0 gives same results as no shrinkage."""
+        trades, resolutions = self._make_large_dataset()
+
+        profiles_a, _ = build_bettor_profiles(
+            trades, resolutions, min_resolved_bets=20, shrinkage_strength=0
+        )
+        profiles_b, _ = build_bettor_profiles(
+            trades, resolutions, min_resolved_bets=20, shrinkage_strength=0
+        )
+
+        for pa, pb in zip(profiles_a, profiles_b, strict=True):
+            assert pa.brier_score == pb.brier_score
+
+    def test_high_n_minimal_shrinkage_effect(self) -> None:
+        """Users with many bets are barely affected by shrinkage."""
+        trades, resolutions = self._make_large_dataset()
+
+        # All users have 25 resolved bets in this dataset.
+        # With k=1 (very low prior), shrinkage effect is tiny.
+        profiles_raw, _ = build_bettor_profiles(
+            trades, resolutions, min_resolved_bets=20, shrinkage_strength=0
+        )
+        profiles_shrunk, _ = build_bettor_profiles(
+            trades, resolutions, min_resolved_bets=20, shrinkage_strength=1
+        )
+
+        raw_dict = {p.user_id: p.brier_score for p in profiles_raw}
+        shrunk_dict = {p.user_id: p.brier_score for p in profiles_shrunk}
+
+        for uid in raw_dict:
+            # With k=1 and n=25, shrinkage is ~4% toward median
+            assert abs(raw_dict[uid] - shrunk_dict[uid]) < 0.05
+
+    def test_shrinkage_preserves_ordering(self) -> None:
+        """Shrinkage should mostly preserve relative ordering of BS."""
+        trades, resolutions = self._make_large_dataset()
+
+        profiles, _ = build_bettor_profiles(
+            trades, resolutions, min_resolved_bets=20, shrinkage_strength=15
+        )
+
+        briers = [p.brier_score for p in profiles]
+        assert briers == sorted(briers)

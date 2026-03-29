@@ -4,6 +4,35 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.9.0] - 2026-03-30
+
+### Added
+- **Inverse Problem Phase 2: подключение профилей к pipeline + расширение модели**
+  - `store.py`: миграция на Parquet (pyarrow ZSTD) — 506 МБ → ~60 МБ, загрузка 0.3с вместо 12с. **Почему:** 506 МБ JSON → полная десериализация в RAM (~1 ГБ peak) при каждом старте worker'а; Parquet с predicate pushdown грузит только INFORMED тир за 0.3с.
+  - `tier_filter` param в `load_profiles()`: default "informed" грузит только 348K вместо 1.7M
+  - JSON backward compat сохранён (dispatch по расширению файла)
+  - Bayesian shrinkage в `profiler.py`: `adjusted_BS = (n×BS + k×median) / (n+k)`, k=15. **Почему:** при n=3 resolved bets Brier Score имеет огромную дисперсию — "lucky streak" классифицируется как INFORMED. Shrinkage стягивает малонадёжные оценки к популяционной медиане (Ferro & Fricker 2012).
+  - `parametric.py` (NEW): Exp(λ) closed-form MLE + Weibull(λ,k) via scipy L-BFGS-B. **Почему:** BS говорит "точный/неточный", λ даёт модель поведения — как человек оценивает вероятность во времени. Нет опубликованных работ по Weibull recovery из prediction market bets — publishable novelty.
+  - `clustering.py` (NEW): HDBSCAN на behavioral features (optional dep), 6 стратегических архетипов (sharp_informed, skilled_retail, volume_bettor, contrarian, stale, noise_trader)
+  - `cloning.py` (NEW): clone validation — predicted vs actual positions, MAE, skill_score. **Почему:** аргумент транзитивности Алексея — если клоны предсказывают ставки И ставки отражают реальность → клоны предсказывают реальность.
+  - `signal.py`: `compute_enriched_signal()` с adaptive parametric blending + extremizing (Satopää et al. 2014). **Почему:** после accuracy-weighted aggregation, push away from 50% даёт 10-20% BS improvement в сравнимых популяциях прогнозистов.
+  - Extended `InformedSignal`: +4 optional поля (parametric_probability, parametric_model, mean_lambda, dominant_cluster) — backward-compatible.
+  - `loader.py`: `load_market_horizons()` — market_id → horizon_days из CSV (блокер для параметрики)
+  - New schemas: ExponentialFit, WeibullFit, ParametricResult, CloneValidationResult, ClusterAssignment
+  - `scripts/convert_json_to_parquet.py`: одноразовая миграция JSON → Parquet на сервере
+  - Build scripts (`duckdb_build_profiles.py`, `hf_build_profiles.py`) обновлены: output .parquet по умолчанию
+
+### Changed
+- `store.py` DEFAULT_PROFILES_PATH: `.json` → `.parquet`
+- `profiler.py`: новый param `shrinkage_strength=15` (0 = отключить)
+- `dry_run.py --profiles`: принимает .parquet и .json
+
+### Metrics
+- Тесты: 1102 → 1172 (+70)
+- Inverse tests: 87 → 156 (+69)
+
+---
+
 ## [0.8.0] - 2026-03-29
 
 ### Added
