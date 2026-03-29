@@ -346,10 +346,15 @@ class TestRegisterPage:
 
 
 class TestLogout:
-    async def test_logout_clears_cookie_and_redirects(self, web_client):
-        resp = await web_client.get("/logout", follow_redirects=False)
+    async def test_logout_post_clears_cookie_and_redirects(self, web_client):
+        resp = await web_client.post("/logout", follow_redirects=False)
         assert resp.status_code == 302
         assert resp.headers["location"] == "/"
+
+    async def test_logout_get_returns_405(self, web_client):
+        """GET /logout should no longer work (prefetch/img tag abuse)."""
+        resp = await web_client.get("/logout", follow_redirects=False)
+        assert resp.status_code == 405
 
 
 class TestMyPredictions:

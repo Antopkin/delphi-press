@@ -179,9 +179,9 @@ async def register_submit(
     return _set_auth_cookie(response, token)
 
 
-@router.get("/logout")
+@router.post("/logout")
 async def logout() -> RedirectResponse:
-    """Clear auth cookie and redirect to landing."""
+    """Clear auth cookie and redirect to landing. POST-only to prevent prefetch abuse."""
     response = RedirectResponse(url="/", status_code=302)
     response.delete_cookie(key="access_token", path="/")
     return response
