@@ -22,6 +22,7 @@
 - `src/schemas/` → соответствующие спеки по модулю
 - `src/agents/base.py`, `orchestrator.py` → `docs/02-agents-core.md`
 - `src/agents/collectors/` → `docs/03-collectors.md`
+- `src/data_sources/outlet_resolver.py`, `wikidata_client.py`, `feed_discovery.py` → `docs/03-collectors.md` (§7: OutletResolver)
 - `src/agents/analysts/` → `docs/04-analysts.md`
 - `src/agents/forecasters/` → `docs/05-delphi-pipeline.md`
 - `src/agents/generators/` → `docs/06-generators.md`

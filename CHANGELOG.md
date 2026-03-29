@@ -4,6 +4,26 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.8.0] - 2026-03-29
+
+### Added
+- **OutletResolver**: динамическая резолюция СМИ через Wikidata SPARQL + RSS autodiscovery
+  - `wikidata_client.py`: SPARQL-клиент для Wikidata (name → website + language + country)
+  - `feed_discovery.py`: двухпроходная RSS-автоподборка (HTML link tags → path probing)
+  - `outlet_resolver.py`: 3-layer resolver (catalog → DB cache 30d → Wikidata + RSS)
+  - Drop-in replacement для OutletsCatalog — реализует `OutletCatalogProto`
+  - Worker pre-resolves outlet перед pipeline (обогащает неизвестные СМИ)
+  - API autocomplete: combined search (static catalog 20 + DB dynamic)
+  - `POST /predictions`: новые поля `outlet_resolved`, `outlet_language`, `outlet_url` в ответе
+  - Frontend: "Издание не найдено" hint + 2s warning при unresolved outlet
+- Telegram @Antopkin в футере сайта и README
+
+### Metrics
+- Тесты: 1096 → 1102
+- Коммиты: 5d417e4..e5f56ef (8 коммитов)
+
+---
+
 ## [0.7.1] - 2026-03-29
 
 Security audit + bugfixes + code quality. Полное ревью кодовой базы (10 параллельных агентов, 214 файлов) выявило 80+ находок. Закрыто 39/40.

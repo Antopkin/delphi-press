@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-29. Production deployed. Обновлено: 2026-03-29 (v0.7.1 security audit + bugfixes).
+> Статус на 2026-03-29. Production deployed. Обновлено: 2026-03-29 (v0.8.0 OutletResolver + v0.7.1 security audit).
 
 ---
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **1080 тестов** зелёных. Security audit v0.7.1: CSRF middleware, IDOR protection, rate limiting, hardened secrets, 39/40 findings closed. Hardening (retry, SSRF, cron, monitoring) завершён. Foresight bugfix v0.5.1: Metaculus API migration, cache key fix, CLOB param fix. Delphi parse-error fix v0.5.2: personas PromptParseError fallback, orchestrator quorum 4→3. Market eval v0.6.0: resolved markets API, historical price, market_brier_comparison, news↔market correlation (Spearman/Granger).
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **1102 теста** зелёных. OutletResolver v0.8.0: динамическая резолюция СМИ через Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: CSRF middleware, IDOR protection, rate limiting, hardened secrets, 39/40 findings closed. Hardening (retry, SSRF, cron, monitoring) завершён. Foresight bugfix v0.5.1: Metaculus API migration, cache key fix, CLOB param fix. Delphi parse-error fix v0.5.2: personas PromptParseError fallback, orchestrator quorum 4→3. Market eval v0.6.0: resolved markets API, historical price, market_brier_comparison, news↔market correlation (Spearman/Granger).
 
 ### Реализованные компоненты
 
@@ -38,6 +38,7 @@
 | **CSRF Middleware** | `src/security/csrf.py` — Double Submit Cookie, JSON exempt | DONE | 2 теста |
 | **Async Password** | `src/security/password.py` — `hash_password_async`, `verify_password_async` | DONE | 6 тестов |
 | **Security Headers** | `nginx/security-headers.conf` — CSP, HSTS+preload, include pattern | DONE | — |
+| **OutletResolver** | wikidata_client, feed_discovery, outlet_resolver (3-layer: catalog → DB 30d → Wikidata + RSS) | DONE | 18 тестов |
 
 ### Отложенные задачи (tech debt из security audit v0.7.1)
 

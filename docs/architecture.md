@@ -159,12 +159,14 @@ Registry built in `src/agents/registry.py:build_default_registry()`.
 
 | Collector | Dependencies (Protocol) | Implementation | Data Sources |
 |---|---|---|---|
-| NewsScout | `RSSFetcherProto`, `WebSearchProto`, `OutletCatalogProto` | `src/data_sources/rss.py`, `src/data_sources/web_search.py`, `src/data_sources/outlets_catalog.py` | RSS feeds + web search |
+| NewsScout | `RSSFetcherProto`, `WebSearchProto`, `OutletCatalogProto` | `src/data_sources/rss.py`, `src/data_sources/web_search.py`, `src/data_sources/outlet_resolver.py` | RSS feeds + web search |
 | EventCalendar | `WebSearchProto` | `src/data_sources/web_search.py` | Web search queries |
-| OutletHistorian | `ArticleScraperProto`, `OutletCatalogProto`, `ProfileCacheProto` | `src/data_sources/scraper.py`, `src/data_sources/outlets_catalog.py`, `src/data_sources/profile_cache.py` | Article scraping, 7-day TTL cache |
+| OutletHistorian | `ArticleScraperProto`, `OutletCatalogProto`, `ProfileCacheProto` | `src/data_sources/scraper.py`, `src/data_sources/outlet_resolver.py`, `src/data_sources/profile_cache.py` | Article scraping, 7-day TTL cache |
 | ForesightCollector | `MetaculusClientProto`, `PolymarketClientProto`, `GdeltClientProto` | All in `src/data_sources/foresight.py` | Metaculus API, Polymarket API, GDELT API |
 
 **Note**: ForesightCollector is only registered if all three foresight clients are present in `collector_deps`.
+
+**OutletResolver** (pre-Stage 1): Worker создаёт `OutletResolver` как drop-in replacement для `OutletsCatalog`. Resolver реализует `OutletCatalogProto` (sync `get_outlet()`, `get_rss_feeds()`) + async `resolve()` для enrichment. Цепочка: static catalog (20 outlets) → DB cache (TTL 30d) → Wikidata SPARQL + RSS autodiscovery. Файлы: `src/data_sources/outlet_resolver.py`, `src/data_sources/wikidata_client.py`, `src/data_sources/feed_discovery.py`.
 
 ---
 

@@ -248,7 +248,7 @@ npm run css:dev     # Development: input.css → tailwind.css (watch mode)
 
 | Модуль | Страница | Задача | API endpoints | Key DOM IDs |
 |--------|----------|--------|------------|------------|
-| `form.js` | index.html | Автодополнение + отправка формы | GET `/api/v1/outlets?q=...`, POST `/api/v1/predictions` | `#prediction-form`, `#outlet`, `#outlet-suggestions`, `#target_date`, `#submit-btn` |
+| `form.js` | index.html | Автодополнение (catalog + DB) + отправка формы. Показывает "Издание не найдено" hint при пустых результатах, 2s warning при unresolved outlet перед redirect. | GET `/api/v1/outlets?q=...`, POST `/api/v1/predictions` | `#prediction-form`, `#outlet`, `#outlet-suggestions`, `#target_date`, `#submit-btn` |
 | `progress.js` | progress.html | SSE-поток, обновление шагов, redirect | GET `/api/v1/predictions/{id}/stream` (EventSource) | `#progress-bar`, `#progress-percent`, `#step-list`, `#narrative-area` |
 | `results.js` | results.html | Аккордион reasoning-блоков | Нет | `.fn-reasoning-block` (details) |
 | `settings.js` | settings.html | Валидация, добавление, удаление ключей | POST/DELETE `/api/v1/keys` | `#add-key-form`, `.fn-delete-btn`, `.fn-validate-btn` |
@@ -311,8 +311,8 @@ npm run css:dev     # Development: input.css → tailwind.css (watch mode)
 
 | Endpoint | Method | Использование | Response |
 |----------|--------|---|----------|
-| `/api/v1/outlets?q=QUERY` | GET | Autocomplete на главной | `{ items: [{ name, language }] }` |
-| `/api/v1/predictions` | POST | Создание прогноза | `{ id, status, outlet_name, target_date }` |
+| `/api/v1/outlets?q=QUERY` | GET | Autocomplete на главной (catalog + DB) | `{ items: [{ name, normalized_name, language, website_url, ... }] }` |
+| `/api/v1/predictions` | POST | Создание прогноза + outlet resolution | `{ id, status, outlet, target_date, outlet_resolved, outlet_language, outlet_url }` |
 | `/api/v1/predictions/{id}/stream` | GET (SSE) | Прогресс в реальном времени | `{ stage, message, progress, elapsed_ms }` |
 | `/api/v1/predictions/{id}` | GET | Статус прогноза (fallback при разрыве SSE) | `{ id, status, ... }` |
 | `/api/v1/keys` | POST | Добавить API-ключ | `{ id, provider, label, is_active }` |

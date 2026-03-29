@@ -1445,3 +1445,60 @@ class OutletHistorian(BaseAgent):
 4. **OutletHistorian** -- самый сложный (скрейпинг + 3 LLM-вызова + кеш)
 
 Для каждого агента -- сначала интеграционный тест с mock LLM, затем E2E тест с реальным API (помечен `@pytest.mark.integration`).
+
+---
+
+## 7. OutletResolver (`src/data_sources/outlet_resolver.py`)
+
+Динамический резолвер названий СМИ. Обогащает неизвестные издания через Wikidata SPARQL и RSS autodiscovery. Drop-in replacement для `OutletsCatalog` — реализует `OutletCatalogProto`.
+
+### Цепочка резолюции
+
+1. **Static catalog** (`src/data_sources/outlets_catalog.py`) — 20 hardcoded outlets, instant
+2. **DB cache** (SQLite, таблица `outlets`) — TTL 30 дней, instant
+3. **Wikidata SPARQL** (`src/data_sources/wikidata_client.py`) — name → website + language + country, ~1-2s
+4. **RSS autodiscovery** (`src/data_sources/feed_discovery.py`) — HTML link tags → path probing, ~1-3s
+5. Результат кэшируется в DB для будущих запросов
+
+### Интерфейс
+
+```python
+class OutletResolver:
+    def __init__(
+        self,
+        *,
+        catalog: OutletCatalogProto,
+        session_factory: async_sessionmaker[AsyncSession],
+    ) -> None: ...
+
+    # Sync (OutletCatalogProto — для коллекторов)
+    def get_outlet(self, name: str) -> OutletInfo | None: ...
+    def get_rss_feeds(self, name: str) -> list[str]: ...
+
+    # Async (enrichment — для worker и API)
+    async def resolve(self, name: str) -> OutletInfo | None: ...
+    async def resolve_by_url(self, url: str) -> OutletInfo | None: ...
+```
+
+### Интеграция
+
+- **Worker** (`src/worker.py`): создаёт `OutletResolver`, pre-resolves outlet перед pipeline, передаёт как `outlet_catalog` в `collector_deps`
+- **API** (`src/api/predictions.py`): pre-resolves при создании prediction, возвращает `outlet_resolved`, `outlet_language`, `outlet_url`
+- **dry_run.py**: использует in-memory SQLite для DB cache
+- **Коллекторы**: получают resolver через `OutletCatalogProto`, не знают о Wikidata/RSS — используют sync `get_outlet()` и `get_rss_feeds()`
+
+### Зависимости
+
+Новых пакетов нет. Использует `httpx` (HTTP), `feedparser` (RSS parsing) — обе уже в `pyproject.toml`.
+
+### WikidataClient (`src/data_sources/wikidata_client.py`)
+
+SPARQL-запрос к `query.wikidata.org/sparql` по типам `Q11032` (газета), `Q1193236` (новостное агентство), `Q1145276` (новостной сайт). Поля: `P856` (website), `P407` (язык), `P17` (страна). Timeout 10s, graceful degradation (возвращает `None` при ошибке).
+
+### FeedDiscovery (`src/data_sources/feed_discovery.py`)
+
+Двухпроходная стратегия:
+1. Парсинг `<link rel="alternate" type="application/rss+xml">` из HTML главной страницы
+2. Параллельный пробинг стандартных путей (`/feed`, `/rss.xml`, `/atom.xml`, `/rss/all`, etc.)
+
+Результат дедуплицируется. При полной неудаче — пустой список (pipeline использует global RSS fallback).
