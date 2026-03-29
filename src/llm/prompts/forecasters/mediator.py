@@ -73,6 +73,26 @@ news={{ pred.newsworthiness }}, тип={{ pred.scenario_type }}
 
 ---
 
+## HORIZON-SPECIFIC SYNTHESIS GUIDANCE
+
+{% if horizon_band == 'immediate' %}
+PRIORITY: Divergences from Media Expert and Economist carry extra weight at this horizon
+(news cycle and economic calendar are the strongest predictors for 1-2 days).
+SCHEDULED EVENTS CHECK: Did all Round 1 personas explicitly address scheduled events
+in the next {{ horizon_days }} day(s)? List any scheduled events NOT mentioned in any assessment.
+{% elif horizon_band == 'near' %}
+PRIORITY: All persona divergences carry equal weight. This is the maximum uncertainty zone.
+For Devil's Advocate alternative scenarios: ask — what is the specific mechanism by which
+this alternative realizes within {{ horizon_days }} days?
+{% else %}
+PRIORITY: Divergences from Realist and Geopolitical Strategist carry extra weight at this
+horizon (base rates and structural forces are the strongest predictors for 5-7 days).
+NEWS DECAY CHECK: Any dispute based primarily on current breaking news should be flagged —
+most current signals will decay within 5-7 days (half-life ~7h).
+{% endif %}
+
+---
+
 ## ИНСТРУКЦИЯ
 
 Проанализируй оценки и верни JSON по схеме MediatorSynthesis:

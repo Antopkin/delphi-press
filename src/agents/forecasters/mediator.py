@@ -72,6 +72,14 @@ class Mediator(BaseAgent):
         cross_flags = self._check_cross_impacts(assessments, disputes)
 
         # Step 3: LLM call for key questions + summary
+        # Horizon-aware mediator prompt
+        from datetime import date as date_type
+
+        from src.schemas.timeline import compute_horizon_band
+
+        horizon_days = max(1, min((context.target_date - date_type.today()).days, 7))
+        horizon_band = compute_horizon_band(horizon_days).value
+
         anonymized = self._anonymize_assessments(assessments)
         prompt = MediatorPrompt()
         messages = prompt.to_messages(
@@ -79,6 +87,8 @@ class Mediator(BaseAgent):
             target_date=str(context.target_date),
             anonymized_assessments=anonymized,
             event_trajectories=context.trajectories or [],
+            horizon_days=horizon_days,
+            horizon_band=horizon_band,
             schema_instruction=prompt.render_output_schema_instruction(),
         )
 

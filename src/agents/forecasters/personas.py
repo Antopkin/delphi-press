@@ -273,10 +273,17 @@ class DelphiPersonaAgent(BaseAgent):
             R1: {"assessment": PersonaAssessment.model_dump()}
             R2: {"revised_assessment": PersonaAssessment.model_dump()}
         """
+        from datetime import date as date_type
+
         from src.llm.prompts.forecasters.persona import PersonaPrompt
+        from src.schemas.timeline import compute_horizon_band
 
         round_number = 2 if context.mediator_synthesis is not None else 1
         task = f"delphi_r{round_number}_{self.persona.task_prefix}"
+
+        # Horizon-aware prompt parameters
+        horizon_days = max(1, min((context.target_date - date_type.today()).days, 7))
+        horizon_band = compute_horizon_band(horizon_days).value
 
         prompt = PersonaPrompt(
             persona_id=self.persona.id.value,
@@ -291,6 +298,8 @@ class DelphiPersonaAgent(BaseAgent):
             cross_impact_matrix=context.cross_impact_matrix,
             round_number=round_number,
             mediator_feedback=context.mediator_synthesis if round_number == 2 else None,
+            horizon_days=horizon_days,
+            horizon_band=horizon_band,
             schema_instruction=prompt.render_output_schema_instruction(),
         )
 
