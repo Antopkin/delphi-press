@@ -71,7 +71,7 @@ class Orchestrator:
         StageDefinition(
             name=ProgressStage.EVENT_IDENTIFICATION,
             agent_names=["event_trend_analyzer"],
-            timeout_seconds=300,
+            timeout_seconds=600,
         ),
         StageDefinition(
             name=ProgressStage.TRAJECTORY,

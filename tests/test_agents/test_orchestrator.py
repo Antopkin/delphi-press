@@ -525,3 +525,21 @@ def test_build_error_response_empty_headlines(populated_registry, make_context):
     failed = StageResult(stage_name="collection", success=False, error="fail")
     resp = orch._build_error_response(ctx, failed)
     assert resp.headlines == []
+
+
+# ── Timeout configuration ──────────────────────────────────────────
+
+
+def test_event_identification_stage_timeout_600():
+    """Stage 2 needs 600s for Opus trajectory_analysis on 20 threads."""
+    stage = Orchestrator.STAGES[1]
+    assert stage.name == ProgressStage.EVENT_IDENTIFICATION
+    assert stage.timeout_seconds >= 600
+
+
+def test_persona_agent_timeout_600():
+    """Persona agents need 600s for complex JSON generation with Opus."""
+    from src.agents.forecasters.personas import DelphiPersonaAgent
+
+    # DelphiPersonaAgent requires persona config, check class method directly
+    assert DelphiPersonaAgent.get_timeout_seconds(None) >= 600

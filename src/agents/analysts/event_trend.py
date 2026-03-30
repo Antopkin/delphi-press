@@ -76,7 +76,7 @@ class EventTrendAnalyzer(BaseAgent):
     W_ENTITY_PROMINENCE = 0.10
 
     def get_timeout_seconds(self) -> int:
-        return 300
+        return 600
 
     def validate_context(self, context: PipelineContext) -> str | None:
         signals = self._coerce_signals(context.signals)
