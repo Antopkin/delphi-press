@@ -237,11 +237,8 @@ async def main() -> None:
 
     scraper = NoopScraper()  # NoopScraper instead of TrafilaturaScraper for speed
     profile_cache = InMemoryProfileCache()
-    _tournaments_str = os.environ.get("METACULUS_TOURNAMENTS", "32977")
-    metaculus = MetaculusClient(
-        token=os.environ.get("METACULUS_TOKEN", ""),
-        tournaments=[int(t) for t in _tournaments_str.split(",") if t.strip()],
-    )
+    # Metaculus disabled: API returns 403 without BENCHMARKING tier
+    metaculus = None
     polymarket = PolymarketClient()
     gdelt = GdeltDocClient()
 

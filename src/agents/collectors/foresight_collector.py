@@ -222,7 +222,9 @@ class ForesightCollector(BaseAgent):
     # ------------------------------------------------------------------
 
     async def _fetch_metaculus(self, query: str) -> list[dict[str, Any]]:
-        """Fetch Metaculus questions. Exceptions propagate to gather."""
+        """Fetch Metaculus questions. Returns [] if client is None (disabled)."""
+        if self._metaculus is None:
+            return []
         return await self._metaculus.fetch_questions(query, limit=MAX_FORESIGHT_EVENTS)
 
     async def _fetch_polymarket(self, query: str) -> list[dict[str, Any]]:

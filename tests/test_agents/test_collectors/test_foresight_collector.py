@@ -870,3 +870,29 @@ async def test_live_trades_reset_between_calls(
     # Correct behavior: no live trades → no informed_probability
     # (because no pre-loaded trades exist either)
     assert "informed_probability" not in sig2
+
+
+# ── Metaculus disable ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_metaculus_none_skips_silently(
+    mock_router, mock_polymarket, mock_gdelt, make_context, caplog
+):
+    """When metaculus_client=None, skip silently — no warning, no error."""
+    mock_polymarket.fetch_markets.return_value = []
+    mock_gdelt.fetch_articles.return_value = []
+
+    agent = ForesightCollector(
+        mock_router,
+        metaculus_client=None,
+        polymarket_client=mock_polymarket,
+        gdelt_client=mock_gdelt,
+    )
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        result = await agent.execute(make_context())
+    assert result["foresight_events"] == []
+    assert "metaculus" not in result["sources_used"]
+    assert "Metaculus fetch failed" not in caplog.text
