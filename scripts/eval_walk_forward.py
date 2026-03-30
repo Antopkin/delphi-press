@@ -230,39 +230,60 @@ def compute_fold_metrics(
     Returns dict with: bss_vs_raw, bs_raw, bs_informed,
     reliability, resolution, uncertainty, calibration_slope, ece.
     """
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    import importlib
-
-    _metrics_mod = importlib.import_module("src.eval.metrics")
-    brier_decomposition = _metrics_mod.brier_decomposition
-    calibration_slope = _metrics_mod.calibration_slope
-    expected_calibration_error = _metrics_mod.expected_calibration_error
-
-    # Compute BS directly (avoid bootstrap overhead)
     import numpy as _np
 
     _r = _np.asarray(raw_probs, dtype=_np.float64)
     _i = _np.asarray(informed_probs, dtype=_np.float64)
     _o = _np.asarray(outcomes, dtype=_np.float64)
+    n = len(_r)
+
+    # Brier scores
     bs_raw = float(_np.mean((_r - _o) ** 2))
     bs_informed = float(_np.mean((_i - _o) ** 2))
-
     bss = 1.0 - bs_informed / bs_raw if bs_raw > 0 else 0.0
 
-    # Murphy decomposition on informed predictions
-    decomp = brier_decomposition(informed_probs, outcomes)
+    # Murphy decomposition (equal-width bins) on informed predictions
+    o_bar = float(_np.mean(_o))
+    unc = o_bar * (1.0 - o_bar)
+    bin_edges = _np.linspace(0.0, 1.0, 11)
+    rel, res = 0.0, 0.0
+    for idx in range(10):
+        mask = (_i >= bin_edges[idx]) & (_i < bin_edges[idx + 1])
+        if idx == 9:
+            mask = (_i >= bin_edges[idx]) & (_i <= bin_edges[idx + 1])
+        n_k = int(_np.sum(mask))
+        if n_k == 0:
+            continue
+        o_k = float(_np.mean(_o[mask]))
+        p_k = float(_np.mean(_i[mask]))
+        rel += (n_k / n) * (o_k - p_k) ** 2
+        res += (n_k / n) * (o_k - o_bar) ** 2
 
-    # Calibration slope and ECE
-    cal_slope = calibration_slope(informed_probs, outcomes)
-    ece = expected_calibration_error(informed_probs, outcomes)
+    # Calibration slope: cov(p, o) / var(p)
+    var_p = float(_np.var(_i))
+    cal_slope = (
+        float(_np.mean((_i - _np.mean(_i)) * (_o - _np.mean(_o)))) / var_p
+        if var_p > 1e-12
+        else 0.0
+    )
+
+    # ECE (equal-frequency bins)
+    sorted_idx = _np.argsort(_i)
+    p_sorted, o_sorted = _i[sorted_idx], _o[sorted_idx]
+    bin_size = max(1, n // 10)
+    ece = 0.0
+    for j in range(0, n, bin_size):
+        p_bin = p_sorted[j : j + bin_size]
+        o_bin = o_sorted[j : j + bin_size]
+        ece += (len(p_bin) / n) * abs(float(_np.mean(p_bin)) - float(_np.mean(o_bin)))
 
     return {
         "bss_vs_raw": round(bss, 6),
         "bs_raw": round(bs_raw, 6),
         "bs_informed": round(bs_informed, 6),
-        "reliability": round(decomp.reliability, 6),
-        "resolution": round(decomp.resolution, 6),
-        "uncertainty": round(decomp.uncertainty, 6),
+        "reliability": round(rel, 6),
+        "resolution": round(res, 6),
+        "uncertainty": round(unc, 6),
         "calibration_slope": round(cal_slope, 4),
         "ece": round(ece, 4),
     }
