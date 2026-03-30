@@ -253,6 +253,11 @@ class Orchestrator:
         duration_ms = (time.monotonic_ns() - stage_start_ns) // 1_000_000
 
         if successful_count < min_required:
+            # Include agent-level errors for debugging
+            agent_errors = [
+                f"{r.agent_name}: {r.error}" for r in results if not r.success and r.error
+            ]
+            detail = "; ".join(agent_errors) if agent_errors else "unknown"
             return StageResult(
                 stage_name=str(stage_name),
                 success=False,
@@ -260,7 +265,7 @@ class Orchestrator:
                 duration_ms=duration_ms,
                 error=(
                     f"Insufficient successful agents for '{stage_name}': "
-                    f"{successful_count}/{min_required}"
+                    f"{successful_count}/{min_required}. Details: {detail}"
                 ),
             )
 

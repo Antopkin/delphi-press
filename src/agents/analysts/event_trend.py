@@ -107,8 +107,12 @@ class EventTrendAnalyzer(BaseAgent):
             cluster_labels = self._cluster_embeddings(embeddings)
             raw_clusters = self._build_clusters(signals, cluster_labels)
 
-        # LLM-лейблинг и scoring
-        threads = await self._label_and_score_clusters(raw_clusters)
+        # LLM-лейблинг и scoring (graceful: if LLM fails, use raw signal titles)
+        try:
+            threads = await self._label_and_score_clusters(raw_clusters)
+        except Exception as exc:
+            self.logger.warning("Cluster labeling LLM failed, using raw titles: %s", exc)
+            threads = self._fallback_threads(raw_clusters)
 
         # Ранжирование
         max_threads = context.pipeline_config.get("max_event_threads", self.MAX_THREADS)
@@ -302,6 +306,48 @@ class EventTrendAnalyzer(BaseAgent):
             )
             threads.append(thread)
 
+        return threads
+
+    def _fallback_threads(self, clusters: list[dict]) -> list[EventThread]:
+        """Build EventThreads from raw clusters without LLM labeling."""
+        max_size = max((c["signal_count"] for c in clusters), default=1)
+        threads = []
+        for cluster in clusters:
+            signals_in: list[SignalRecord] = cluster["signals"]
+            signal_ids = [s.id for s in signals_in]
+            entities = self._extract_top_entities(signals_in)
+            sources = {s.source_name for s in signals_in}
+            source_div = len(sources) / max(len(signals_in), 1)
+            timestamps = [s.published_at for s in signals_in if s.published_at]
+            latest = max(timestamps) if timestamps else None
+            recency = self._calculate_recency_score(latest)
+            sig_score = self._calculate_significance_score(
+                importance=0.5,
+                cluster_size=len(signals_in),
+                max_cluster_size=max_size,
+                recency_score=recency,
+                source_diversity=source_div,
+                entity_prominence=0.5,
+            )
+            thread_hash = hashlib.md5(signals_in[0].title.encode()).hexdigest()[:8]
+            threads.append(
+                EventThread(
+                    id=f"thread_{thread_hash}",
+                    title=signals_in[0].title,
+                    summary="; ".join(s.title for s in signals_in[:3]),
+                    signal_ids=signal_ids,
+                    cluster_size=len(signals_in),
+                    category="",
+                    entities=entities,
+                    source_diversity=source_div,
+                    earliest_signal=min(timestamps) if timestamps else None,
+                    latest_signal=latest,
+                    recency_score=recency,
+                    significance_score=sig_score,
+                    importance=0.5,
+                    entity_prominence=0.5,
+                )
+            )
         return threads
 
     # ── Trajectory analysis ───────────────────────────────────────────
