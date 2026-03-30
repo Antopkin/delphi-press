@@ -66,6 +66,10 @@ _CHEAP_TASKS = {
     "event_identification",
     "event_clustering",
     "thread_merge",
+    # event_trend_analyzer calls these internally (stage 2, 300s timeout) —
+    # Opus is too slow for 20 threads within the timeout
+    "trajectory_analysis",
+    "cross_impact_analysis",
 }
 
 
