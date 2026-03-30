@@ -187,49 +187,18 @@ def _extremize(prob: float, d: float) -> float:
     return odds_ext / (1.0 + odds_ext)
 
 
-def compute_fold_signals(
+def _fetch_test_markets(
     con,
-    profiles: dict[str, dict],
     test_start: float,
     test_end: float,
     *,
     bucketed_path: str | None = None,
-    volume_gate: bool = False,
-    adaptive_extremize: bool = False,
-    timing_weight: bool = False,
-) -> tuple[list[float], list[float], list[float], list[float]]:
-    """Compute raw and informed probabilities for test markets.
+) -> dict[str, dict]:
+    """Fetch test market positions from DuckDB (the expensive part).
 
-    For each test market (resolved in [test_start, test_end)):
-    - raw_prob: volume-weighted average of ALL bettors' positions (market consensus)
-    - informed_prob: accuracy-weighted average of INFORMED bettors, with
-      coverage-based shrinkage toward raw_prob
-
-    Variant flags:
-    - volume_gate: soft gate — markets with total volume < $10K get zero
-      enrichment, linear scale to $100K.
-    - adaptive_extremize: push informed probability away from 0.5 using
-      inter-bettor position std (Satopää et al. 2014).
-    - timing_weight: weight bettors by (1 - timing_score), giving more
-      weight to early traders.
-
-    Args:
-        con: DuckDB connection.
-        profiles: User profiles from build_fold_profiles().
-        test_start: Start of test window (unix timestamp).
-        test_end: End of test window (unix timestamp).
-        bucketed_path: Path to bucketed parquet (temporal filter).
-        volume_gate: Apply soft volume gate.
-        adaptive_extremize: Apply adaptive extremizing (d from position std).
-        timing_weight: Weight by (1 - timing_score).
-
-    Returns:
-        (raw_probs, informed_probs, outcomes, coverages) — parallel lists.
+    Returns dict mapping condition_id → {resolved_yes, positions: [(uid, pos, vol, last_bucket)]}.
+    This is the heavy I/O — call ONCE per fold, then reuse for all variants.
     """
-    # Only fetch last_bucket when timing_weight is needed (saves memory)
-    extra_col = ", MAX(time_bucket) AS last_bucket" if timing_weight else ""
-    extra_sel = ", p.last_bucket" if timing_weight else ", NULL AS last_bucket"
-
     if bucketed_path:
         cutoff_bucket = int(test_start // BUCKET_SIZE_SECONDS)
         test_rows = con.execute(
@@ -239,14 +208,14 @@ def compute_fold_signals(
                     LEAST(1.0, GREATEST(0.0,
                         SUM(weighted_price_sum) / NULLIF(SUM(total_usd), 0)
                     )) AS avg_position,
-                    SUM(total_usd) AS total_usd
-                    {extra_col}
+                    SUM(total_usd) AS total_usd,
+                    MAX(time_bucket) AS last_bucket
                 FROM read_parquet('{bucketed_path}')
                 WHERE time_bucket <= {cutoff_bucket}
                 GROUP BY user_id, condition_id
             )
             SELECT r.condition_id, r.resolved_yes,
-                   p.user_id, p.avg_position, p.total_usd{extra_sel}
+                   p.user_id, p.avg_position, p.total_usd, p.last_bucket
             FROM resolved_markets r
             JOIN positions_at_cutoff p ON r.condition_id = p.condition_id
             WHERE r.end_date >= ? AND r.end_date < ?
@@ -256,7 +225,7 @@ def compute_fold_signals(
         ).fetchall()
     else:
         test_rows = con.execute(
-            f"""
+            """
             SELECT r.condition_id, r.resolved_yes,
                    p.user_id, p.avg_position, p.total_usd, NULL AS last_bucket
             FROM resolved_markets r
@@ -268,9 +237,8 @@ def compute_fold_signals(
         ).fetchall()
 
     if not test_rows:
-        return [], [], [], []
+        return {}
 
-    # Group by market
     from collections import defaultdict
 
     market_data: dict[str, dict] = defaultdict(lambda: {"resolved_yes": None, "positions": []})
@@ -278,6 +246,22 @@ def compute_fold_signals(
         market_data[cid]["resolved_yes"] = resolved_yes
         market_data[cid]["positions"].append((uid, pos, vol, last_bucket))
 
+    return dict(market_data)
+
+
+def _apply_variant(
+    market_data: dict[str, dict],
+    profiles: dict[str, dict],
+    test_start: float,
+    *,
+    volume_gate: bool = False,
+    adaptive_extremize: bool = False,
+    timing_weight: bool = False,
+) -> tuple[list[float], list[float], list[float], list[float]]:
+    """Apply variant-specific post-processing to cached market data.
+
+    Pure Python — runs in milliseconds. Call once per variant per fold.
+    """
     raw_probs = []
     informed_probs = []
     outcomes = []
@@ -308,7 +292,7 @@ def compute_fold_signals(
             weight = accuracy_w * vol * profile["recency_weight"]
 
             # Timing weight: early traders (low timing_score) get more weight
-            if timing_weight and bucketed_path and last_bucket is not None:
+            if timing_weight and last_bucket is not None:
                 cutoff_bucket_val = int(test_start // BUCKET_SIZE_SECONDS)
                 ts = last_bucket / cutoff_bucket_val if cutoff_bucket_val > 0 else 1.0
                 ts = min(1.0, max(0.0, ts))
@@ -346,6 +330,44 @@ def compute_fold_signals(
         coverages.append(coverage)
 
     return raw_probs, informed_probs, outcomes, coverages
+
+
+# Variant configurations for --all-variants mode
+VARIANT_CONFIGS = {
+    "baseline": {"volume_gate": False, "adaptive_extremize": False, "timing_weight": False},
+    "volume_gate": {"volume_gate": True, "adaptive_extremize": False, "timing_weight": False},
+    "gate_extremize": {"volume_gate": True, "adaptive_extremize": True, "timing_weight": False},
+    "gate_timing": {"volume_gate": True, "adaptive_extremize": False, "timing_weight": True},
+    "all_three": {"volume_gate": True, "adaptive_extremize": True, "timing_weight": True},
+}
+
+
+def compute_fold_signals(
+    con,
+    profiles: dict[str, dict],
+    test_start: float,
+    test_end: float,
+    *,
+    bucketed_path: str | None = None,
+    volume_gate: bool = False,
+    adaptive_extremize: bool = False,
+    timing_weight: bool = False,
+) -> tuple[list[float], list[float], list[float], list[float]]:
+    """Compute raw and informed probabilities for test markets (single variant).
+
+    Backward-compatible wrapper around _fetch_test_markets + _apply_variant.
+    """
+    market_data = _fetch_test_markets(con, test_start, test_end, bucketed_path=bucketed_path)
+    if not market_data:
+        return [], [], [], []
+    return _apply_variant(
+        market_data,
+        profiles,
+        test_start,
+        volume_gate=volume_gate,
+        adaptive_extremize=adaptive_extremize,
+        timing_weight=timing_weight,
+    )
 
 
 def compute_fold_metrics(
@@ -571,6 +593,139 @@ def run_walk_forward(
     return fold_results
 
 
+def run_walk_forward_multi(
+    con,
+    burn_in_days: int = 180,
+    step_days: int = 60,
+    test_window_days: int = 60,
+    min_bets: int = 5,
+    shrinkage_strength: int = 15,
+    *,
+    bucketed_path: str | None = None,
+    variants: dict[str, dict[str, bool]] | None = None,
+) -> dict[str, list[dict]]:
+    """Run walk-forward for ALL variants in a single pass.
+
+    DuckDB queries (build_fold_profiles, _fetch_test_markets) run ONCE per fold.
+    Python post-processing (_apply_variant) runs once per variant — milliseconds.
+
+    Returns dict mapping variant_name → list of fold result dicts.
+    """
+    if variants is None:
+        variants = VARIANT_CONFIGS
+
+    result = con.execute("SELECT MIN(end_date), MAX(end_date) FROM resolved_markets").fetchone()
+    if result is None or result[0] is None:
+        return {name: [] for name in variants}
+
+    t_min, t_max = result
+    t_start = t_min + burn_in_days * 86400
+    step_secs = step_days * 86400
+    window_secs = test_window_days * 86400
+
+    all_results: dict[str, list[dict]] = {name: [] for name in variants}
+    prev_informed_set: set[str] = set()
+    fold_id = 0
+    t = t_start
+
+    while t + window_secs <= t_max:
+        n_train = con.execute(
+            "SELECT COUNT(*) FROM resolved_markets WHERE end_date < ?", [t]
+        ).fetchone()[0]
+        n_test = con.execute(
+            "SELECT COUNT(*) FROM resolved_markets WHERE end_date >= ? AND end_date < ?",
+            [t, t + window_secs],
+        ).fetchone()[0]
+
+        if n_test == 0:
+            logger.warning("Fold %d: zero test markets, skipping", fold_id)
+            t += step_secs
+            fold_id += 1
+            continue
+
+        # Build profiles ONCE per fold (identical for all variants)
+        profiles = build_fold_profiles(
+            con,
+            t,
+            min_bets,
+            shrinkage_strength,
+            bucketed_path=bucketed_path,
+        )
+        informed_set = {uid for uid, p in profiles.items() if p["tier"] == "informed"}
+        n_profiled = len(profiles)
+        n_informed = len(informed_set)
+
+        if prev_informed_set:
+            intersection = len(informed_set & prev_informed_set)
+            union = len(informed_set | prev_informed_set)
+            tier_stability = round(intersection / union, 4) if union > 0 else 0.0
+        else:
+            tier_stability = None
+
+        # Fetch test market positions ONCE per fold (the expensive DuckDB query)
+        market_data = _fetch_test_markets(
+            con,
+            t,
+            t + window_secs,
+            bucketed_path=bucketed_path,
+        )
+
+        if len(market_data) < 2:
+            logger.warning("Fold %d: only %d test markets, skipping", fold_id, len(market_data))
+            t += step_secs
+            fold_id += 1
+            prev_informed_set = informed_set
+            continue
+
+        # Apply each variant (pure Python, milliseconds each)
+        for variant_name, flags in variants.items():
+            raw_probs, informed_probs, outcomes, market_coverages = _apply_variant(
+                market_data,
+                profiles,
+                t,
+                **flags,
+            )
+
+            if len(raw_probs) < 2:
+                continue
+
+            metrics = compute_fold_metrics(raw_probs, informed_probs, outcomes)
+            mean_coverage = (
+                sum(market_coverages) / len(market_coverages) if market_coverages else 0.0
+            )
+
+            fold_result = {
+                "fold_id": fold_id,
+                "train_end": t,
+                "test_start": t,
+                "test_end": t + window_secs,
+                "n_train_markets": n_train,
+                "n_test_markets": n_test,
+                "n_profiled": n_profiled,
+                "n_informed": n_informed,
+                "coverage": round(mean_coverage, 4),
+                "tier_stability": tier_stability,
+                **metrics,
+            }
+            all_results[variant_name].append(fold_result)
+
+        logger.info(
+            "Fold %d: train=%d test=%d profiled=%d informed=%d [%d variants]",
+            fold_id,
+            n_train,
+            n_test,
+            n_profiled,
+            n_informed,
+            len(variants),
+        )
+
+        prev_informed_set = informed_set
+        t += step_secs
+        fold_id += 1
+
+    return all_results
+
+
 def write_csv(results: list[dict], path: Path) -> None:
     """Write fold results to CSV."""
     if not results:
@@ -742,6 +897,11 @@ def main() -> None:
         metavar="N",
         help="Bootstrap resamples for BSS confidence intervals (e.g., 1000)",
     )
+    parser.add_argument(
+        "--all-variants",
+        action="store_true",
+        help="Run ALL variant configs in a single pass (5x faster than separate runs)",
+    )
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -870,43 +1030,68 @@ def main() -> None:
         time.perf_counter() - t0,
     )
 
-    # Log variant configuration
-    variants = []
-    if args.volume_gate:
-        variants.append("volume_gate")
-    if args.adaptive_extremize:
-        variants.append("adaptive_extremize")
-    if args.timing_weight:
-        variants.append("timing_weight")
-    if variants:
-        logger.info("BSS variants enabled: %s", ", ".join(variants))
+    bp = str(bucketed_path) if bucketed_path else None
 
-    # Run walk-forward
-    results = run_walk_forward(
-        con,
-        burn_in_days=args.burn_in,
-        step_days=args.step,
-        test_window_days=args.test_window,
-        min_bets=args.min_bets,
-        shrinkage_strength=args.shrinkage,
-        bucketed_path=str(bucketed_path) if bucketed_path else None,
-        volume_gate=args.volume_gate,
-        adaptive_extremize=args.adaptive_extremize,
-        timing_weight=args.timing_weight,
-    )
+    if args.all_variants:
+        # Single-pass multi-variant mode: DuckDB queries run ONCE, all variants computed
+        logger.info("ALL-VARIANTS mode: %d configs in single pass", len(VARIANT_CONFIGS))
+        all_results = run_walk_forward_multi(
+            con,
+            burn_in_days=args.burn_in,
+            step_days=args.step,
+            test_window_days=args.test_window,
+            min_bets=args.min_bets,
+            shrinkage_strength=args.shrinkage,
+            bucketed_path=bp,
+        )
+        con.close()
 
-    con.close()
+        output_dir = args.output_csv.parent
+        for variant_name, results in all_results.items():
+            csv_path = output_dir / f"walk_forward_{variant_name}.csv"
+            write_csv(results, csv_path)
+            print(f"\n{'─' * 60}")
+            print(f"VARIANT: {variant_name}")
+            print_summary(results)
+            if args.bootstrap > 0 and results:
+                print_bootstrap_ci(results, n_resamples=args.bootstrap)
 
-    # Output
-    write_csv(results, args.output_csv)
-    print_summary(results)
+        elapsed = time.perf_counter() - t0
+        print(f"\nTotal time (all variants): {elapsed:.1f}s")
+    else:
+        # Single-variant mode (backward compatible)
+        variant_flags = []
+        if args.volume_gate:
+            variant_flags.append("volume_gate")
+        if args.adaptive_extremize:
+            variant_flags.append("adaptive_extremize")
+        if args.timing_weight:
+            variant_flags.append("timing_weight")
+        if variant_flags:
+            logger.info("BSS variants enabled: %s", ", ".join(variant_flags))
 
-    # Bootstrap CI (paired resampling for BSS)
-    if args.bootstrap > 0 and results:
-        print_bootstrap_ci(results, n_resamples=args.bootstrap)
+        results = run_walk_forward(
+            con,
+            burn_in_days=args.burn_in,
+            step_days=args.step,
+            test_window_days=args.test_window,
+            min_bets=args.min_bets,
+            shrinkage_strength=args.shrinkage,
+            bucketed_path=bp,
+            volume_gate=args.volume_gate,
+            adaptive_extremize=args.adaptive_extremize,
+            timing_weight=args.timing_weight,
+        )
+        con.close()
 
-    elapsed = time.perf_counter() - t0
-    print(f"\nTotal time: {elapsed:.1f}s")
+        write_csv(results, args.output_csv)
+        print_summary(results)
+
+        if args.bootstrap > 0 and results:
+            print_bootstrap_ci(results, n_resamples=args.bootstrap)
+
+        elapsed = time.perf_counter() - t0
+        print(f"\nTotal time: {elapsed:.1f}s")
 
 
 if __name__ == "__main__":
