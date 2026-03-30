@@ -195,25 +195,25 @@
     <pre class="mermaid mb-6">
 flowchart TD
     subgraph collect["Сбор данных"]
-        NS["NewsScout<br/>RSS + поиск"] & EC["EventCalendar<br/>планируемые события"] & OH["OutletHistorian<br/>архив издания"] & FC["ForesightCollector<br/>Polymarket, Metaculus"]
+        NS["NewsScout"] & EC["EventCalendar"] & OH["OutletHistorian"] & FC["ForesightCollector"]
     end
 
     subgraph analyze["Анализ"]
-        MERGE["Объединение<br/>сигналов"] --> CLUSTER["Кластеризация<br/>TF-IDF + HDBSCAN"]
-        CLUSTER --> GA["Геополитический<br/>аналитик"] & EA["Экономический<br/>аналитик"] & MA["Медиа-<br/>аналитик"]
-        GA & EA & MA --> SCENARIOS["Сценарии +<br/>cross-impact matrix"]
+        MERGE["Объединение сигналов"] --> CLUSTER["Кластеризация"]
+        CLUSTER --> GA["Геополитик"] & EA["Экономист"] & MA["Медиа-аналитик"]
+        GA & EA & MA --> SCENARIOS["Сценарии"]
     end
 
     subgraph delphi["Дельфи-консенсус"]
-        P1["Реалист"] & P2["Геостратег"] & P3["Экономист"] & P4["Медиа-эксперт"] & P5["Адвокат<br/>дьявола"]
-        P1 & P2 & P3 & P4 & P5 --> MED["Медиатор<br/>синтез разногласий"]
-        MED --> R2["Раунд 2<br/>пересмотр оценок"]
-        R2 --> JUDGE["Judge<br/>таймлайн событий"]
+        P1["Реалист"] & P2["Геостратег"] & P3["Экономист"] & P4["Медиа-эксперт"] & P5["Адвокат дьявола"]
+        P1 & P2 & P3 & P4 & P5 --> MED["Медиатор"]
+        MED --> R2["Раунд 2"]
+        R2 --> JUDGE["Judge"]
     end
 
     subgraph output["Генерация"]
-        FRAME["Фрейминг<br/>редакционный угол"] --> HEADLINE["Заголовок + лид<br/>в стиле издания"]
-        HEADLINE --> QG["Quality Gate<br/>факт-чек + стиль"]
+        FRAME["Фрейминг"] --> HEADLINE["Заголовок + лид"]
+        HEADLINE --> QG["Quality Gate"]
     end
 
     NS & EC & OH & FC --> MERGE
