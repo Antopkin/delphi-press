@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-30. Production deployed. Обновлено: 2026-03-30 (v0.9.4 Market Dashboard + pipeline resilience + UI fixes + v0.9.3 Phase 5 BSS variants + conditionId fix + v0.9.2 walk-forward eval + v0.9.1 calibration + v0.9.0 Phase 2 + v0.8.0 OutletResolver + v0.7.1 security audit).
+> Статус на 2026-03-31. Production deployed v0.9.4. Обновлено: 2026-03-31 (v0.9.4 Market Dashboard + Opus everywhere + pipeline resilience + 6 TDD bugfixes + v0.9.3 Phase 5 BSS variants + conditionId fix + v0.9.2 walk-forward eval + v0.9.1 calibration + v0.9.0 Phase 2 + v0.8.0 OutletResolver + v0.7.1 security audit).
 
 ---
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Market Dashboard v0.9.4**: `/markets` — live informed consensus vs raw Polymarket price (TTL 15 мин, Chart.js sparklines), блок релевантных рынков на `/results/{id}` (fuzzy match), resilient event_identification (fallback + детальные ошибки), UI: пресеты Light+Opus, дата до +7 дней. **Inverse Problem v0.9.3**: conditionId fix, BSS variants, bootstrap CI, single-pass multi-variant (5x speedup), weekly profile refresh cron. Walk-forward baseline: +0.196 mean BSS (22/22 positive), CI [+0.094, +0.297], p=2.38e-07. Parquet store (506→62 МБ, 348K INFORMED), Bayesian shrinkage, parametric λ, HDBSCAN. **1296 тестов** зелёных. OutletResolver v0.8.0: Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: 40/40 findings closed. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation. Единственный LLM-провайдер — OpenRouter.
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Market Dashboard v0.9.4**: `/markets` — live informed consensus vs raw Polymarket price (TTL 15 мин, Chart.js sparklines), блок релевантных рынков на `/results/{id}` (fuzzy match), resilient event_identification (fallback + детальные ошибки), UI: пресеты Light+Opus, дата до +7 дней. **Inverse Problem v0.9.3**: conditionId fix, BSS variants, bootstrap CI, single-pass multi-variant (5x speedup), weekly profile refresh cron. Walk-forward baseline: +0.196 mean BSS (22/22 positive), CI [+0.094, +0.297], p=2.38e-07. Parquet store (506→62 МБ, 348K INFORMED), Bayesian shrinkage, parametric λ, HDBSCAN. **1302 теста** зелёных. Все production tasks на Opus 4.6, max_tokens unlimited, Metaculus отключён (403), GDELT без кириллицы, 2 пресета (Light+Opus). OutletResolver v0.8.0: Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: 40/40 findings closed. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation. Единственный LLM-провайдер — OpenRouter.
 
 ### Реализованные компоненты
 

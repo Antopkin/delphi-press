@@ -26,9 +26,14 @@
 - **Trajectory/cross-impact на cheap model** в dry run — timeout 300s в stage 2
 - **UI**: timeline line, дата до +7 дней, пресеты Light+Opus only
 - **Mermaid диаграммы**, нумерация стадий, horizon bands на /about
+- **Stage timeouts** — event_identification 300→600s, DelphiPersonaAgent 300→600s, event_trend_analyzer 300→600s. **Почему:** Opus на 20 threads не укладывался в 300s
+- **Metaculus disabled** — API возвращает 403 без BENCHMARKING tier. `_fetch_metaculus()` возвращает [] если client=None, без warning. Вернём когда получим доступ
+- **GDELT кириллица** — API отвергает non-Latin символы. GDELT query теперь без outlet name (дата + "news forecast"), `sourcelang` фильтр достаточен
+- **Reuters dead feeds** — `feeds.reuters.com` удалён из GLOBAL_RSS_FEEDS (закрыт с 2020)
+- **Standard preset удалён** — модель `claude-sonnet-4.6` не существует в pricing. Оставлены 2 пресета: Light (Gemini) и Opus
 
 ### Metrics
-- Тесты: 1242 → 1289 (+47: markets, quality gate, schemas)
+- Тесты: 1242 → 1302 (+60: markets, quality gate, schemas, timeouts, metaculus, gdelt, reuters)
 - Первый полный 9/9 прогон: ТАСС 2026-04-02, 8 заголовков, $3.76
 
 ---
