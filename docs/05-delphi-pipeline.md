@@ -666,14 +666,13 @@ class DelphiOrchestrator(BaseAgent):
         - claude-sonnet-4 → gpt-4o
         - gpt-4o → claude-sonnet-4
         - gemini-2.5-pro → gpt-4o
-        - yandexgpt → claude-sonnet-4
+        - all models fallback through OpenRouter chain
         - llama-3.3-70b → gemini-2.5-pro
         """
         fallback_chain: dict[str, str] = {
             "anthropic/claude-sonnet-4": "openai/gpt-4o",
             "openai/gpt-4o": "anthropic/claude-sonnet-4",
             "google/gemini-2.5-pro": "openai/gpt-4o",
-            "yandexgpt": "anthropic/claude-sonnet-4",
             "meta-llama/llama-3.3-70b-instruct": "google/gemini-2.5-pro",
         }
         return fallback_chain.get(primary_model)
@@ -1850,7 +1849,6 @@ async def _handle_degenerate_consensus(
 | `anthropic/claude-sonnet-4` | `openai/gpt-4o` | `google/gemini-2.5-pro` |
 | `openai/gpt-4o` | `anthropic/claude-sonnet-4` | `google/gemini-2.5-pro` |
 | `google/gemini-2.5-pro` | `openai/gpt-4o` | `anthropic/claude-sonnet-4` |
-| `yandexgpt` | `anthropic/claude-sonnet-4` | `openai/gpt-4o` |
 | `meta-llama/llama-3.3-70b-instruct` | `google/gemini-2.5-pro` | `openai/gpt-4o` |
 
 Retry policy: 1 retry с той же моделью (exponential backoff 2s), потом переключение на fallback.

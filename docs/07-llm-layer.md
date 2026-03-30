@@ -2,7 +2,7 @@
 
 ## Назначение
 
-Модуль `llm` -- единая точка доступа ко всем LLM-провайдерам. Абстрагирует различия между OpenRouter (OpenAI-совместимый API) и YandexGPT, обеспечивает роутинг моделей по задачам, fallback при отказах, потоковый вывод (SSE), трекинг стоимости и бюджетный контроль.
+Модуль `llm` -- единая точка доступа к LLM-провайдеру OpenRouter (OpenAI-совместимый API). Обеспечивает роутинг моделей по задачам, fallback при отказах, потоковый вывод (SSE), трекинг стоимости и бюджетный контроль.
 
 **Потребители**: все агенты (`src/agents/`), quality gate, style replicator -- любой компонент, которому нужен LLM-вызов.
 
@@ -15,7 +15,7 @@
 ```
 src/llm/
     __init__.py          # Реэкспорт публичного API
-    providers.py         # OpenRouterClient, YandexGPTClient
+    providers.py         # OpenRouterClient
     router.py            # ModelRouter -- выбор модели по задаче
     prompts/
         __init__.py
@@ -44,7 +44,7 @@ class LLMResponse(BaseModel):
 
     content: str = Field(..., description="Текст ответа модели")
     model: str = Field(..., description="Идентификатор модели: 'anthropic/claude-sonnet-4'")
-    provider: str = Field(..., description="Провайдер: 'openrouter' | 'yandex'")
+    provider: str = Field(..., description="Провайдер: 'openrouter'")
     tokens_in: int = Field(..., ge=0, description="Число входных токенов")
     tokens_out: int = Field(..., ge=0, description="Число выходных токенов")
     cost_usd: float = Field(..., ge=0.0, description="Стоимость вызова в USD")
@@ -215,7 +215,7 @@ class LLMProvider(ABC):
     @property
     @abstractmethod
     def provider_name(self) -> str:
-        """Идентификатор провайдера: 'openrouter', 'yandex'."""
+        """Идентификатор провайдера: 'openrouter'."""
         ...
 ```
 
@@ -331,107 +331,9 @@ class OpenRouterClient(LLMProvider):
         return "openrouter"
 ```
 
-### 2.3 YandexGPTClient
+### 2.3 Retry-логика (общая)
 
-Клиент для YandexGPT через официальный SDK. Используется для русскоязычных задач (стилистическая проверка, генерация на русском).
-
-```python
-from yandex_cloud_ml_sdk import AsyncYCloudML
-
-
-class YandexGPTClient(LLMProvider):
-    """
-    Клиент YandexGPT через yandex-cloud-ml-sdk.
-
-    Особенности:
-    - Модели: 'yandexgpt', 'yandexgpt-lite', 'yandexgpt-32k'
-    - Авторизация: folder_id + API key (или IAM token)
-    - Формат сообщений отличается от OpenAI -- SDK абстрагирует
-    - Стоимость: по тарифам Yandex Cloud (за 1000 токенов)
-    - Не поддерживает json_mode напрямую -- эмулируется через промпт
-    """
-
-    def __init__(
-        self,
-        folder_id: str,
-        api_key: str,
-        *,
-        max_retries: int = 3,
-        retry_base_delay: float = 1.0,
-        retry_max_delay: float = 30.0,
-        timeout_seconds: float = 60.0,
-    ) -> None:
-        """
-        Args:
-            folder_id: Yandex Cloud folder ID (env: YANDEX_FOLDER_ID).
-            api_key: Yandex Cloud API key (env: YANDEX_API_KEY).
-            max_retries: Число повторных попыток.
-            retry_base_delay: Базовая задержка для backoff.
-            retry_max_delay: Максимальная задержка.
-            timeout_seconds: Timeout на один запрос.
-        """
-        self._sdk = AsyncYCloudML(folder_id=folder_id, auth=api_key)
-        self._max_retries = max_retries
-        self._retry_base_delay = retry_base_delay
-        self._retry_max_delay = retry_max_delay
-        self._timeout = timeout_seconds
-
-    async def complete(self, request: LLMRequest) -> LLMResponse:
-        """
-        Non-streaming вызов YandexGPT.
-
-        Реализация:
-        1. Маппинг model name:
-           - 'yandexgpt' -> 'yandexgpt/latest'
-           - 'yandexgpt-lite' -> 'yandexgpt-lite/latest'
-           - 'yandexgpt-32k' -> 'yandexgpt/latest' (с увеличенным контекстом)
-        2. Конвертировать messages в формат SDK.
-        3. Вызвать model.configure(temperature=...).run(messages).
-        4. Извлечь usage из ответа.
-        5. Рассчитать стоимость по тарифу Yandex Cloud.
-
-        Особенности:
-        - json_mode: если request.json_mode=True, добавить в system prompt
-          инструкцию "Respond ONLY with valid JSON".
-        - temperature: YandexGPT поддерживает 0..1 (не 0..2 как OpenAI).
-          Значения > 1 обрезаются до 1.0 с warning.
-        """
-        ...
-
-    async def stream(self, request: LLMRequest) -> AsyncIterator[str]:
-        """
-        Streaming вызов YandexGPT.
-
-        Использует model.configure(...).run_stream(messages).
-        """
-        ...
-
-    async def complete_from_stream(
-        self, request: LLMRequest,
-    ) -> tuple[AsyncIterator[str], "asyncio.Future[LLMResponse]"]:
-        """Streaming + метрики (аналогично OpenRouterClient)."""
-        ...
-
-    def _calculate_cost(
-        self, model: str, tokens_in: int, tokens_out: int,
-    ) -> float:
-        """
-        Стоимость YandexGPT по тарифам Yandex Cloud.
-
-        Тарифы (март 2026, приблизительные):
-        - yandexgpt: $0.0032 / 1K input, $0.0032 / 1K output (~0.24 руб/1K)
-        - yandexgpt-lite: $0.00075 / 1K input, $0.00075 / 1K output (~0.06 руб/1K)
-        """
-        ...
-
-    @property
-    def provider_name(self) -> str:
-        return "yandex"
-```
-
-### 2.4 Retry-логика (общая)
-
-Вынесена в utility-функцию, используемую обоими провайдерами:
+Вынесена в utility-функцию:
 
 ```python
 import asyncio
@@ -518,7 +420,7 @@ def estimate_tokens(text: str, model: str = "gpt-4") -> int:
     Оценить число токенов в тексте.
 
     Используется tiktoken с encoding для GPT-4 (cl100k_base).
-    Для YandexGPT и Claude это приблизительная оценка (+-10%).
+    Для Claude это приблизительная оценка (+-10%).
 
     Args:
         text: Текст для оценки.
@@ -556,8 +458,8 @@ def estimate_messages_tokens(messages: list[LLMMessage]) -> int:
 
 | task ID | Описание | Primary Model | Fallback | Temperature | json_mode |
 |---|---|---|---|---|---|
-| `news_scout_search` | Формирование поисковых запросов | `openai/gpt-4o-mini` | `yandexgpt-lite` | 0.3 | false |
-| `event_calendar` | Поиск запланированных событий | `openai/gpt-4o-mini` | `yandexgpt-lite` | 0.3 | true |
+| `news_scout_search` | Формирование поисковых запросов | `openai/gpt-4o-mini` | `google/gemini-2.0-flash` | 0.3 | false |
+| `event_calendar` | Поиск запланированных событий | `openai/gpt-4o-mini` | `google/gemini-2.0-flash` | 0.3 | true |
 | `outlet_historian` | Анализ стиля СМИ | `anthropic/claude-sonnet-4` | `openai/gpt-4o` | 0.4 | true |
 | `event_clustering` | Кластеризация сигналов | `openai/gpt-4o-mini` | `google/gemini-2.0-flash` | 0.2 | true |
 | `trajectory_analysis` | Сценарии развития событий | `anthropic/claude-sonnet-4` | `openai/gpt-4o` | 0.6 | true |
@@ -570,10 +472,10 @@ def estimate_messages_tokens(messages: list[LLMMessage]) -> int:
 | `delphi_r2_*` | Дельфи раунд 2 (те же персоны) | *те же, что в R1* | *те же* | 0.6 | true |
 | `judge` | Финальный ранжинг | `anthropic/claude-opus-4` | `anthropic/claude-sonnet-4` | 0.3 | true |
 | `framing` | Анализ фрейминга | `anthropic/claude-sonnet-4` | `openai/gpt-4o` | 0.5 | true |
-| `style_generation` | Генерация заголовков | `yandexgpt` | `anthropic/claude-sonnet-4` | 0.8 | false |
+| `style_generation` | Генерация заголовков | `anthropic/claude-sonnet-4` | `openai/gpt-4o` | 0.8 | false |
 | `style_generation_en` | Генерация (английский) | `anthropic/claude-sonnet-4` | `openai/gpt-4o` | 0.8 | false |
 | `quality_factcheck` | Факт-чек | `anthropic/claude-sonnet-4` | `openai/gpt-4o` | 0.2 | true |
-| `quality_style` | Стилистическая проверка | `yandexgpt` | `anthropic/claude-sonnet-4` | 0.3 | true |
+| `quality_style` | Стилистическая проверка | `anthropic/claude-sonnet-4` | `openai/gpt-4o` | 0.3 | true |
 
 ### 3.3 Model Diversity для Delphi
 
@@ -609,7 +511,7 @@ class ModelRouter:
     ) -> None:
         """
         Args:
-            providers: Словарь провайдеров {'openrouter': ..., 'yandex': ...}.
+            providers: Словарь провайдеров {'openrouter': ...}.
             assignments: Таблица назначений (если None, используется DEFAULT_ASSIGNMENTS).
             budget_usd: Максимальный бюджет на один прогноз в USD.
         """
@@ -712,8 +614,7 @@ class ModelRouter:
         Определить провайдера по имени модели.
 
         Правила:
-        - 'yandexgpt*' -> YandexGPTClient
-        - Всё остальное -> OpenRouterClient (который поддерживает все модели)
+        - Все модели -> OpenRouterClient (поддерживает все модели через единый API)
         """
         ...
 ```
@@ -1067,15 +968,6 @@ class EventTrendAnalyzer(BaseAgent):
 | `deepseek/deepseek-r1` | $0.55 | $2.19 | 64K |
 | `deepseek/deepseek-v3-0324` | $0.30 | $0.88 | 64K |
 
-### YandexGPT (Yandex Cloud, март 2026)
-
-| Модель | Input ($/1K tokens) | Output ($/1K tokens) |
-|---|---|---|
-| `yandexgpt` (Pro) | ~$0.0032 | ~$0.0032 |
-| `yandexgpt-lite` | ~$0.00075 | ~$0.00075 |
-
-> Тарифы Yandex Cloud указаны в рублях; приведённые доллары -- конвертация по курсу ~80 RUB/USD.
-
 ### Реализация в коде
 
 ```python
@@ -1096,13 +988,6 @@ MODEL_PRICING: dict[str, tuple[float, float]] = {
     "deepseek/deepseek-v3-0324":    (0.30, 0.88),
 }
 
-YANDEX_PRICING: dict[str, tuple[float, float]] = {
-    # model_id: (input_per_thousand, output_per_thousand) in USD
-    "yandexgpt":      (0.0032, 0.0032),
-    "yandexgpt-lite": (0.00075, 0.00075),
-}
-
-
 def calculate_cost(
     model: str, tokens_in: int, tokens_out: int,
 ) -> float:
@@ -1115,12 +1000,6 @@ def calculate_cost(
     if model in MODEL_PRICING:
         price_in, price_out = MODEL_PRICING[model]
         return (tokens_in / 1_000_000 * price_in) + (tokens_out / 1_000_000 * price_out)
-
-    # YandexGPT: цены за 1K (не за 1M)
-    yandex_key = model.replace("/latest", "").replace("yandexgpt/", "yandexgpt")
-    if yandex_key in YANDEX_PRICING:
-        price_in, price_out = YANDEX_PRICING[yandex_key]
-        return (tokens_in / 1_000 * price_in) + (tokens_out / 1_000 * price_out)
 
     return 0.0
 ```
@@ -1197,14 +1076,12 @@ class LLMConfig(BaseSettings):
 
     # Провайдеры
     openrouter_api_key: str = ""
-    yandex_folder_id: str = ""
-    yandex_api_key: str = ""
 
     # Дефолтные модели (переопределяемые через таблицу назначений)
     default_model_cheap: str = "openai/gpt-4o-mini"
     default_model_reasoning: str = "anthropic/claude-sonnet-4"
     default_model_strong: str = "anthropic/claude-opus-4"
-    default_model_russian: str = "yandexgpt"
+    default_model_russian: str = "anthropic/claude-sonnet-4"
 
     # Retry
     llm_max_retries: int = 3
@@ -1230,9 +1107,6 @@ class LLMConfig(BaseSettings):
 # OpenAI SDK (OpenRouter-совместимый)
 openai = ">=1.0"
 
-# YandexGPT
-yandex-cloud-ml-sdk = ">=0.3"
-
 # Token counting
 tiktoken = ">=0.7"
 
@@ -1255,8 +1129,6 @@ pydantic-settings = ">=2.0"
 | `test_openrouter_complete` | Мок OpenAI SDK, проверка маппинга request/response |
 | `test_openrouter_retry` | 3 ошибки 503, потом успех -> LLMResponse |
 | `test_openrouter_non_retryable` | Ошибка 401 -> не retry, сразу raise |
-| `test_yandex_complete` | Мок YandexGPT SDK, проверка маппинга |
-| `test_yandex_temperature_clamp` | temperature=1.5 -> warning + clamp to 1.0 |
 | `test_router_primary_success` | Primary модель отвечает -> LLMResponse |
 | `test_router_fallback` | Primary fail -> fallback success |
 | `test_router_all_fail` | Все модели fail -> LLMProviderError |
@@ -1279,7 +1151,6 @@ pydantic-settings = ">=2.0"
 | Тест | Что проверяет |
 |---|---|
 | `test_openrouter_real_call` | Реальный вызов GPT-4o-mini через OpenRouter |
-| `test_yandex_real_call` | Реальный вызов YandexGPT |
 | `test_openrouter_streaming` | Реальный streaming вызов |
 | `test_router_e2e` | Полный цикл: router -> provider -> response -> cost |
 
@@ -1310,25 +1181,9 @@ def mock_openrouter():
 
 
 @pytest.fixture
-def mock_yandex():
-    provider = AsyncMock(spec=YandexGPTClient)
-    provider.provider_name = "yandex"
-    provider.complete.return_value = LLMResponse(
-        content="Тестовый ответ",
-        model="yandexgpt",
-        provider="yandex",
-        tokens_in=80,
-        tokens_out=40,
-        cost_usd=0.00038,
-        duration_ms=800,
-    )
-    return provider
-
-
-@pytest.fixture
-def router(mock_openrouter, mock_yandex):
+def router(mock_openrouter):
     return ModelRouter(
-        providers={"openrouter": mock_openrouter, "yandex": mock_yandex},
+        providers={"openrouter": mock_openrouter},
         budget_usd=50.0,
     )
 ```
@@ -1416,34 +1271,30 @@ logger.error(
 
 ### Контекст
 
-Пользователи вводят свои API-ключи (OpenRouter, YandexGPT) в веб-интерфейсе. Серверные ключи из `.env` становятся опциональным fallback. Это позволяет:
+Пользователи вводят свои API-ключи (OpenRouter) в веб-интерфейсе. Серверные ключи из `.env` становятся опциональным fallback. Это позволяет:
 - Переложить расходы на пользователя
 - Масштабировать без увеличения собственных затрат
 - Поддерживать пресеты Light / Standard / Full с разным бюджетом
 
 ### Изменения в провайдерах
 
-`OpenRouterClient` и `YandexGPTClient` уже принимают `api_key` в конструкторе — изменений в их API не требуется. Изменяется **точка инициализации**: провайдер создаётся per-request с ключом пользователя, а не один раз при старте приложения.
+`OpenRouterClient` уже принимает `api_key` в конструкторе — изменений в API не требуется. Изменяется **точка инициализации**: провайдер создаётся per-request с ключом пользователя, а не один раз при старте приложения.
 
 ```python
 # src/llm/factory.py
 
-from src.llm.providers import OpenRouterClient, YandexGPTClient
+from src.llm.providers import OpenRouterClient
 
 
 def create_providers(
     *,
     openrouter_key: str | None = None,
-    yandex_key: str | None = None,
-    yandex_folder_id: str | None = None,
     settings: Settings | None = None,
 ) -> dict[str, LLMProvider]:
     """Создаёт провайдеры с ключами пользователя (или fallback на серверные).
 
     Args:
         openrouter_key: API-ключ пользователя для OpenRouter.
-        yandex_key: API-ключ пользователя для YandexGPT.
-        yandex_folder_id: Yandex Cloud folder ID пользователя.
         settings: Серверные настройки (fallback).
 
     Returns:
@@ -1457,13 +1308,6 @@ def create_providers(
     or_key = openrouter_key or settings.openrouter_api_key
     if or_key:
         providers["openrouter"] = OpenRouterClient(api_key=or_key)
-
-    ya_key = yandex_key or settings.yandex_api_key
-    ya_folder = yandex_folder_id or settings.yandex_folder_id
-    if ya_key and ya_folder:
-        providers["yandex"] = YandexGPTClient(
-            folder_id=ya_folder, api_key=ya_key,
-        )
 
     return providers
 ```

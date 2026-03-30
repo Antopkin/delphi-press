@@ -153,8 +153,8 @@ other_assessments = []  # намеренно пусто на R1
 # asyncio.gather с return_exceptions: провал одного не останавливает стадию
 results = await asyncio.gather(*tasks, return_exceptions=True)
 
-# YandexGPT: usage.prompt_tokens вместо usage.input_tokens
-tokens_in = response.usage.prompt_tokens  # YandexGPT API quirk
+# OpenRouter: usage.prompt_tokens for input token count
+tokens_in = response.usage.prompt_tokens
 ```
 
 ### 4. HANDOVER.md для переключения сессий

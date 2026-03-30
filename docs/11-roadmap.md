@@ -6,7 +6,7 @@
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Inverse Problem v0.9.1**: adaptive extremizing (position_std), soft volume gate ($10K–$100K), `as_of` temporal cutoff для walk-forward, `timing_score` (volume-weighted), Murphy decomposition + calibration slope + ECE, 6 crash fixes. Parquet store (506→62 МБ, 348K INFORMED → 7.5s load), Bayesian shrinkage, parametric λ, HDBSCAN clustering, enriched signal. **1226 тестов** зелёных. OutletResolver v0.8.0: динамическая резолюция СМИ через Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: CSRF middleware, IDOR protection, rate limiting, hardened secrets, **40/40 findings closed**. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation (Spearman/Granger). YandexGPT удалён — только OpenRouter.
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Inverse Problem v0.9.1**: adaptive extremizing (position_std), soft volume gate ($10K–$100K), `as_of` temporal cutoff для walk-forward, `timing_score` (volume-weighted), Murphy decomposition + calibration slope + ECE, 6 crash fixes. Parquet store (506→62 МБ, 348K INFORMED → 7.5s load), Bayesian shrinkage, parametric λ, HDBSCAN clustering, enriched signal. **1226 тестов** зелёных. OutletResolver v0.8.0: динамическая резолюция СМИ через Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: CSRF middleware, IDOR protection, rate limiting, hardened secrets, **40/40 findings closed**. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation (Spearman/Granger). Единственный LLM-провайдер — OpenRouter.
 
 ### Реализованные компоненты
 
@@ -49,7 +49,7 @@
 
 ### Известные stubs
 
-Нет. YandexGPTClient удалён (v0.8.0). Все LLM-задачи через OpenRouter.
+Нет. Все LLM-задачи через OpenRouter.
 
 ### Ключевые файлы пайплайна
 

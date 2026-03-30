@@ -12,7 +12,7 @@
 
 | | Web UI | Claude Code mode |
 |---|---|---|
-| **Описание** | Веб-интерфейс. Пользователь вводит свои API-ключи (OpenRouter, YandexGPT) | Пользователь клонирует репо, запускает `/predict` в Claude Code |
+| **Описание** | Веб-интерфейс. Пользователь вводит свои API-ключи (OpenRouter) | Пользователь клонирует репо, запускает `/predict` в Claude Code |
 | **Стоимость** | ~$5-50/прогноз (на ключах пользователя) | ~$0 (покрыто подпиской Claude Code Max) |
 | **Model diversity** | Да (5 разных LLM-моделей) | Нет (все субагенты = Opus 4.6, промптовая diversity) |
 | **Автоматизация** | Да (API, расписание) | Нет (ручной запуск) |
@@ -86,7 +86,6 @@
 | ORM | SQLAlchemy 2.0 | 2.0+ | Async ORM, Alembic-миграции, type safety |
 | Валидация | Pydantic v2 | 2.0+ | Схемы данных, настройки, LLM output parsing |
 | LLM клиент | OpenAI Python SDK | 1.0+ | OpenRouter совместим с OpenAI API |
-| YandexGPT | yandex-cloud-ml-sdk | — | Официальный SDK |
 | HTTP клиент | httpx | 0.27+ | Async HTTP для RSS, web search, scraping |
 | RSS | feedparser | 6.0+ | Парсинг RSS/Atom фидов |
 | Frontend CSS | Tailwind CSS | 4.2.2 | Utility-first, @theme config, PostCSS build |
@@ -169,7 +168,7 @@ foresighting_news/
 │   │
 │   ├── llm/                        # [Спека: 07-llm-layer.md]
 │   │   ├── __init__.py
-│   │   ├── providers.py            # OpenRouter + YandexGPT клиенты
+│   │   ├── providers.py            # OpenRouterClient
 │   │   ├── router.py               # Выбор модели по задаче + fallback
 │   │   └── prompts/                # Шаблоны промптов
 │   │       ├── __init__.py
@@ -385,7 +384,7 @@ Stage 9: QUALITY GATE (~1-2 мин)
              │   • Логические несоответствия?
              │   • Score 1-5
              │
-             ├── 9b. Стилистическая проверка (YandexGPT)
+             ├── 9b. Стилистическая проверка (Claude Sonnet)
              │   • Соответствие стилю издания?
              │   • Длина, тон, лексика?
              │   • Score 1-5
@@ -445,8 +444,8 @@ PredictionResponse {
 | 5b: Delphi R2 | 5 | Mix | $8.00 |
 | 6: Judge | 1 | Claude Opus | $2.00 |
 | 7: Framing | ~7 | Claude Sonnet | $2.00 |
-| 8: Generation | ~21 (7 × 3 варианта) | YandexGPT / Sonnet | $1.50 |
-| 9: Quality Gate | ~14 (dual-model) | Sonnet + YandexGPT | $2.00 |
+| 8: Generation | ~21 (7 x 3 варианта) | Claude Sonnet | $1.50 |
+| 9: Quality Gate | ~14 (dual-model) | Claude Sonnet | $2.00 |
 | **ИТОГО** | **~105** | | **~$30.50** |
 
 ---
@@ -456,14 +455,12 @@ PredictionResponse {
 ```env
 # LLM Providers
 OPENROUTER_API_KEY=sk-or-...
-YANDEX_FOLDER_ID=...
-YANDEX_API_KEY=...
 
 # Model defaults (переопределяемые через UI/CLI)
 DEFAULT_MODEL_CHEAP=openai/gpt-4o-mini
 DEFAULT_MODEL_REASONING=anthropic/claude-sonnet-4
 DEFAULT_MODEL_STRONG=anthropic/claude-opus-4
-DEFAULT_MODEL_RUSSIAN=yandexgpt
+DEFAULT_MODEL_RUSSIAN=anthropic/claude-sonnet-4
 
 # App
 SECRET_KEY=...
