@@ -70,6 +70,10 @@ _CHEAP_TASKS = {
     # Opus is too slow for 20 threads within the timeout
     "trajectory_analysis",
     "cross_impact_analysis",
+    # quality_gate runs 33×2 LLM calls (factcheck + style per headline) —
+    # small JSON responses, Opus is overkill and times out at 300s
+    "quality_factcheck",
+    "quality_style",
 }
 
 
