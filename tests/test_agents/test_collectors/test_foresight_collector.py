@@ -67,6 +67,8 @@ def make_polymarket_markets(count: int = 3) -> list[dict]:
     """Create sample Polymarket market dicts."""
     return [
         {
+            "id": str(100 + i),
+            "condition_id": f"0x{'ab' * 32}".replace("ab" * 31, f"{'ab' * 30}{i:02x}"),
             "question": f"Market question {i}?",
             "slug": f"market-slug-{i}",
             "yes_probability": 0.55 + i * 0.1,
@@ -322,6 +324,7 @@ async def test_foresight_collector_maps_polymarket_with_enrichment(
     mock_polymarket.fetch_enriched_markets.return_value = [
         {
             "id": "m1",
+            "condition_id": "0xabc123",
             "question": "Will BTC exceed 100k?",
             "slug": "btc-100k",
             "yes_probability": 0.65,
@@ -353,7 +356,8 @@ async def test_foresight_collector_maps_polymarket_with_enrichment(
 
     assert len(signals) == 1
     sig = signals[0]
-    assert sig["market_id"] == "m1"
+    # condition_id is preferred over id as market_id
+    assert sig["market_id"] == "0xabc123"
     assert "volatility_7d" in sig
     assert "trend_7d" in sig
     assert "lw_probability" in sig
@@ -471,6 +475,84 @@ def test_resolve_gdelt_language_russian_outlet():
 
 def test_resolve_gdelt_language_english_outlet():
     assert ForesightCollector._resolve_gdelt_language("BBC News") == "english"
+
+
+# ── Inverse enrichment via condition_id ─────────────────────────────
+
+
+async def test_foresight_collector_inverse_enrichment_uses_condition_id(
+    make_context,
+    mock_metaculus,
+    mock_polymarket,
+    mock_gdelt,
+    mock_router,
+):
+    """Inverse enrichment matches on condition_id, not Gamma internal id."""
+    from unittest.mock import patch
+
+    from src.inverse.schemas import BettorProfile, BettorTier, InformedSignal
+
+    cid = "0xabc123def456"
+    profiles = {
+        "wallet1": BettorProfile(
+            user_id="wallet1",
+            tier=BettorTier.INFORMED,
+            brier_score=0.15,
+            n_resolved_bets=50,
+            mean_position_size=200.0,
+            total_volume=100000.0,
+            recency_weight=0.9,
+        ),
+    }
+    # Trades keyed by condition_id (not Gamma internal id)
+    from src.inverse.schemas import TradeRecord
+    from datetime import datetime, timezone
+
+    trades = {
+        cid: [
+            TradeRecord(
+                user_id="wallet1",
+                market_id=cid,
+                side="YES",
+                price=0.7,
+                size=100.0,
+                timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            ),
+        ],
+    }
+
+    agent_with_inverse = ForesightCollector(
+        mock_router,
+        metaculus_client=mock_metaculus,
+        polymarket_client=mock_polymarket,
+        gdelt_client=mock_gdelt,
+        inverse_profiles=profiles,
+        inverse_trades=trades,
+    )
+
+    mock_metaculus.fetch_questions.return_value = []
+    mock_polymarket.fetch_enriched_markets.return_value = [
+        {
+            "id": "999",  # Gamma internal id (numeric)
+            "condition_id": cid,  # CTF condition id (hex)
+            "question": "Test inverse?",
+            "slug": "test-inverse",
+            "yes_probability": 0.5,
+            "volume": 50000,
+            "categories": [],
+        }
+    ]
+    mock_gdelt.fetch_articles.return_value = []
+
+    result = await agent_with_inverse.execute(make_context())
+    sig = result["foresight_signals"][0]
+
+    # market_id should be condition_id, not Gamma id
+    assert sig["market_id"] == cid
+    # Inverse enrichment should fire because condition_id matches trades key
+    assert "informed_probability" in sig
+    assert "informed_coverage" in sig
+    assert sig["informed_n_bettors"] >= 1
 
 
 def test_resolve_gdelt_language_ria():

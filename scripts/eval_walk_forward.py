@@ -37,6 +37,14 @@ RECENCY_HALF_LIFE_DAYS = 90
 N_FULL_COVERAGE = 20
 BUCKET_SIZE_SECONDS = 30 * 86400
 
+# Volume gate thresholds (match src/inverse/signal.py)
+VOLUME_GATE_MIN = 10_000.0
+VOLUME_GATE_MAX = 100_000.0
+
+# Adaptive extremizing bounds (match src/inverse/signal.py)
+ADAPTIVE_D_SCALE = 2.0
+ADAPTIVE_D_MAX = 2.0
+
 
 # ---------------------------------------------------------------------------
 # Core functions (testable independently of CLI)
@@ -166,6 +174,19 @@ def build_fold_profiles(
     return profiles
 
 
+def _extremize(prob: float, d: float) -> float:
+    """Push probability away from 0.5 (Satopää et al. 2014).
+
+    Applies log-odds extremizing: odds_ext = odds^d, then converts back.
+    """
+    if d <= 1.0:
+        return prob
+    p = max(1e-7, min(1 - 1e-7, prob))
+    odds = p / (1.0 - p)
+    odds_ext = odds**d
+    return odds_ext / (1.0 + odds_ext)
+
+
 def compute_fold_signals(
     con,
     profiles: dict[str, dict],
@@ -173,6 +194,9 @@ def compute_fold_signals(
     test_end: float,
     *,
     bucketed_path: str | None = None,
+    volume_gate: bool = False,
+    adaptive_extremize: bool = False,
+    timing_weight: bool = False,
 ) -> tuple[list[float], list[float], list[float], list[float]]:
     """Compute raw and informed probabilities for test markets.
 
@@ -181,12 +205,23 @@ def compute_fold_signals(
     - informed_prob: accuracy-weighted average of INFORMED bettors, with
       coverage-based shrinkage toward raw_prob
 
+    Variant flags:
+    - volume_gate: soft gate — markets with total volume < $10K get zero
+      enrichment, linear scale to $100K.
+    - adaptive_extremize: push informed probability away from 0.5 using
+      inter-bettor position std (Satopää et al. 2014).
+    - timing_weight: weight bettors by (1 - timing_score), giving more
+      weight to early traders.
+
     Args:
         con: DuckDB connection.
         profiles: User profiles from build_fold_profiles().
         test_start: Start of test window (unix timestamp).
         test_end: End of test window (unix timestamp).
         bucketed_path: Path to bucketed parquet (temporal filter).
+        volume_gate: Apply soft volume gate.
+        adaptive_extremize: Apply adaptive extremizing (d from position std).
+        timing_weight: Weight by (1 - timing_score).
 
     Returns:
         (raw_probs, informed_probs, outcomes, coverages) — parallel lists.
@@ -200,13 +235,14 @@ def compute_fold_signals(
                     LEAST(1.0, GREATEST(0.0,
                         SUM(weighted_price_sum) / NULLIF(SUM(total_usd), 0)
                     )) AS avg_position,
-                    SUM(total_usd) AS total_usd
+                    SUM(total_usd) AS total_usd,
+                    MAX(time_bucket) AS last_bucket
                 FROM read_parquet('{bucketed_path}')
                 WHERE time_bucket <= {cutoff_bucket}
                 GROUP BY user_id, condition_id
             )
             SELECT r.condition_id, r.resolved_yes,
-                   p.user_id, p.avg_position, p.total_usd
+                   p.user_id, p.avg_position, p.total_usd, p.last_bucket
             FROM resolved_markets r
             JOIN positions_at_cutoff p ON r.condition_id = p.condition_id
             WHERE r.end_date >= ? AND r.end_date < ?
@@ -218,7 +254,7 @@ def compute_fold_signals(
         test_rows = con.execute(
             """
             SELECT r.condition_id, r.resolved_yes,
-                   p.user_id, p.avg_position, p.total_usd
+                   p.user_id, p.avg_position, p.total_usd, NULL AS last_bucket
             FROM resolved_markets r
             JOIN positions p ON r.condition_id = p.condition_id
             WHERE r.end_date >= ? AND r.end_date < ?
@@ -234,9 +270,9 @@ def compute_fold_signals(
     from collections import defaultdict
 
     market_data: dict[str, dict] = defaultdict(lambda: {"resolved_yes": None, "positions": []})
-    for cid, resolved_yes, uid, pos, vol in test_rows:
+    for cid, resolved_yes, uid, pos, vol, last_bucket in test_rows:
         market_data[cid]["resolved_yes"] = resolved_yes
-        market_data[cid]["positions"].append((uid, pos, vol))
+        market_data[cid]["positions"].append((uid, pos, vol, last_bucket))
 
     raw_probs = []
     informed_probs = []
@@ -248,25 +284,35 @@ def compute_fold_signals(
         pos_list = data["positions"]
 
         # Raw probability: volume-weighted average of all bettors
-        total_vol = sum(v for _, _, v in pos_list)
+        total_vol = sum(v for _, _, v, _ in pos_list)
         if total_vol <= 0:
             continue
-        raw_prob = sum(p * v for _, p, v in pos_list) / total_vol
+        raw_prob = sum(p * v for _, p, v, _ in pos_list) / total_vol
         raw_prob = max(0.01, min(0.99, raw_prob))
 
         # Informed probability: accuracy-weighted of INFORMED bettors
         informed_weighted_sum = 0.0
         informed_total_weight = 0.0
+        informed_positions: list[float] = []
         n_informed = 0
 
-        for uid, pos, vol in pos_list:
+        for uid, pos, vol, last_bucket in pos_list:
             profile = profiles.get(uid)
             if profile is None or profile["tier"] != "informed":
                 continue
             accuracy_w = max(0.01, 1.0 - profile["brier_score"])
             weight = accuracy_w * vol * profile["recency_weight"]
+
+            # Timing weight: early traders (low timing_score) get more weight
+            if timing_weight and bucketed_path and last_bucket is not None:
+                cutoff_bucket_val = int(test_start // BUCKET_SIZE_SECONDS)
+                ts = last_bucket / cutoff_bucket_val if cutoff_bucket_val > 0 else 1.0
+                ts = min(1.0, max(0.0, ts))
+                weight *= 1.0 - 0.5 * ts  # 50% reduction for latest traders
+
             informed_weighted_sum += pos * weight
             informed_total_weight += weight
+            informed_positions.append(pos)
             n_informed += 1
 
         coverage = min(1.0, n_informed / N_FULL_COVERAGE)
@@ -276,6 +322,19 @@ def compute_fold_signals(
             informed_prob = coverage * informed_raw + (1.0 - coverage) * raw_prob
         else:
             informed_prob = raw_prob
+
+        # Adaptive extremize: push away from 0.5 based on position disagreement
+        if adaptive_extremize and n_informed >= 2:
+            pos_std = statistics.stdev(informed_positions)
+            d = min(ADAPTIVE_D_MAX, 1.0 + ADAPTIVE_D_SCALE * pos_std)
+            informed_prob = _extremize(informed_prob, d)
+
+        # Volume gate: soft interpolation toward raw_prob for low-volume markets
+        if volume_gate:
+            gate = max(
+                0.0, min(1.0, (total_vol - VOLUME_GATE_MIN) / (VOLUME_GATE_MAX - VOLUME_GATE_MIN))
+            )
+            informed_prob = gate * informed_prob + (1.0 - gate) * raw_prob
 
         raw_probs.append(raw_prob)
         informed_probs.append(informed_prob)
@@ -363,6 +422,9 @@ def run_walk_forward(
     shrinkage_strength: int = 15,
     *,
     bucketed_path: str | None = None,
+    volume_gate: bool = False,
+    adaptive_extremize: bool = False,
+    timing_weight: bool = False,
 ) -> list[dict]:
     """Run walk-forward evaluation across all folds.
 
@@ -374,6 +436,9 @@ def run_walk_forward(
         min_bets: Minimum resolved bets for profiling.
         shrinkage_strength: Bayesian prior strength.
         bucketed_path: Path to bucketed parquet (eliminates temporal leak).
+        volume_gate: Apply soft volume gate ($10K-$100K).
+        adaptive_extremize: Apply adaptive extremizing (d from position std).
+        timing_weight: Weight by early/late trading timing.
 
     Returns:
         List of fold result dicts with all metrics and metadata.
@@ -437,6 +502,9 @@ def run_walk_forward(
             t,
             t + window_secs,
             bucketed_path=bucketed_path,
+            volume_gate=volume_gate,
+            adaptive_extremize=adaptive_extremize,
+            timing_weight=timing_weight,
         )
 
         if len(raw_probs) < 2:
@@ -572,6 +640,61 @@ def print_summary(results: list[dict]) -> None:
     print(f"{'=' * 60}")
 
 
+def print_bootstrap_ci(results: list[dict], *, n_resamples: int = 1000) -> None:
+    """Compute and print paired bootstrap 95% CI for BSS.
+
+    For each fold, resamples the same market indices for both raw and
+    informed predictions, then computes BSS per resample.
+    Also computes an aggregate CI pooling all folds.
+    """
+    import numpy as _np
+
+    rng = _np.random.default_rng(42)
+
+    print(f"\n{'=' * 60}")
+    print(f"BOOTSTRAP CONFIDENCE INTERVALS ({n_resamples} resamples)")
+    print(f"{'=' * 60}")
+
+    # Per-fold CIs are not stored in results (no raw arrays).
+    # Compute aggregate BSS CI from fold-level BSS values.
+    bss_values = _np.array([r["bss_vs_raw"] for r in results])
+    n_folds = len(bss_values)
+
+    # --- Independent bootstrap (resample folds) ---
+    boot_means = _np.empty(n_resamples)
+    for i in range(n_resamples):
+        idx = rng.integers(0, n_folds, size=n_folds)
+        boot_means[i] = _np.mean(bss_values[idx])
+
+    ci_lo = float(_np.percentile(boot_means, 2.5))
+    ci_hi = float(_np.percentile(boot_means, 97.5))
+    print(f"Fold-level BSS mean:      {float(_np.mean(bss_values)):>+.4f}")
+    print(f"95% CI (fold bootstrap):  [{ci_lo:+.4f}, {ci_hi:+.4f}]")
+
+    # --- Block bootstrap (blocks of 3, preserves temporal correlation) ---
+    block_size = 3
+    n_blocks = n_folds // block_size
+    if n_blocks >= 2:
+        block_means = _np.empty(n_resamples)
+        for i in range(n_resamples):
+            sampled = []
+            for _ in range(n_blocks):
+                start = rng.integers(0, n_folds - block_size + 1)
+                sampled.extend(bss_values[start : start + block_size].tolist())
+            block_means[i] = _np.mean(sampled[:n_folds])
+        bci_lo = float(_np.percentile(block_means, 2.5))
+        bci_hi = float(_np.percentile(block_means, 97.5))
+        print(f"95% CI (block bootstrap): [{bci_lo:+.4f}, {bci_hi:+.4f}]")
+
+    # Sign test
+    n_positive = int(_np.sum(bss_values > 0))
+    from math import comb
+
+    p_sign = sum(comb(n_folds, k) for k in range(n_positive, n_folds + 1)) / 2**n_folds
+    print(f"Sign test: {n_positive}/{n_folds} positive, p = {p_sign:.2e}")
+    print(f"{'=' * 60}")
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -592,6 +715,28 @@ def main() -> None:
         "--bucketed",
         action="store_true",
         help="Use time-bucketed positions (eliminates temporal leak)",
+    )
+    parser.add_argument(
+        "--volume-gate",
+        action="store_true",
+        help="Soft volume gate: markets < $10K get zero enrichment, linear to $100K",
+    )
+    parser.add_argument(
+        "--adaptive-extremize",
+        action="store_true",
+        help="Push informed probability away from 0.5 (Satopää et al. 2014)",
+    )
+    parser.add_argument(
+        "--timing-weight",
+        action="store_true",
+        help="Weight bettors by trading timing (early traders get more weight)",
+    )
+    parser.add_argument(
+        "--bootstrap",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Bootstrap resamples for BSS confidence intervals (e.g., 1000)",
     )
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
@@ -721,6 +866,17 @@ def main() -> None:
         time.perf_counter() - t0,
     )
 
+    # Log variant configuration
+    variants = []
+    if args.volume_gate:
+        variants.append("volume_gate")
+    if args.adaptive_extremize:
+        variants.append("adaptive_extremize")
+    if args.timing_weight:
+        variants.append("timing_weight")
+    if variants:
+        logger.info("BSS variants enabled: %s", ", ".join(variants))
+
     # Run walk-forward
     results = run_walk_forward(
         con,
@@ -730,6 +886,9 @@ def main() -> None:
         min_bets=args.min_bets,
         shrinkage_strength=args.shrinkage,
         bucketed_path=str(bucketed_path) if bucketed_path else None,
+        volume_gate=args.volume_gate,
+        adaptive_extremize=args.adaptive_extremize,
+        timing_weight=args.timing_weight,
     )
 
     con.close()
@@ -737,6 +896,10 @@ def main() -> None:
     # Output
     write_csv(results, args.output_csv)
     print_summary(results)
+
+    # Bootstrap CI (paired resampling for BSS)
+    if args.bootstrap > 0 and results:
+        print_bootstrap_ci(results, n_resamples=args.bootstrap)
 
     elapsed = time.perf_counter() - t0
     print(f"\nTotal time: {elapsed:.1f}s")

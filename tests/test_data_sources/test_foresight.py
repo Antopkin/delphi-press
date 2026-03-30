@@ -129,6 +129,7 @@ METACULUS_NULL_PREDICTION = {
 POLYMARKET_RESPONSE = [
     {
         "id": "abc123",
+        "conditionId": "0xabc123def456789000000000000000000000000000000000000000000000dead",
         "question": "Will X happen?",
         "slug": "will-x-happen",
         "description": "Resolves YES if...",
@@ -442,6 +443,10 @@ class TestPolymarketClient:
         assert len(results) == 1
         market = results[0]
         assert market["id"] == "abc123"
+        assert (
+            market["condition_id"]
+            == "0xabc123def456789000000000000000000000000000000000000000000000dead"
+        )
         assert market["question"] == "Will X happen?"
         assert market["yes_probability"] == pytest.approx(0.65)
         assert market["liquidity"] == pytest.approx(85000.0)

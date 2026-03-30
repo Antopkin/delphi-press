@@ -270,6 +270,9 @@ class ForesightCollector(BaseAgent):
         mapped: list[dict[str, Any]] = []
         for market in markets:
             slug = market.get("slug", "")
+            # Use condition_id (CTF hex hash) as market_id — matches inverse
+            # profiles keyed by condition_id. Fallback to Gamma internal id.
+            condition_id = market.get("condition_id", "")
             entry: dict[str, Any] = {
                 "title": market.get("question", ""),
                 "source": "polymarket",
@@ -277,7 +280,7 @@ class ForesightCollector(BaseAgent):
                 "probability": market.get("yes_probability"),
                 "volume_usd": market.get("volume", 0),
                 "categories": market.get("categories", []),
-                "market_id": market.get("id", ""),
+                "market_id": condition_id or market.get("id", ""),
                 "end_date": market.get("end_date"),
             }
 

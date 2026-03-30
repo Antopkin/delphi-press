@@ -278,6 +278,7 @@ class PolymarketClient:
             results.append(
                 {
                     "id": market.get("id", ""),
+                    "condition_id": market.get("conditionId", ""),
                     "question": market.get("question", ""),
                     "slug": market.get("slug", ""),
                     "description": market.get("description", ""),
