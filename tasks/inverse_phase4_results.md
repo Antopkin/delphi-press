@@ -115,9 +115,37 @@ signal computation.
 
 - Akey et al. 2025: top 1% captures 84% of gains. Our top 20% (INFORMED) captures
   BSS +0.13 — significant above typical prediction tournament improvements.
-- Satopää et al. 2014: extremizing adds 10-20%. Our baseline (no extremizing)
-  already shows +0.13, suggesting extremizing could push to +0.15-0.16.
+- Satopää et al. 2014: extremizing adds 10-20% in tournament settings. **Our ablation
+  shows extremizing HURTS on Polymarket data** — likely because informed bettors are
+  correlated (same market signals), not independently informed (private info).
 - **First published walk-forward evaluation on Polymarket bettor profiles.**
+
+## Phase 5: BSS Variant Ablation (2026-03-30)
+
+Single-pass multi-variant evaluation: 5 configs in one run, DuckDB SQL once per fold.
+22 folds, 435K resolved markets, bootstrap CI 1000 resamples.
+
+### Variant Results
+
+| Variant | BSS mean | BSS median | Fraction > 0 | Sign test p | 95% CI (fold) |
+|---|---|---|---|---|---|
+| **Baseline** | **+0.196** | **+0.159** | **100% (22/22)** | **2.38e-07** | **[+0.135, +0.260]** |
+| Volume gate | +0.071 | +0.054 | 95.5% (21/22) | — | [+0.040, +0.102] |
+| Gate + extremize | +0.047 | +0.028 | 68.2% (15/22) | 0.067 | [+0.022, +0.075] |
+| Gate + timing | +0.071 | +0.054 | 95.5% (21/22) | — | [+0.040, +0.102] |
+| All three | +0.047 | +0.028 | 68.2% (15/22) | 0.067 | [+0.022, +0.075] |
+
+### Interpretation
+
+1. **Baseline is optimal.** No variant improves over simple accuracy-weighted consensus with Bayesian shrinkage.
+2. **Volume gate hurts (-64% BSS).** Soft gating markets below $100K removes informative signal — most Polymarket markets are below this threshold.
+3. **Extremizing hurts further.** Pushing probabilities away from 0.5 amplifies noise rather than independent information. This contradicts Satopää et al. 2014 predictions — likely because our INFORMED bettors are already highly correlated (not independently informed).
+4. **Timing weight has zero effect.** Gate + timing = gate alone — timing_score doesn't discriminate within the INFORMED tier.
+5. **Negative result is valuable:** simplest model wins. No hyperparameter tuning needed.
+
+### Methodology Note
+
+Parameters ($10K/$100K thresholds, d_scale=2.0, d_max=2.0) were set a priori from literature in Phase 3, NOT tuned on walk-forward data. Overfitting risk is minimal.
 
 ## Technical Notes
 
