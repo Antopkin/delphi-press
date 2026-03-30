@@ -528,11 +528,11 @@ def main() -> None:
                    WHEN CAST(json_extract(replace(outcome_prices, '''', '"'), '$[0]') AS DOUBLE) > 0.99 THEN TRUE
                    WHEN CAST(json_extract(replace(outcome_prices, '''', '"'), '$[0]') AS DOUBLE) < 0.01 THEN FALSE
                END AS resolved_yes,
-               epoch(CAST("endDate" AS TIMESTAMP)) AS end_date
+               epoch(end_date) AS end_date
         FROM read_parquet('{markets_path}')
         WHERE closed = 1
         AND outcome_prices IS NOT NULL
-        AND "endDate" IS NOT NULL
+        AND end_date IS NOT NULL
         AND (
             CAST(json_extract(replace(outcome_prices, '''', '"'), '$[0]') AS DOUBLE) > 0.99
             OR CAST(json_extract(replace(outcome_prices, '''', '"'), '$[0]') AS DOUBLE) < 0.01
