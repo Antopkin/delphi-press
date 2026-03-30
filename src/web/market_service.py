@@ -140,15 +140,28 @@ class MarketSignalService:
             trades_batch = await client.fetch_trades_batch(cids)
 
             cards: list[MarketCard] = []
+            n_with_trades = 0
+            n_adapted = 0
+            all_trader_ids: set[str] = set()
+            matched_trader_ids: set[str] = set()
+
             for market in markets_with_cid:
                 cid = market["condition_id"]
                 raw_trades = trades_batch.get(cid, [])
                 if not raw_trades:
                     continue
+                n_with_trades += 1
 
                 trade_records = adapt_data_api_trades(raw_trades, cid)
                 if not trade_records:
                     continue
+                n_adapted += 1
+
+                # Collect trader IDs for funnel diagnostics
+                market_traders = {t.user_id for t in trade_records}
+                all_trader_ids |= market_traders
+                market_matched = market_traders & set(self.profiles.keys())
+                matched_trader_ids |= market_matched
 
                 yes_prob = market.get("yes_probability", 0.5)
                 signal = compute_informed_signal(
@@ -160,6 +173,13 @@ class MarketSignalService:
 
                 # Skip markets with no informed bettors
                 if signal.n_informed_bettors == 0:
+                    logger.debug(
+                        "Market %s: %d trades, %d traders, %d profiled, 0 informed",
+                        cid[:12],
+                        len(trade_records),
+                        len(market_traders),
+                        len(market_matched),
+                    )
                     continue
 
                 # Fetch price history for sparkline
@@ -172,10 +192,17 @@ class MarketSignalService:
             cards.sort(key=lambda c: c.dispersion, reverse=True)
 
             logger.info(
-                "Computed informed signals for %d/%d markets (%d had informed bettors)",
-                len(cards),
+                "Market funnel: %d fetched -> %d with cid -> %d with trades -> "
+                "%d adapted -> %d with informed. "
+                "Unique traders: %d, profiled: %d (of %d in store)",
+                len(markets),
                 len(markets_with_cid),
+                n_with_trades,
+                n_adapted,
                 len(cards),
+                len(all_trader_ids),
+                len(matched_trader_ids),
+                len(self.profiles),
             )
             return cards
 
