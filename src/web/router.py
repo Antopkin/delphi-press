@@ -268,7 +268,7 @@ async def index(
     session_factory = request.app.state.session_factory
 
     tomorrow = date.today() + timedelta(days=1)
-    max_date = date.today() + timedelta(days=30)
+    max_date = date.today() + timedelta(days=7)
 
     async with get_session(session_factory) as session:
         repo = PredictionRepository(session)

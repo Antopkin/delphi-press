@@ -27,7 +27,7 @@
         <div class="flex-1 flex flex-col gap-2" style="--fn-stagger-i: 1;">
             <span class="font-heading text-xl text-text-muted font-semibold leading-none">2</span>
             <strong>Укажите дату</strong>
-            <small class="text-text-muted leading-relaxed">На какой день нужен прогноз -- от завтра до +30 дней</small>
+            <small class="text-text-muted leading-relaxed">На какой день нужен прогноз -- от завтра до +7 дней</small>
         </div>
         <div class="hidden md:block shrink-0 w-8 h-0.5 bg-border mt-4" aria-hidden="true"></div>
         <div class="flex-1 flex flex-col gap-2" style="--fn-stagger-i: 2;">
@@ -91,7 +91,7 @@
                 aria-describedby="date-help"
                 class="w-full rounded-md border-border px-3 py-2"
             >
-            <small id="date-help" class="text-text-muted">От завтра до +30 дней</small>
+            <small id="date-help" class="text-text-muted">От завтра до +7 дней</small>
         </div>
 
         {# -- API key field -- #}
@@ -111,9 +111,9 @@
         {# -- Preset selection -- #}
         <fieldset class="border-none p-0 my-4" role="radiogroup" aria-label="Выберите режим прогноза">
             <legend class="font-semibold mb-3">Режим прогноза</legend>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <label class="fn-preset-card" data-preset="light">
-                    <input type="radio" name="preset" value="light">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-lg">
+                <label class="fn-preset-card fn-preset-card--selected" data-preset="light">
+                    <input type="radio" name="preset" value="light" checked>
                     <div class="flex flex-col gap-1">
                         <strong class="text-lg">Light</strong>
                         <span class="text-xl font-bold text-primary">~$1</span>
@@ -121,19 +121,10 @@
                     </div>
                 </label>
 
-                <label class="fn-preset-card fn-preset-card--selected" data-preset="standard">
-                    <input type="radio" name="preset" value="standard" checked>
-                    <div class="flex flex-col gap-1">
-                        <strong class="text-lg">Standard</strong>
-                        <span class="text-xl font-bold text-primary">~$5</span>
-                        <small class="text-text-muted text-sm">Claude Sonnet, 10 событий, 2 раунда</small>
-                    </div>
-                </label>
-
                 <label class="fn-preset-card" data-preset="full">
                     <input type="radio" name="preset" value="full">
                     <div class="flex flex-col gap-1">
-                        <strong class="text-lg">Full</strong>
+                        <strong class="text-lg">Opus</strong>
                         <span class="text-xl font-bold text-primary">~$15</span>
                         <small class="text-text-muted text-sm">Claude Opus, 20 событий, 2 раунда</small>
                     </div>
