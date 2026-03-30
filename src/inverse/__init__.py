@@ -14,17 +14,27 @@ Online: compute_informed_signal() → enriched foresight_signals for Judge.
 from src.inverse.schemas import (
     BettorProfile,
     BettorTier,
+    CloneValidationResult,
+    ClusterAssignment,
+    ExponentialFit,
     InformedBrierComparison,
     InformedSignal,
+    ParametricResult,
     ProfileSummary,
     TradeRecord,
+    WeibullFit,
 )
 
 __all__ = [
     "BettorProfile",
     "BettorTier",
+    "CloneValidationResult",
+    "ClusterAssignment",
+    "ExponentialFit",
     "InformedBrierComparison",
     "InformedSignal",
+    "ParametricResult",
     "ProfileSummary",
     "TradeRecord",
+    "WeibullFit",
 ]

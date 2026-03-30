@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-29. Production deployed. Обновлено: 2026-03-29 (v0.8.0 OutletResolver + v0.7.1 security audit).
+> Статус на 2026-03-30. Production deployed. Обновлено: 2026-03-30 (v0.9.2 Inverse Phase 4 walk-forward eval + v0.9.1 Phase 3 calibration + v0.9.0 Phase 2 + v0.8.0 OutletResolver + v0.7.1 security audit).
 
 ---
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Inverse Problem v0.9.1**: adaptive extremizing (position_std), soft volume gate ($10K–$100K), `as_of` temporal cutoff для walk-forward, `timing_score` (volume-weighted), Murphy decomposition + calibration slope + ECE, 6 crash fixes. Parquet store (506→62 МБ, 348K INFORMED → 7.5s load), Bayesian shrinkage, parametric λ, HDBSCAN clustering, enriched signal. **1226 тестов** зелёных. OutletResolver v0.8.0: динамическая резолюция СМИ через Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: CSRF middleware, IDOR protection, rate limiting, hardened secrets, **40/40 findings closed**. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation (Spearman/Granger). Единственный LLM-провайдер — OpenRouter.
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Inverse Problem v0.9.2**: walk-forward evaluation — 22 фолда, BSS +0.127 (12.7% BS reduction), 100% positive. Temporal leak eliminated via bucketed partial aggregates (33 ГБ → 2.4 ГБ bucketed parquet). Adaptive extremizing, soft volume gate, `as_of` cutoff, `timing_score`, Murphy decomposition + calibration slope + ECE. Parquet store (506→62 МБ, 348K INFORMED), Bayesian shrinkage, parametric λ, HDBSCAN. **1242 теста** зелёных. OutletResolver v0.8.0: Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: 40/40 findings closed. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation. Единственный LLM-провайдер — OpenRouter.
 
 ### Реализованные компоненты
 
@@ -39,6 +39,9 @@
 | **Async Password** | `src/security/password.py` — `hash_password_async`, `verify_password_async` | DONE | 6 тестов |
 | **Security Headers** | `nginx/security-headers.conf` — CSP, HSTS+preload, include pattern | DONE | — |
 | **OutletResolver** | wikidata_client, feed_discovery, outlet_resolver (3-layer: catalog → DB 30d → Wikidata + RSS) | DONE | 18 тестов |
+| **Inverse Problem** | profiler (as_of, timing_score), signal (adaptive extremize, soft volume gate), store (Parquet), loader (resolution dates, market timestamps), parametric (Exp/Weibull), clustering (HDBSCAN), cloning | DONE | 210 тестов |
+| **Eval Metrics** | Murphy decomposition, calibration slope, ECE, brier_score + bootstrap CI, log_score | DONE | 13 тестов |
+| **Inverse Scripts** | `duckdb_build_profiles.py`, `hf_build_profiles.py`, `eval_informed_consensus.py`, `convert_json_to_parquet.py` | DONE | — |
 
 ### Закрытые отложенные задачи (security audit v0.7.1)
 
@@ -63,6 +66,8 @@ scripts/eval_market_calibration.py  — market BS по горизонтам на
 scripts/eval_news_correlation.py    — news↔market Spearman/Granger → markdown report
 src/eval/correlation.py             — detect movements, news window, Spearman, Granger
 src/utils/fuzzy_match.py            — 3-tier fuzzy match (extracted from Judge)
+src/inverse/                        — bettor profiling + informed consensus + parametric models
+scripts/convert_json_to_parquet.py  — одноразовая миграция 506 МБ → ~60 МБ Parquet
 tests/fixtures/mock_llm.py          — MockLLMClient (task-based dispatch)
 tests/fixtures/llm_responses.py     — 25+ JSON fixture factories
 tests/test_integration/             — 7 E2E integration tests

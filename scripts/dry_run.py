@@ -136,7 +136,7 @@ async def main() -> None:
     parser.add_argument(
         "--profiles",
         default="",
-        help="Path to bettor_profiles.json (enables inverse problem enrichment)",
+        help="Path to bettor_profiles.parquet or .json (enables inverse problem enrichment)",
     )
     parser.add_argument(
         "--trades",

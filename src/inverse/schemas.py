@@ -9,16 +9,22 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
     "BettorProfile",
     "BettorTier",
+    "CloneValidationResult",
+    "ClusterAssignment",
+    "ExponentialFit",
     "InformedBrierComparison",
     "InformedSignal",
+    "ParametricResult",
     "ProfileSummary",
     "TradeRecord",
+    "WeibullFit",
 ]
 
 
@@ -62,6 +68,14 @@ class BettorProfile(BaseModel):
         le=1.0,
         description="Exponential decay weight based on last trade time",
     )
+    timing_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Volume-weighted mean fraction of market lifetime elapsed at bet time. "
+        "[INFERRED] from Bürgi et al. 2025 (timing → accuracy) and Mitts & Ofir 2026 "
+        "(pre-event timing principle).",
+    )
 
 
 class ProfileSummary(BaseModel):
@@ -74,9 +88,15 @@ class ProfileSummary(BaseModel):
     informed_count: int = Field(..., ge=0, description="Users in INFORMED tier")
     moderate_count: int = Field(..., ge=0, description="Users in MODERATE tier")
     noise_count: int = Field(..., ge=0, description="Users in NOISE tier")
-    median_brier: float = Field(..., description="Median Brier Score across profiled users")
-    p10_brier: float = Field(..., description="10th percentile BS (best performers)")
-    p90_brier: float = Field(..., description="90th percentile BS (worst performers)")
+    median_brier: float = Field(
+        ..., ge=0.0, le=1.0, description="Median Brier Score across profiled users"
+    )
+    p10_brier: float = Field(
+        ..., ge=0.0, le=1.0, description="10th percentile BS (best performers)"
+    )
+    p90_brier: float = Field(
+        ..., ge=0.0, le=1.0, description="90th percentile BS (worst performers)"
+    )
 
 
 class InformedSignal(BaseModel):
@@ -99,6 +119,98 @@ class InformedSignal(BaseModel):
     )
     confidence: float = Field(
         ..., ge=0.0, le=1.0, description="Signal confidence (shrinkage-adjusted)"
+    )
+    # Phase 2 extensions (backward-compatible: all optional)
+    parametric_probability: float | None = Field(
+        default=None, ge=0.0, le=1.0, description="Lambda-derived consensus probability"
+    )
+    parametric_model: str | None = Field(
+        default=None, description="Model type: exponential/weibull"
+    )
+    mean_lambda: float | None = Field(
+        default=None, gt=0.0, description="Mean lambda of informed bettors with fits"
+    )
+    dominant_cluster: int | None = Field(
+        default=None, description="Most common cluster among informed bettors"
+    )
+
+
+class ClusterAssignment(BaseModel):
+    """Cluster assignment for a single bettor."""
+
+    model_config = ConfigDict(frozen=True)
+
+    user_id: str = Field(..., description="Trader wallet/profile ID")
+    cluster_id: int = Field(..., description="-1 = noise/outlier")
+    cluster_label: str = Field(default="", description="Human-readable label")
+    membership_probability: float = Field(
+        ..., ge=0.0, le=1.0, description="Soft cluster membership probability"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Parametric estimation schemas (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+class ExponentialFit(BaseModel):
+    """MLE fit of Exp(λ) to a bettor's resolved positions."""
+
+    model_config = ConfigDict(frozen=True)
+
+    user_id: str = Field(..., description="Trader wallet/profile ID")
+    lambda_val: float = Field(..., gt=0.0, description="Rate parameter (events/day)")
+    n_observations: int = Field(..., ge=1, description="Number of resolved markets used")
+    log_likelihood: float = Field(..., description="Log-likelihood of the fit")
+    ci_lower: float = Field(..., gt=0.0, description="95% CI lower bound for λ")
+    ci_upper: float = Field(..., gt=0.0, description="95% CI upper bound for λ")
+
+
+class WeibullFit(BaseModel):
+    """MLE fit of Weibull(λ, k) to a bettor's resolved positions."""
+
+    model_config = ConfigDict(frozen=True)
+
+    user_id: str = Field(..., description="Trader wallet/profile ID")
+    lambda_val: float = Field(..., gt=0.0, description="Scale parameter")
+    shape_k: float = Field(..., gt=0.0, description="Shape parameter (k=1 → Exponential)")
+    n_observations: int = Field(..., ge=1, description="Number of resolved markets used")
+    log_likelihood: float = Field(..., description="Log-likelihood of the fit")
+    aic: float = Field(..., description="Akaike Information Criterion")
+    bic: float = Field(..., description="Bayesian Information Criterion")
+
+
+class ParametricResult(BaseModel):
+    """Combined parametric model result for a single bettor."""
+
+    model_config = ConfigDict(frozen=True)
+
+    user_id: str = Field(..., description="Trader wallet/profile ID")
+    preferred_model: Literal["exponential", "weibull"] = Field(
+        ..., description="Model selected by AICc"
+    )
+    exp_fit: ExponentialFit = Field(..., description="Exponential fit (always computed)")
+    weibull_fit: WeibullFit | None = Field(
+        default=None, description="Weibull fit (only if n >= 20)"
+    )
+    delta_aic: float = Field(
+        default=0.0, description="AIC_exp - AIC_weibull; negative → prefer Exp"
+    )
+
+
+class CloneValidationResult(BaseModel):
+    """Validation of a parametric clone against held-out markets."""
+
+    model_config = ConfigDict(frozen=True)
+
+    user_id: str = Field(..., description="Trader wallet/profile ID")
+    n_train: int = Field(..., ge=0, description="Training markets count")
+    n_test: int = Field(..., ge=0, description="Test markets count")
+    lambda_train: float = Field(..., gt=0.0, description="Lambda from training set")
+    mae: float = Field(..., ge=0.0, description="Mean |predicted - actual| position")
+    baseline_mae: float = Field(..., ge=0.0, description="MAE of naive baseline (train mean)")
+    skill_score: float = Field(
+        ..., description="1 - mae/baseline_mae; >0 means parametric beats naive"
     )
 
 

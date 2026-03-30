@@ -403,8 +403,8 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("data/inverse/bettor_profiles.json"),
-        help="Output profiles JSON path",
+        default=Path("data/inverse/bettor_profiles.parquet"),
+        help="Output profiles path (.parquet or .json)",
     )
     parser.add_argument("--min-bets", type=int, default=3, help="Min resolved bets (default: 3)")
     parser.add_argument("--batch-size", type=int, default=500_000, help="Rows per chunk")
@@ -447,10 +447,13 @@ def main() -> None:
     profiles, summary = build_profiles(positions, resolutions, min_bets=args.min_bets)
     logger.info("Profiling took %.1fs", time.perf_counter() - t0)
 
-    # Step 5: Save
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    data = {"summary": summary, "profiles": profiles}
-    args.output.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    # Step 5: Save via store.py (supports Parquet + JSON based on extension)
+    from src.inverse.schemas import BettorProfile, ProfileSummary
+    from src.inverse.store import save_profiles
+
+    profile_objs = [BettorProfile(**p) for p in profiles]
+    summary_obj = ProfileSummary(**summary)
+    save_profiles(profile_objs, summary_obj, args.output)
     logger.info("Saved %d profiles to %s", len(profiles), args.output)
 
     # Step 6: Cleanup

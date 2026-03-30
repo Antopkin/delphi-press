@@ -43,6 +43,11 @@ NOISE_PERCENTILE = 0.70
 #: Half-life for recency decay (days). Trades older than this get 0.5 weight.
 RECENCY_HALF_LIFE_DAYS = 90
 
+#: Bayesian shrinkage prior strength (pseudo-observations).
+#: Pulls low-N profiles toward population median BS (Ferro & Fricker 2012).
+#: At n=3: heavy shrinkage. At n=100: minimal effect.
+SHRINKAGE_PRIOR_STRENGTH = 15
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -58,8 +63,17 @@ def build_bettor_profiles(
     noise_percentile: float = NOISE_PERCENTILE,
     recency_half_life_days: int = RECENCY_HALF_LIFE_DAYS,
     reference_time: datetime | None = None,
+    shrinkage_strength: int = SHRINKAGE_PRIOR_STRENGTH,
+    as_of: datetime | None = None,
+    resolutions_with_dates: dict[str, tuple[bool, datetime]] | None = None,
+    market_timestamps: dict[str, tuple[datetime, datetime]] | None = None,
 ) -> tuple[list[BettorProfile], ProfileSummary]:
     """Build accuracy profiles for all bettors with sufficient history.
+
+    Applies Bayesian shrinkage to Brier Scores to stabilize estimates for
+    bettors with few resolved bets. Formula (Ferro & Fricker 2012):
+        adjusted_BS = (n × observed_BS + k × population_median) / (n + k)
+    where k = shrinkage_strength (default 15).
 
     Args:
         trades: All trade records from the dataset.
@@ -69,12 +83,42 @@ def build_bettor_profiles(
         noise_percentile: Fraction below which users are classified as NOISE.
         recency_half_life_days: Exponential decay half-life for recency weight.
         reference_time: Reference time for recency calculation (default: now UTC).
+            When as_of is provided and reference_time is not, defaults to as_of.
+        shrinkage_strength: Bayesian prior strength (pseudo-observations).
+            0 disables shrinkage (use raw BS).
+        as_of: Temporal cutoff for walk-forward validation. When set:
+            - Only trades with timestamp < as_of are included.
+            - Only resolutions before as_of are used (if resolutions_with_dates provided).
+            - reference_time defaults to as_of (not now).
+        resolutions_with_dates: Optional mapping market_id → (outcome, resolution_date).
+            Used with as_of to filter out future resolutions.
+        market_timestamps: Optional mapping market_id → (open_dt, close_dt).
+            When provided, computes volume-weighted timing_score per bettor.
+            [INFERRED] from Bürgi et al. 2025, Mitts & Ofir 2026.
 
     Returns:
         Tuple of (profiles, summary). Profiles are sorted by brier_score ascending.
     """
+    # as_of defaults reference_time when not explicitly set
+    if as_of is not None and reference_time is None:
+        reference_time = as_of
+
     if reference_time is None:
         reference_time = datetime.now(tz=timezone.utc)
+
+    # Temporal filtering: only trades before as_of
+    if as_of is not None:
+        trades = [t for t in trades if t.timestamp < as_of]
+
+    # Resolution filtering: only markets resolved before as_of
+    if as_of is not None and resolutions_with_dates is not None:
+        resolutions = {
+            mid: outcome
+            for mid, (outcome, res_date) in resolutions_with_dates.items()
+            if res_date < as_of
+        }
+    elif resolutions_with_dates is not None:
+        resolutions = {mid: outcome for mid, (outcome, _) in resolutions_with_dates.items()}
 
     # Step 1: Group trades by user
     user_trades: dict[str, list[TradeRecord]] = defaultdict(list)
@@ -87,7 +131,11 @@ def build_bettor_profiles(
     raw_profiles: list[dict] = []
     for user_id, utrades in user_trades.items():
         metrics = _compute_user_metrics(
-            utrades, resolutions, reference_time, recency_half_life_days
+            utrades,
+            resolutions,
+            reference_time,
+            recency_half_life_days,
+            market_timestamps=market_timestamps,
         )
         if metrics is not None and metrics["n_resolved_bets"] >= min_resolved_bets:
             raw_profiles.append({"user_id": user_id, **metrics})
@@ -103,6 +151,18 @@ def build_bettor_profiles(
             p10_brier=0.0,
             p90_brier=0.0,
         )
+
+    # Step 4b: Bayesian shrinkage — stabilize BS for low-N bettors.
+    # adjusted_BS = (n × BS + k × median_BS) / (n + k)
+    if shrinkage_strength > 0:
+        raw_brier_values = sorted(p["brier_score"] for p in raw_profiles)
+        population_median = float(statistics.median(raw_brier_values))
+        for p in raw_profiles:
+            n = p["n_resolved_bets"]
+            k = shrinkage_strength
+            raw_bs = p["brier_score"]
+            adjusted = (n * raw_bs + k * population_median) / (n + k)
+            p["brier_score"] = round(min(1.0, max(0.0, adjusted)), 6)
 
     # Step 5: Classify into tiers by Brier Score percentile
     brier_scores = sorted(p["brier_score"] for p in raw_profiles)
@@ -127,6 +187,7 @@ def build_bettor_profiles(
                 n_markets=p["n_markets"],
                 win_rate=p["win_rate"],
                 recency_weight=p["recency_weight"],
+                timing_score=p.get("timing_score"),
             )
         )
 
@@ -156,6 +217,8 @@ def _compute_user_metrics(
     resolutions: dict[str, bool],
     reference_time: datetime,
     half_life_days: int,
+    *,
+    market_timestamps: dict[str, tuple[datetime, datetime]] | None = None,
 ) -> dict | None:
     """Compute accuracy metrics for a single user.
 
@@ -208,6 +271,27 @@ def _compute_user_metrics(
         recency = math.exp(-0.693 * days_ago / half_life_days)  # ln(2) ≈ 0.693
         recency = min(1.0, max(0.0, recency))
 
+    # Timing score: volume-weighted mean of (bet_time - open) / (close - open)
+    timing_score = None
+    if market_timestamps is not None:
+        timing_weighted_sum = 0.0
+        timing_total_size = 0.0
+        for market_id, mtrades in market_trades.items():
+            ts = market_timestamps.get(market_id)
+            if ts is None:
+                continue
+            market_open, market_close = ts
+            market_duration = (market_close - market_open).total_seconds()
+            if market_duration <= 0:
+                continue
+            for t in mtrades:
+                elapsed = (t.timestamp - market_open).total_seconds()
+                frac = max(0.0, min(1.0, elapsed / market_duration))
+                timing_weighted_sum += frac * t.size
+                timing_total_size += t.size
+        if timing_total_size > 0:
+            timing_score = round(timing_weighted_sum / timing_total_size, 4)
+
     return {
         "n_resolved_bets": n,
         "brier_score": round(brier_score, 6),
@@ -216,6 +300,7 @@ def _compute_user_metrics(
         "n_markets": len(market_trades),
         "win_rate": round(win_rate, 4),
         "recency_weight": round(recency, 4),
+        "timing_score": timing_score,
     }
 
 

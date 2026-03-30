@@ -4,6 +4,100 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.9.2] - 2026-03-30
+
+### Added
+- **Inverse Problem Phase 4: walk-forward evaluation + temporal leak fix + deploy**
+  - `scripts/eval_walk_forward.py` (NEW): Walk-forward BSS evaluation с DuckDB backend. 22 фолда, non-overlapping 60-day windows, burn-in 180 дней. **Почему:** нужно доказать что informed consensus реально помогает на out-of-sample данных — не просто in-sample fit.
+  - `scripts/duckdb_build_bucketed.py` (NEW): Time-bucketed partial aggregates из 470M raw trades. Один скан 33 ГБ → 2.4 ГБ bucketed parquet. **Почему:** pre-aggregated позиции содержали temporal leak (trades после cutoff T включены в avg_position). Bucketed подход: суммы composable, averages — нет. `avg_position_as_of_T = SUM(weighted_price_sum) / SUM(total_usd) WHERE time_bucket <= T`.
+  - Dockerfile: `--extra inverse` в обоих `uv sync` → pyarrow в Docker image без ручной установки
+  - docker-compose: bind mount `/data/inverse` для app и worker; worker healthcheck `test -f /proc/1/status` вместо curl (ARQ не имеет HTTP endpoint)
+
+### Results
+- **22/22 фолда BSS > 0** — informed consensus всегда улучшает raw market price
+- **Robust mean BSS = +0.127** (фолды 0-16, >= 944 test markets) — 12.7% снижение Brier Score
+- Peak BSS = +0.273 (fold 9, 34K informed bettors)
+- Tier stability = 0.613 (61% Jaccard overlap между фолдами)
+- Temporal leak analysis: leaked BSS +0.092 vs clean BSS **+0.117** на тех же фолдах — leak добавлял шум, не сигнал
+- **Первое walk-forward evaluation на Polymarket bettor profiles** (нет опубликованных аналогов)
+
+### Fixed
+- Temporal leak в pre-aggregated позициях (trades после cutoff T были в avg_position)
+- Worker healthcheck: `pgrep` → `test -f /proc/1/status` (pgrep отсутствует в python:3.12-slim)
+- `mean_coverage` в walk-forward: per-market average вместо per-fold total (cosmetic)
+- `avg_position` clamped to [0,1] в SQL merge (`LEAST/GREATEST`)
+- Удалены мёртвые CLI аргументы (`--adaptive-extremize`, `--volume-gate`) из eval скрипта
+
+### Metrics
+- Тесты: 1226 → 1242 (+16 walk-forward eval)
+- Walk-forward: 22 фолда за 82 мин (bucketed) vs 15 фолдов за 5+ часов + OOM (old)
+- Docker: 4/4 containers healthy (включая worker)
+
+---
+
+## [0.9.1] - 2026-03-30
+
+### Added
+- **Inverse Problem Phase 3: калибровка, валидация, timing**
+  - `signal.py`: adaptive extremizing — d вычисляется из `position_std` (inter-bettor std, не |informed-raw|). **Почему:** Satopää et al. (2014) показали: оптимальный d зависит от корреляции информации между бетторами (1.16–3.92). Фиксированный d=1.5 был uncalibrated. Формула: `d = 1.0 + 2.0 × std`, clamped [1.0, 2.0]. Новый flag `adaptive_extremize: bool`.
+  - `signal.py`: soft volume gate — линейный градиент $10K–$100K. **Почему:** Clinton & Huang (2024): accuracy Polymarket падает до 61% на тонких рынках. Hard cutoff → discontinuity; soft gate → плавная деградация.
+  - `profiler.py`: `as_of: datetime` — temporal cutoff для walk-forward validation. Фильтрует trades И resolutions по дате. **Почему:** look-ahead bias — профили видели будущие данные, BSS оптимистичен. `reference_time` автоматически = `as_of` (ARCH-3).
+  - `profiler.py`: `timing_score` — volume-weighted mean fraction of market lifetime at bet time. **Почему:** Bürgi et al. (2025): цены точнее ближе к resolution. [INFERRED] — наша операционализация, не validated feature из Mitts & Ofir.
+  - `loader.py`: `load_resolutions_with_dates()` — resolutions с timestamps для walk-forward
+  - `loader.py`: `load_market_timestamps()` — (open, close) пары для timing_score
+  - `metrics.py`: Murphy decomposition (REL, RES, UNC), calibration slope (OLS), ECE
+  - `schemas.py`: `BettorProfile.timing_score`, `ProfileSummary` percentile constraints (ge=0, le=1)
+
+### Fixed
+- **6 crash-багов** (найдены техническим аудитом, 2 агента line-by-line review):
+  - `extremize(d < 1.0)` — was silently producing wrong math (probability shrinkage вместо expansion). Теперь `ValueError`.
+  - `_parse_timestamp()` — timezone offsets (`+05:00`) были либо dropped, либо wrong UTC. Теперь `fromisoformat()` + `astimezone(UTC)`.
+  - `_parse_resolution_row()` — `outcomePrices='{"a":1}'` (object вместо array) → `KeyError`. Теперь type-check `isinstance(prices, list)`.
+  - `ProfileSummary` — percentile поля принимали значения > 1.0 или < 0.0. Добавлены `ge=0.0, le=1.0`.
+  - `compute_enriched_signal()`: guard `total_w == 0` в parametric blend (предотвращает `ZeroDivisionError`).
+  - Citation corrections: Mitts & Ofir 2025 → 2026; `timing_score`/`concentration_entropy` — [INFERRED], не из статьи. Akey et al. 2025 — primary citation для tier profiling.
+
+### Changed
+- `signal.py`: `extremize()` теперь требует `d >= 1.0` (breaking: `d < 1.0` → ValueError)
+- `loader.py`: `_parse_timestamp()` → `fromisoformat()` вместо manual format list (поддержка timezone offsets)
+- `profiler.py`: `build_bettor_profiles()` — 3 новых keyword params: `as_of`, `resolutions_with_dates`, `market_timestamps`
+
+### Metrics
+- Тесты: 1172 → 1226 (+54)
+- Inverse tests: 156 → 210 (+54)
+- E2E server verified: Parquet load 348K INFORMED profiles in 7.5s
+
+---
+
+## [0.9.0] - 2026-03-30
+
+### Added
+- **Inverse Problem Phase 2: подключение профилей к pipeline + расширение модели**
+  - `store.py`: миграция на Parquet (pyarrow ZSTD) — 506 МБ → ~60 МБ, загрузка 0.3с вместо 12с. **Почему:** 506 МБ JSON → полная десериализация в RAM (~1 ГБ peak) при каждом старте worker'а; Parquet с predicate pushdown грузит только INFORMED тир за 0.3с.
+  - `tier_filter` param в `load_profiles()`: default "informed" грузит только 348K вместо 1.7M
+  - JSON backward compat сохранён (dispatch по расширению файла)
+  - Bayesian shrinkage в `profiler.py`: `adjusted_BS = (n×BS + k×median) / (n+k)`, k=15. **Почему:** при n=3 resolved bets Brier Score имеет огромную дисперсию — "lucky streak" классифицируется как INFORMED. Shrinkage стягивает малонадёжные оценки к популяционной медиане (Ferro & Fricker 2012).
+  - `parametric.py` (NEW): Exp(λ) closed-form MLE + Weibull(λ,k) via scipy L-BFGS-B. **Почему:** BS говорит "точный/неточный", λ даёт модель поведения — как человек оценивает вероятность во времени. Нет опубликованных работ по Weibull recovery из prediction market bets — publishable novelty.
+  - `clustering.py` (NEW): HDBSCAN на behavioral features (optional dep), 6 стратегических архетипов (sharp_informed, skilled_retail, volume_bettor, contrarian, stale, noise_trader)
+  - `cloning.py` (NEW): clone validation — predicted vs actual positions, MAE, skill_score. **Почему:** аргумент транзитивности Алексея — если клоны предсказывают ставки И ставки отражают реальность → клоны предсказывают реальность.
+  - `signal.py`: `compute_enriched_signal()` с adaptive parametric blending + extremizing (Satopää et al. 2014). **Почему:** после accuracy-weighted aggregation, push away from 50% даёт 10-20% BS improvement в сравнимых популяциях прогнозистов.
+  - Extended `InformedSignal`: +4 optional поля (parametric_probability, parametric_model, mean_lambda, dominant_cluster) — backward-compatible.
+  - `loader.py`: `load_market_horizons()` — market_id → horizon_days из CSV (блокер для параметрики)
+  - New schemas: ExponentialFit, WeibullFit, ParametricResult, CloneValidationResult, ClusterAssignment
+  - `scripts/convert_json_to_parquet.py`: одноразовая миграция JSON → Parquet на сервере
+  - Build scripts (`duckdb_build_profiles.py`, `hf_build_profiles.py`) обновлены: output .parquet по умолчанию
+
+### Changed
+- `store.py` DEFAULT_PROFILES_PATH: `.json` → `.parquet`
+- `profiler.py`: новый param `shrinkage_strength=15` (0 = отключить)
+- `dry_run.py --profiles`: принимает .parquet и .json
+
+### Metrics
+- Тесты: 1102 → 1172 (+70)
+- Inverse tests: 87 → 156 (+69)
+
+---
+
 ## [0.8.0] - 2026-03-29
 
 ### Added

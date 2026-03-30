@@ -10,6 +10,18 @@ import pytest
 from src.db.models import FetchMethod, PredictionStatus, RawArticle
 from src.schemas.prediction import HeadlineOutput, PredictionResponse
 
+# ── WorkerSettings ─────────────────────────────────────────────────
+
+
+def test_worker_max_tries_at_least_2():
+    """Failed tasks (network timeout, OOM) must be retried at least once."""
+    from src.worker import WorkerSettings
+
+    assert WorkerSettings.max_tries >= 2, (
+        f"max_tries={WorkerSettings.max_tries}: failed predictions are lost without retry"
+    )
+
+
 # ── run_prediction_task ─────────────────────────────────────────────
 
 

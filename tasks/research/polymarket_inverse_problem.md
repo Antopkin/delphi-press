@@ -176,8 +176,15 @@ Delphi Press уже коллектит оба потока данных:
 | Шаг 4: News↔market корреляция | **Готово** | `src/eval/correlation.py` (detect, collect, Spearman, Granger), `scripts/eval_news_correlation.py` | 16 |
 | Fuzzy match extraction | **Готово** | `src/utils/fuzzy_match.py` (extracted from Judge) | 8 |
 
-| Шаг 5: Inverse Problem (Wisdom of the Informed) | **Готово** | `src/inverse/` (schemas, profiler, signal, loader, store), Judge Phase 5 integration, `scripts/build_bettor_profiles.py`, `scripts/eval_informed_consensus.py` | 86 |
-| Шаг 5b: HuggingFace full dataset profiling | **Готово** | `scripts/duckdb_build_profiles.py`, `scripts/merge_profiles.py` (DuckDB two-pass на 470M trades) | — |
+| Шаг 5: Inverse Problem (Wisdom of the Informed) | **Готово** | `src/inverse/` (schemas, profiler, signal, loader, store), Judge Phase 5 integration, `scripts/build_bettor_profiles.py`, `scripts/eval_informed_consensus.py` | 87 |
+| Шаг 5b: HuggingFace full dataset profiling | **Готово** | `scripts/duckdb_build_profiles.py`, `scripts/hf_build_profiles.py` (DuckDB two-pass на 470M trades) | — |
+| Шаг 6a: Parquet storage + tier_filter | **Готово** | `store.py` (Parquet ZSTD + JSON legacy), `scripts/convert_json_to_parquet.py` | 20 |
+| Шаг 6b: Bayesian shrinkage | **Готово** | `profiler.py` (shrinkage_strength=15, Ferro & Fricker 2012) | 4 |
+| Шаг 6c: Parametric λ (Exp+Weibull) | **Готово** | `parametric.py` (closed-form MLE + scipy L-BFGS-B), schemas.py | 14 |
+| Шаг 6d: HDBSCAN clustering | **Готово** | `clustering.py` (optional dep, 6 архетипов), schemas.py | 16 |
+| Шаг 6e: Enriched signal + extremizing | **Готово** | `signal.py` (`compute_enriched_signal()`, Satopää et al.) | 10 |
+| Шаг 6f: Clone validation | **Готово** | `cloning.py` (MAE, skill_score, транзитивность Алексея) | 6 |
+| Шаг 6g: Market horizons loader | **Готово** | `loader.py` (`load_market_horizons()`) | 7 |
 
 **Результаты профилирования (HuggingFace, 2026-03-29):**
 - Источник: `SII-WANGZJ/Polymarket_data` trades.parquet (33 ГБ, 470M строк)
@@ -185,9 +192,9 @@ Delphi Press уже коллектит оба потока данных:
 - 348,519 INFORMED / 871,299 MODERATE / 522,780 NOISE
 - Median BS: 0.295, p10 BS: 0.067, p90 BS: 0.571
 - Best: BS=0.000001 ($404K volume, 4 resolved bets)
-- Файл: `bettor_profiles.json` (506 МБ, на сервере)
+- Файл: `bettor_profiles.parquet` (~60 МБ, конвертировано из 506 МБ JSON)
 
-Итого реализовано: **8 фаз, 195 тестов** (2026-03-28 — 2026-03-29).
+Итого реализовано: **15 фаз, 156 тестов inverse + 1172 всего** (2026-03-28 — 2026-03-30).
 
 ---
 
