@@ -58,17 +58,31 @@ class InMemoryProfileCache:
 # ---------------------------------------------------------------------------
 # Cheap model assignments
 # ---------------------------------------------------------------------------
-def build_cheap_assignments(model: str) -> dict[str, ModelAssignment]:
-    """Clone DEFAULT_ASSIGNMENTS, replacing all models with the cheap one.
+_CHEAP_TASKS = {
+    "news_scout_search",
+    "news_scout_classify",
+    "event_calendar",
+    "outlet_historian",
+    "event_identification",
+    "event_clustering",
+    "thread_merge",
+}
 
-    max_tokens=None lets the model use its full output capacity (no truncation).
+
+def build_cheap_assignments(model: str, persona_model: str) -> dict[str, ModelAssignment]:
+    """Clone DEFAULT_ASSIGNMENTS with two-tier model strategy.
+
+    Cheap model for data collection/classification tasks,
+    strong model for analysis/personas/generation.
+    max_tokens=None lets each model use its full output capacity.
     """
     cheap = {}
     for task, orig in DEFAULT_ASSIGNMENTS.items():
+        m = model if task in _CHEAP_TASKS else persona_model
         cheap[task] = ModelAssignment(
             task=orig.task,
-            primary_model=model,
-            fallback_models=[model],
+            primary_model=m,
+            fallback_models=[m],
             temperature=orig.temperature,
             max_tokens=None,
             json_mode=orig.json_mode,
@@ -100,9 +114,14 @@ async def main() -> None:
     parser.add_argument(
         "--model",
         default="google/gemini-3.1-flash-lite-preview",
-        help="Model to use for all tasks",
+        help="Cheap model for data collection tasks",
     )
-    parser.add_argument("--budget", type=float, default=5.0, help="Max budget USD")
+    parser.add_argument(
+        "--persona-model",
+        default="anthropic/claude-opus-4.6",
+        help="Strong model for personas, analysts, generation (default: opus-4.6)",
+    )
+    parser.add_argument("--budget", type=float, default=15.0, help="Max budget USD")
     parser.add_argument(
         "--event-threads",
         type=int,
@@ -146,13 +165,20 @@ async def main() -> None:
     print(f"  DELPHI PRESS DRY RUN")
     print(f"  Outlet:      {args.outlet}")
     print(f"  Target date: {target_date}")
-    print(f"  Model:       {args.model}")
+    print(f"  Cheap model: {args.model}")
+    print(f"  Strong model:{args.persona_model}")
     print(f"  Budget:      ${args.budget:.2f}")
     print(f"{'=' * 60}\n")
 
-    # 1. Build cheap model assignments
-    cheap_assignments = build_cheap_assignments(args.model)
-    logger.info("Overriding %d task assignments to %s", len(cheap_assignments), args.model)
+    # 1. Build two-tier model assignments
+    cheap_assignments = build_cheap_assignments(args.model, args.persona_model)
+    logger.info(
+        "Task assignments: %d cheap (%s) + %d strong (%s)",
+        sum(1 for t in cheap_assignments if t in _CHEAP_TASKS),
+        args.model,
+        sum(1 for t in cheap_assignments if t not in _CHEAP_TASKS),
+        args.persona_model,
+    )
 
     # 2. Create LLM provider
     provider = OpenRouterClient(api_key=api_key)
