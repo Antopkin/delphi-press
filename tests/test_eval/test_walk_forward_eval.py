@@ -238,7 +238,7 @@ class TestSignalComputation:
         profiles = build_fold_profiles(duckdb_con, cutoff, min_bets=3, shrinkage_strength=15)
 
         test_end = cutoff + 60 * 86400
-        raw_probs, informed_probs, outcomes = compute_fold_signals(
+        raw_probs, informed_probs, outcomes, _coverages = compute_fold_signals(
             duckdb_con,
             profiles,
             cutoff,
@@ -258,7 +258,7 @@ class TestSignalComputation:
         profiles = build_fold_profiles(duckdb_con, cutoff, min_bets=3, shrinkage_strength=15)
 
         test_end = cutoff + 60 * 86400
-        raw_probs, informed_probs, outcomes = compute_fold_signals(
+        raw_probs, informed_probs, outcomes, _coverages = compute_fold_signals(
             duckdb_con,
             profiles,
             cutoff,
@@ -282,7 +282,7 @@ class TestSignalComputation:
         assert len(profiles) == 0
 
         test_end = cutoff + 60 * 86400
-        raw_probs, informed_probs, outcomes = compute_fold_signals(
+        raw_probs, informed_probs, outcomes, _coverages = compute_fold_signals(
             duckdb_con,
             profiles,
             cutoff,
@@ -424,3 +424,147 @@ class TestEdgeCases:
             assert required_columns.issubset(results[0].keys()), (
                 f"Missing: {required_columns - results[0].keys()}"
             )
+
+
+class TestBucketedMode:
+    """Test bucketed positions (temporal leak fix)."""
+
+    @pytest.fixture
+    def bucketed_db(self, tmp_path):
+        """Create in-memory DuckDB with bucketed data + parquet file."""
+        import duckdb
+        import random
+
+        rng = random.Random(42)
+        con = duckdb.connect()
+        bucket_secs = 30 * 86400
+
+        # Create resolved_markets (same as main fixture)
+        n_markets = 30
+        markets = []
+        for i in range(n_markets):
+            end_day = 30 + i * 10
+            resolved_yes = rng.random() > 0.5
+            markets.append((f"m{i:03d}", resolved_yes, _ts(end_day)))
+
+        con.execute("""
+            CREATE TABLE resolved_markets (
+                condition_id VARCHAR, resolved_yes BOOLEAN, end_date DOUBLE
+            )
+        """)
+        con.executemany("INSERT INTO resolved_markets VALUES (?, ?, ?)", markets)
+
+        # Create bucketed positions: split trades across time buckets
+        rows = []
+        for uid_idx in range(15):
+            for mid_idx in range(n_markets):
+                if rng.random() > 0.6:
+                    continue
+                outcome = 1.0 if markets[mid_idx][1] else 0.0
+                # Simulate 1-2 trades in different buckets
+                n_buckets = 1 if rng.random() < 0.7 else 2
+                for b in range(n_buckets):
+                    trade_day = max(
+                        1,
+                        markets[mid_idx][2] / 86400
+                        - _EPOCH.timestamp() / 86400
+                        - rng.uniform(5, 60 + b * 30),
+                    )
+                    trade_ts = _EPOCH.timestamp() + trade_day * 86400
+                    bucket = int(trade_ts // bucket_secs)
+
+                    if uid_idx < 4:
+                        price = outcome + rng.gauss(0, 0.08)
+                    else:
+                        price = rng.random()
+                    price = max(0.01, min(0.99, price))
+                    vol = rng.uniform(10, 500)
+
+                    rows.append(
+                        (
+                            f"u{uid_idx:03d}",
+                            f"m{mid_idx:03d}",
+                            bucket,
+                            price * vol,
+                            vol,
+                            trade_ts,
+                            1,
+                        )
+                    )
+
+        # Write bucketed parquet
+        con.execute("""
+            CREATE TABLE _bucketed_tmp (
+                user_id VARCHAR, condition_id VARCHAR, time_bucket INTEGER,
+                weighted_price_sum DOUBLE, total_usd DOUBLE,
+                last_ts DOUBLE, n_trades INTEGER
+            )
+        """)
+        con.executemany("INSERT INTO _bucketed_tmp VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+
+        bucketed_parquet = tmp_path / "_merged_bucketed.parquet"
+        con.execute(f"""
+            COPY (SELECT * FROM _bucketed_tmp ORDER BY time_bucket, user_id)
+            TO '{bucketed_parquet}' (FORMAT PARQUET, COMPRESSION ZSTD)
+        """)
+        con.execute("DROP TABLE _bucketed_tmp")
+
+        yield con, str(bucketed_parquet)
+        con.close()
+
+    def test_bucketed_profiles_built(self, bucketed_db):
+        """Bucketed mode builds profiles correctly."""
+        con, bucketed_path = bucketed_db
+        cutoff = _ts(180)
+        profiles = build_fold_profiles(
+            con,
+            cutoff,
+            min_bets=2,
+            shrinkage_strength=0,
+            bucketed_path=bucketed_path,
+        )
+        assert len(profiles) > 0, "Should have profiled users from bucketed data"
+        # All BS values in [0, 1]
+        for p in profiles.values():
+            assert 0.0 <= p["brier_score"] <= 1.0
+
+    def test_bucketed_temporal_filter(self, bucketed_db):
+        """Bucketed mode excludes future trades via time_bucket filter."""
+        con, bucketed_path = bucketed_db
+        cutoff_early = _ts(100)
+        cutoff_late = _ts(250)
+
+        profiles_early = build_fold_profiles(
+            con,
+            cutoff_early,
+            min_bets=1,
+            shrinkage_strength=0,
+            bucketed_path=bucketed_path,
+        )
+        profiles_late = build_fold_profiles(
+            con,
+            cutoff_late,
+            min_bets=1,
+            shrinkage_strength=0,
+            bucketed_path=bucketed_path,
+        )
+        # Later cutoff should have >= profiles (more data)
+        assert len(profiles_late) >= len(profiles_early)
+
+    def test_bucketed_walk_forward_runs(self, bucketed_db):
+        """Walk-forward with bucketed data produces results."""
+        con, bucketed_path = bucketed_db
+        results = run_walk_forward(
+            con,
+            burn_in_days=120,
+            step_days=30,
+            test_window_days=30,
+            min_bets=2,
+            shrinkage_strength=0,
+            bucketed_path=bucketed_path,
+        )
+        # Should produce at least 1 fold
+        assert len(results) >= 1
+        # All BSS values should be floats
+        for fold in results:
+            assert isinstance(fold["bss_vs_raw"], float)

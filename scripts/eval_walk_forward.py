@@ -35,6 +35,7 @@ INFORMED_PERCENTILE = 0.20
 NOISE_PERCENTILE = 0.70
 RECENCY_HALF_LIFE_DAYS = 90
 N_FULL_COVERAGE = 20
+BUCKET_SIZE_SECONDS = 30 * 86400
 
 
 # ---------------------------------------------------------------------------
@@ -47,39 +48,77 @@ def build_fold_profiles(
     cutoff_ts: float,
     min_bets: int = 5,
     shrinkage_strength: int = 15,
+    *,
+    bucketed_path: str | None = None,
 ) -> dict[str, dict]:
     """Build bettor profiles from positions resolved before cutoff_ts.
 
     Uses DuckDB SQL for aggregation, then applies Bayesian shrinkage
     and tier classification in Python.
 
+    When bucketed_path is provided, reconstructs positions from time-bucketed
+    partial aggregates — eliminates temporal leak by only including trades
+    made before the cutoff.
+
     Args:
-        con: DuckDB connection with resolved_markets and positions tables.
+        con: DuckDB connection with resolved_markets table.
         cutoff_ts: Unix timestamp cutoff — only markets with end_date < cutoff.
         min_bets: Minimum resolved bets to include a user.
         shrinkage_strength: Bayesian prior strength (0 = no shrinkage).
+        bucketed_path: Path to _merged_bucketed.parquet (if None, uses positions table).
 
     Returns:
         Dict mapping user_id → profile dict with keys: brier_score,
         n_resolved_bets, total_volume, last_ts, tier, recency_weight.
     """
-    rows = con.execute(
-        """
-        SELECT
-            p.user_id,
-            COUNT(*) AS n_resolved_bets,
-            AVG(POWER(p.avg_position - CASE WHEN r.resolved_yes THEN 1.0 ELSE 0.0 END, 2)) AS brier_score,
-            SUM(p.total_usd) AS total_volume,
-            MAX(p.last_ts) AS last_ts
-        FROM positions p
-        JOIN resolved_markets r ON p.condition_id = r.condition_id
-        WHERE r.end_date < ?
-        GROUP BY p.user_id
-        HAVING COUNT(*) >= ?
-        ORDER BY brier_score ASC
-        """,
-        [cutoff_ts, min_bets],
-    ).fetchall()
+    if bucketed_path:
+        cutoff_bucket = int(cutoff_ts // BUCKET_SIZE_SECONDS)
+        rows = con.execute(
+            f"""
+            WITH positions_at_cutoff AS (
+                SELECT user_id, condition_id,
+                    LEAST(1.0, GREATEST(0.0,
+                        SUM(weighted_price_sum) / NULLIF(SUM(total_usd), 0)
+                    )) AS avg_position,
+                    SUM(total_usd) AS total_usd,
+                    MAX(last_ts) AS last_ts
+                FROM read_parquet('{bucketed_path}')
+                WHERE time_bucket <= {cutoff_bucket}
+                GROUP BY user_id, condition_id
+            )
+            SELECT
+                p.user_id,
+                COUNT(*) AS n_resolved_bets,
+                AVG(POWER(p.avg_position - CASE WHEN r.resolved_yes THEN 1.0 ELSE 0.0 END, 2)) AS brier_score,
+                SUM(p.total_usd) AS total_volume,
+                MAX(p.last_ts) AS last_ts
+            FROM positions_at_cutoff p
+            JOIN resolved_markets r ON p.condition_id = r.condition_id
+            WHERE r.end_date < ?
+            GROUP BY p.user_id
+            HAVING COUNT(*) >= ?
+            ORDER BY brier_score ASC
+            """,
+            [cutoff_ts, min_bets],
+        ).fetchall()
+    else:
+        rows = con.execute(
+            """
+            SELECT
+                p.user_id,
+                COUNT(*) AS n_resolved_bets,
+                AVG(POWER(p.avg_position - CASE WHEN r.resolved_yes THEN 1.0 ELSE 0.0 END, 2)) AS brier_score,
+                SUM(p.total_usd) AS total_volume,
+                MAX(p.last_ts) AS last_ts
+            FROM positions p
+            JOIN resolved_markets r ON p.condition_id = r.condition_id
+            WHERE r.end_date < ?
+            GROUP BY p.user_id
+            HAVING COUNT(*) >= ?
+            ORDER BY brier_score ASC
+            """,
+            [cutoff_ts, min_bets],
+        ).fetchall()
 
     if not rows:
         return {}
@@ -132,7 +171,9 @@ def compute_fold_signals(
     profiles: dict[str, dict],
     test_start: float,
     test_end: float,
-) -> tuple[list[float], list[float], list[float]]:
+    *,
+    bucketed_path: str | None = None,
+) -> tuple[list[float], list[float], list[float], list[float]]:
     """Compute raw and informed probabilities for test markets.
 
     For each test market (resolved in [test_start, test_end)):
@@ -145,25 +186,49 @@ def compute_fold_signals(
         profiles: User profiles from build_fold_profiles().
         test_start: Start of test window (unix timestamp).
         test_end: End of test window (unix timestamp).
+        bucketed_path: Path to bucketed parquet (temporal filter).
 
     Returns:
-        (raw_probs, informed_probs, outcomes) — parallel lists.
+        (raw_probs, informed_probs, outcomes, coverages) — parallel lists.
     """
-    # Get test markets and their positions
-    test_rows = con.execute(
-        """
-        SELECT r.condition_id, r.resolved_yes,
-               p.user_id, p.avg_position, p.total_usd
-        FROM resolved_markets r
-        JOIN positions p ON r.condition_id = p.condition_id
-        WHERE r.end_date >= ? AND r.end_date < ?
-        ORDER BY r.condition_id
-        """,
-        [test_start, test_end],
-    ).fetchall()
+    if bucketed_path:
+        cutoff_bucket = int(test_start // BUCKET_SIZE_SECONDS)
+        test_rows = con.execute(
+            f"""
+            WITH positions_at_cutoff AS (
+                SELECT user_id, condition_id,
+                    LEAST(1.0, GREATEST(0.0,
+                        SUM(weighted_price_sum) / NULLIF(SUM(total_usd), 0)
+                    )) AS avg_position,
+                    SUM(total_usd) AS total_usd
+                FROM read_parquet('{bucketed_path}')
+                WHERE time_bucket <= {cutoff_bucket}
+                GROUP BY user_id, condition_id
+            )
+            SELECT r.condition_id, r.resolved_yes,
+                   p.user_id, p.avg_position, p.total_usd
+            FROM resolved_markets r
+            JOIN positions_at_cutoff p ON r.condition_id = p.condition_id
+            WHERE r.end_date >= ? AND r.end_date < ?
+            ORDER BY r.condition_id
+            """,
+            [test_start, test_end],
+        ).fetchall()
+    else:
+        test_rows = con.execute(
+            """
+            SELECT r.condition_id, r.resolved_yes,
+                   p.user_id, p.avg_position, p.total_usd
+            FROM resolved_markets r
+            JOIN positions p ON r.condition_id = p.condition_id
+            WHERE r.end_date >= ? AND r.end_date < ?
+            ORDER BY r.condition_id
+            """,
+            [test_start, test_end],
+        ).fetchall()
 
     if not test_rows:
-        return [], [], []
+        return [], [], [], []
 
     # Group by market
     from collections import defaultdict
@@ -176,6 +241,7 @@ def compute_fold_signals(
     raw_probs = []
     informed_probs = []
     outcomes = []
+    coverages = []
 
     for cid, data in market_data.items():
         outcome = 1.0 if data["resolved_yes"] else 0.0
@@ -197,18 +263,16 @@ def compute_fold_signals(
             profile = profiles.get(uid)
             if profile is None or profile["tier"] != "informed":
                 continue
-            # Weight: (1 - brier_score) * volume * recency
             accuracy_w = max(0.01, 1.0 - profile["brier_score"])
             weight = accuracy_w * vol * profile["recency_weight"]
             informed_weighted_sum += pos * weight
             informed_total_weight += weight
             n_informed += 1
 
+        coverage = min(1.0, n_informed / N_FULL_COVERAGE)
         if informed_total_weight > 0:
             informed_raw = informed_weighted_sum / informed_total_weight
             informed_raw = max(0.01, min(0.99, informed_raw))
-            # Coverage-based shrinkage toward raw price
-            coverage = min(1.0, n_informed / N_FULL_COVERAGE)
             informed_prob = coverage * informed_raw + (1.0 - coverage) * raw_prob
         else:
             informed_prob = raw_prob
@@ -216,8 +280,9 @@ def compute_fold_signals(
         raw_probs.append(raw_prob)
         informed_probs.append(informed_prob)
         outcomes.append(outcome)
+        coverages.append(coverage)
 
-    return raw_probs, informed_probs, outcomes
+    return raw_probs, informed_probs, outcomes, coverages
 
 
 def compute_fold_metrics(
@@ -296,16 +361,19 @@ def run_walk_forward(
     test_window_days: int = 60,
     min_bets: int = 5,
     shrinkage_strength: int = 15,
+    *,
+    bucketed_path: str | None = None,
 ) -> list[dict]:
     """Run walk-forward evaluation across all folds.
 
     Args:
-        con: DuckDB connection with resolved_markets and positions tables.
+        con: DuckDB connection with resolved_markets table.
         burn_in_days: Days from earliest market to first fold cutoff.
         step_days: Days between consecutive fold cutoffs.
         test_window_days: Days in each test window.
         min_bets: Minimum resolved bets for profiling.
         shrinkage_strength: Bayesian prior strength.
+        bucketed_path: Path to bucketed parquet (eliminates temporal leak).
 
     Returns:
         List of fold result dicts with all metrics and metadata.
@@ -343,7 +411,13 @@ def run_walk_forward(
             continue
 
         # Build profiles
-        profiles = build_fold_profiles(con, t, min_bets, shrinkage_strength)
+        profiles = build_fold_profiles(
+            con,
+            t,
+            min_bets,
+            shrinkage_strength,
+            bucketed_path=bucketed_path,
+        )
         informed_set = {uid for uid, p in profiles.items() if p["tier"] == "informed"}
         n_profiled = len(profiles)
         n_informed = len(informed_set)
@@ -357,8 +431,12 @@ def run_walk_forward(
             tier_stability = None
 
         # Compute signals
-        raw_probs, informed_probs, outcomes = compute_fold_signals(
-            con, profiles, t, t + window_secs
+        raw_probs, informed_probs, outcomes, market_coverages = compute_fold_signals(
+            con,
+            profiles,
+            t,
+            t + window_secs,
+            bucketed_path=bucketed_path,
         )
 
         if len(raw_probs) < 2:
@@ -373,10 +451,8 @@ def run_walk_forward(
         # Compute metrics
         metrics = compute_fold_metrics(raw_probs, informed_probs, outcomes)
 
-        # Mean coverage across test markets
-        mean_coverage = 0.0
-        if n_informed > 0:
-            mean_coverage = min(1.0, n_informed / N_FULL_COVERAGE)
+        # Mean coverage across test markets (per-market average)
+        mean_coverage = sum(market_coverages) / len(market_coverages) if market_coverages else 0.0
 
         fold_result = {
             "fold_id": fold_id,
@@ -512,8 +588,11 @@ def main() -> None:
     parser.add_argument("--memory-limit", default="2GB")
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--output-csv", type=Path, default=Path("results/walk_forward_folds.csv"))
-    parser.add_argument("--adaptive-extremize", action="store_true")
-    parser.add_argument("--volume-gate", type=float, default=None)
+    parser.add_argument(
+        "--bucketed",
+        action="store_true",
+        help="Use time-bucketed positions (eliminates temporal leak)",
+    )
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -524,14 +603,29 @@ def main() -> None:
 
     import duckdb
 
-    maker_path = args.data_dir / "_maker_agg.parquet"
-    taker_path = args.data_dir / "_taker_agg.parquet"
     markets_path = args.data_dir / "markets.parquet"
+    bucketed_path = args.data_dir / "_merged_bucketed.parquet" if args.bucketed else None
 
-    for p in [maker_path, taker_path, markets_path]:
-        if not p.exists():
-            logger.error("File not found: %s", p)
+    if args.bucketed:
+        if not bucketed_path.exists():
+            logger.error(
+                "Bucketed file not found: %s. Run duckdb_build_bucketed.py first.",
+                bucketed_path,
+            )
             sys.exit(1)
+        logger.info("Using bucketed positions: %s (temporal leak eliminated)", bucketed_path)
+    else:
+        # Legacy mode: use pre-aggregated merged positions
+        maker_path = args.data_dir / "_maker_agg.parquet"
+        taker_path = args.data_dir / "_taker_agg.parquet"
+        for p in [maker_path, taker_path]:
+            if not p.exists():
+                logger.error("File not found: %s", p)
+                sys.exit(1)
+
+    if not markets_path.exists():
+        logger.error("File not found: %s", markets_path)
+        sys.exit(1)
 
     t0 = time.perf_counter()
 
@@ -541,54 +635,54 @@ def main() -> None:
     con.execute(f"SET threads={args.threads}")
     con.execute("SET preserve_insertion_order=false")
 
-    # Merge pre-aggregated positions — use COPY TO parquet to avoid OOM.
-    # Pattern from duckdb_build_profiles.py: fresh connection + spill for heavy ops.
-    import shutil
+    if not args.bucketed:
+        # Legacy: merge pre-aggregated positions (WARNING: temporal leak)
+        import shutil
 
-    merged_path = args.data_dir / "_merged_positions.parquet"
-    if merged_path.exists():
-        logger.info(
-            "Using cached merged positions: %s (%.1f MB)",
-            merged_path,
-            merged_path.stat().st_size / 1e6,
-        )
-    else:
-        logger.info("Merging maker + taker positions to %s ...", merged_path)
-        spill = Path("/tmp/duckdb_spill")
-        if spill.exists():
-            shutil.rmtree(spill, ignore_errors=True)
+        merged_path = args.data_dir / "_merged_positions.parquet"
+        if merged_path.exists():
+            logger.info(
+                "Using cached merged positions: %s (%.1f MB)",
+                merged_path,
+                merged_path.stat().st_size / 1e6,
+            )
+        else:
+            logger.info("Merging maker + taker positions to %s ...", merged_path)
+            spill = Path("/tmp/duckdb_spill")
+            if spill.exists():
+                shutil.rmtree(spill, ignore_errors=True)
+            con.close()
+            con = duckdb.connect()
+            con.execute(f"SET memory_limit='{args.memory_limit}'")
+            con.execute("SET temp_directory='/tmp/duckdb_spill'")
+            con.execute(f"SET threads={args.threads}")
+            con.execute("SET preserve_insertion_order=false")
+            con.execute(f"""
+                COPY (
+                    SELECT user_id, condition_id,
+                        SUM(avg_position * total_usd) / NULLIF(SUM(total_usd), 0) AS avg_position,
+                        SUM(total_usd) AS total_usd,
+                        MAX(last_ts) AS last_ts,
+                        SUM(n_trades) AS n_trades
+                    FROM (
+                        SELECT * FROM read_parquet('{maker_path}')
+                        UNION ALL
+                        SELECT * FROM read_parquet('{taker_path}')
+                    )
+                    GROUP BY user_id, condition_id
+                ) TO '{merged_path}' (FORMAT PARQUET, COMPRESSION ZSTD)
+            """)
+            logger.info("Merged to %s (%.1f MB)", merged_path, merged_path.stat().st_size / 1e6)
+
+        # Fresh connection
         con.close()
         con = duckdb.connect()
         con.execute(f"SET memory_limit='{args.memory_limit}'")
         con.execute("SET temp_directory='/tmp/duckdb_spill'")
         con.execute(f"SET threads={args.threads}")
         con.execute("SET preserve_insertion_order=false")
-        con.execute(f"""
-            COPY (
-                SELECT user_id, condition_id,
-                    SUM(avg_position * total_usd) / NULLIF(SUM(total_usd), 0) AS avg_position,
-                    SUM(total_usd) AS total_usd,
-                    MAX(last_ts) AS last_ts,
-                    SUM(n_trades) AS n_trades
-                FROM (
-                    SELECT * FROM read_parquet('{maker_path}')
-                    UNION ALL
-                    SELECT * FROM read_parquet('{taker_path}')
-                )
-                GROUP BY user_id, condition_id
-            ) TO '{merged_path}' (FORMAT PARQUET, COMPRESSION ZSTD)
-        """)
-        logger.info("Merged to %s (%.1f MB)", merged_path, merged_path.stat().st_size / 1e6)
 
-    # Fresh connection for walk-forward queries (low memory after merge)
-    con.close()
-    con = duckdb.connect()
-    con.execute(f"SET memory_limit='{args.memory_limit}'")
-    con.execute("SET temp_directory='/tmp/duckdb_spill'")
-    con.execute(f"SET threads={args.threads}")
-    con.execute("SET preserve_insertion_order=false")
-
-    # Re-create resolved_markets table
+    # Load resolved_markets
     con.execute(f"""
         CREATE TABLE resolved_markets AS
         SELECT condition_id,
@@ -607,20 +701,21 @@ def main() -> None:
         )
     """)
 
-    # Load merged positions from parquet (much smaller after aggregation)
-    con.execute(f"CREATE TABLE positions AS SELECT * FROM read_parquet('{merged_path}')")
-    n_pos = con.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
+    # Filter resolved_markets to only those with positions
+    if args.bucketed:
+        positions_source = f"read_parquet('{bucketed_path}')"
+    else:
+        con.execute(f"CREATE TABLE positions AS SELECT * FROM read_parquet('{merged_path}')")
+        positions_source = "positions"
 
-    # Filter resolved_markets to only those with positions (skip pre-2022 markets)
     n_before = con.execute("SELECT COUNT(*) FROM resolved_markets").fetchone()[0]
-    con.execute("""
+    con.execute(f"""
         DELETE FROM resolved_markets
-        WHERE condition_id NOT IN (SELECT DISTINCT condition_id FROM positions)
+        WHERE condition_id NOT IN (SELECT DISTINCT condition_id FROM {positions_source})
     """)
     n_resolved = con.execute("SELECT COUNT(*) FROM resolved_markets").fetchone()[0]
     logger.info(
-        "Loaded %d positions, %d resolved markets (filtered from %d) in %.1fs",
-        n_pos,
+        "Loaded %d resolved markets (filtered from %d) in %.1fs",
         n_resolved,
         n_before,
         time.perf_counter() - t0,
@@ -634,6 +729,7 @@ def main() -> None:
         test_window_days=args.test_window,
         min_bets=args.min_bets,
         shrinkage_strength=args.shrinkage,
+        bucketed_path=str(bucketed_path) if bucketed_path else None,
     )
 
     con.close()
