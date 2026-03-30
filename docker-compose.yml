@@ -55,6 +55,7 @@ services:
       - "8000"
     volumes:
       - sqlite_data:/app/data
+      - ${INVERSE_DATA_DIR:-/home/deploy/data/inverse}:/app/data/inverse:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 30s
@@ -92,6 +93,7 @@ services:
       - frontend
     volumes:
       - sqlite_data:/app/data
+      - ${INVERSE_DATA_DIR:-/home/deploy/data/inverse}:/app/data/inverse:ro
     deploy:
       resources:
         limits:

@@ -26,12 +26,12 @@ ENV UV_COMPILE_BYTECODE=1 \
 # Layer 1: dependencies (cached unless pyproject.toml/uv.lock change)
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-install-project --no-dev
+    uv sync --locked --no-install-project --no-dev --extra inverse
 
 # Layer 2: application code
 COPY src/ ./src/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --no-editable
+    uv sync --locked --no-dev --no-editable --extra inverse
 
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
