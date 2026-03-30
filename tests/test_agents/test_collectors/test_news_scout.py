@@ -231,3 +231,11 @@ def test_search_result_to_signal():
     signal = NewsScout._search_result_to_signal(result)
     assert signal.source_type == SignalSource.WEB_SEARCH
     assert signal.id.startswith("ws_")
+
+
+def test_global_rss_feeds_no_dead_reuters():
+    """Reuters closed public RSS in 2020 — feeds.reuters.com must not be in global list."""
+    from src.agents.collectors.news_scout import GLOBAL_RSS_FEEDS
+
+    for url in GLOBAL_RSS_FEEDS:
+        assert "feeds.reuters.com" not in url, f"Dead Reuters feed in GLOBAL_RSS_FEEDS: {url}"

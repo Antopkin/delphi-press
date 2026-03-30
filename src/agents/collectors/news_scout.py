@@ -31,8 +31,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 GLOBAL_RSS_FEEDS: list[str] = [
-    "https://feeds.reuters.com/reuters/topNews",
-    "https://feeds.reuters.com/reuters/worldNews",
     "https://feeds.bbci.co.uk/news/world/rss.xml",
     "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
     "https://www.aljazeera.com/xml/rss/all.xml",

@@ -48,17 +48,6 @@ PRESETS: dict[str, PresetConfig] = {
         max_headlines=5,
         quality_gate_min_score=2,
     ),
-    "standard": PresetConfig(
-        name="standard",
-        label="Standard",
-        description="Сбалансированный прогноз на Claude Sonnet",
-        estimated_cost_usd=5.0,
-        model="anthropic/claude-sonnet-4.6",
-        max_event_threads=10,
-        delphi_rounds=2,
-        max_headlines=7,
-        quality_gate_min_score=3,
-    ),
     "full": PresetConfig(
         name="full",
         label="Full",

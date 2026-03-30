@@ -164,9 +164,9 @@ def test_presets_are_defined():
     from src.config import PRESETS
 
     assert "light" in PRESETS
-    assert "standard" in PRESETS
     assert "full" in PRESETS
-    assert len(PRESETS) == 3
+    assert "standard" not in PRESETS  # removed: sonnet-4.6 doesn't exist in pricing
+    assert len(PRESETS) == 2
 
 
 def test_preset_config_fields():
