@@ -49,6 +49,13 @@ COPY --from=builder --chown=appuser:appgroup /app/src /app/src
 # Copy compiled CSS from node builder (overwrite with fresh build)
 COPY --from=css-builder --chown=appuser:appgroup /build/src/web/static/css/tailwind.css /app/src/web/static/css/tailwind.css
 
+# Download script (for auto-download in entrypoint)
+COPY --chown=appuser:appgroup scripts/download_profiles.py /app/scripts/download_profiles.py
+
+# Entrypoint (downloads profiles if missing)
+COPY --chown=appuser:appgroup docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Data directory for SQLite
 RUN mkdir -p /app/data && chown appuser:appgroup /app/data
 
@@ -63,5 +70,5 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
-ENTRYPOINT ["tini", "--"]
+ENTRYPOINT ["tini", "--", "/app/docker-entrypoint.sh"]
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*"]

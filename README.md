@@ -289,6 +289,9 @@ git clone https://github.com/Antopkin/delphi-press.git
 cd delphi-press
 uv sync
 
+# Скачать базу профилей суперпрогнозистов Polymarket (62 MB, однократно)
+uv run python scripts/download_profiles.py
+
 # Быстрый smoke test (gemini-flash, 5 потоков событий, ~$0.25)
 export OPENROUTER_API_KEY="sk-..."
 uv run python scripts/dry_run.py --outlet "ТАСС" --model google/gemini-2.5-flash --event-threads 5
@@ -304,6 +307,7 @@ uv run python scripts/dry_run.py --outlet "BBC News" --model anthropic/claude-op
 ```bash
 docker compose up -d
 # Откроется на http://localhost:8000
+# Профили суперпрогнозистов скачаются автоматически при первом запуске
 ```
 
 ## Статус

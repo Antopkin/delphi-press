@@ -17,7 +17,10 @@ dist/
 .claude/agent-memory/
 .claude/worktrees/
 node_modules/
-data/
+data/*
+!data/inverse/
+data/inverse/*
+!data/inverse/.gitkeep
 *.log
 .DS_Store
 # Локальная академическая литература (80+ источников, 44 файла)
