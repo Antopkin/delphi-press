@@ -65,7 +65,6 @@ DEFAULT_ASSIGNMENTS: dict[str, ModelAssignment] = {
         primary_model="anthropic/claude-opus-4.6",
         fallback_models=["anthropic/claude-sonnet-4.5"],
         temperature=0.6,
-        max_tokens=16384,
         json_mode=True,
     ),
     "cross_impact_analysis": ModelAssignment(
@@ -189,14 +188,14 @@ DEFAULT_ASSIGNMENTS: dict[str, ModelAssignment] = {
     ),
     "style_generation": ModelAssignment(
         task="style_generation",
-        primary_model="anthropic/claude-sonnet-4",
-        fallback_models=["anthropic/claude-opus-4.6"],
+        primary_model="anthropic/claude-opus-4.6",
+        fallback_models=["anthropic/claude-sonnet-4.5"],
         temperature=0.8,
     ),
     "style_generation_ru": ModelAssignment(
         task="style_generation_ru",
-        primary_model="anthropic/claude-sonnet-4",
-        fallback_models=["anthropic/claude-opus-4.6"],
+        primary_model="anthropic/claude-opus-4.6",
+        fallback_models=["anthropic/claude-sonnet-4.5"],
         temperature=0.8,
     ),
     "style_generation_en": ModelAssignment(
@@ -214,8 +213,8 @@ DEFAULT_ASSIGNMENTS: dict[str, ModelAssignment] = {
     ),
     "quality_style": ModelAssignment(
         task="quality_style",
-        primary_model="anthropic/claude-sonnet-4",
-        fallback_models=["anthropic/claude-opus-4.6"],
+        primary_model="anthropic/claude-opus-4.6",
+        fallback_models=["anthropic/claude-sonnet-4.5"],
         temperature=0.3,
         json_mode=True,
     ),
