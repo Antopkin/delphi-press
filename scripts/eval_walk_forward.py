@@ -588,11 +588,19 @@ def main() -> None:
     # Load merged positions from parquet (much smaller after aggregation)
     con.execute(f"CREATE TABLE positions AS SELECT * FROM read_parquet('{merged_path}')")
     n_pos = con.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
+
+    # Filter resolved_markets to only those with positions (skip pre-2022 markets)
+    n_before = con.execute("SELECT COUNT(*) FROM resolved_markets").fetchone()[0]
+    con.execute("""
+        DELETE FROM resolved_markets
+        WHERE condition_id NOT IN (SELECT DISTINCT condition_id FROM positions)
+    """)
     n_resolved = con.execute("SELECT COUNT(*) FROM resolved_markets").fetchone()[0]
     logger.info(
-        "Loaded %d positions, %d resolved markets in %.1fs",
+        "Loaded %d positions, %d resolved markets (filtered from %d) in %.1fs",
         n_pos,
         n_resolved,
+        n_before,
         time.perf_counter() - t0,
     )
 
