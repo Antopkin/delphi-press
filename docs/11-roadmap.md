@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-30. Production deployed. Обновлено: 2026-03-30 (v0.9.1 Inverse Phase 3 calibration + v0.9.0 Phase 2 + v0.8.0 OutletResolver + v0.7.1 security audit).
+> Статус на 2026-03-30. Production deployed. Обновлено: 2026-03-30 (v0.9.2 Inverse Phase 4 walk-forward eval + v0.9.1 Phase 3 calibration + v0.9.0 Phase 2 + v0.8.0 OutletResolver + v0.7.1 security audit).
 
 ---
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Inverse Problem v0.9.1**: adaptive extremizing (position_std), soft volume gate ($10K–$100K), `as_of` temporal cutoff для walk-forward, `timing_score` (volume-weighted), Murphy decomposition + calibration slope + ECE, 6 crash fixes. Parquet store (506→62 МБ, 348K INFORMED → 7.5s load), Bayesian shrinkage, parametric λ, HDBSCAN clustering, enriched signal. **1226 тестов** зелёных. OutletResolver v0.8.0: динамическая резолюция СМИ через Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: CSRF middleware, IDOR protection, rate limiting, hardened secrets, **40/40 findings closed**. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation (Spearman/Granger). Единственный LLM-провайдер — OpenRouter.
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Inverse Problem v0.9.2**: walk-forward evaluation — 22 фолда, BSS +0.127 (12.7% BS reduction), 100% positive. Temporal leak eliminated via bucketed partial aggregates (33 ГБ → 2.4 ГБ bucketed parquet). Adaptive extremizing, soft volume gate, `as_of` cutoff, `timing_score`, Murphy decomposition + calibration slope + ECE. Parquet store (506→62 МБ, 348K INFORMED), Bayesian shrinkage, parametric λ, HDBSCAN. **1242 теста** зелёных. OutletResolver v0.8.0: Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: 40/40 findings closed. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation. Единственный LLM-провайдер — OpenRouter.
 
 ### Реализованные компоненты
 

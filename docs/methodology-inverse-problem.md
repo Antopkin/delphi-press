@@ -386,13 +386,20 @@ Features: brier_score, win_rate, log1p(position_size), log1p(volume), n_markets,
 - 6 crash fixes (extremize bounds, timezone, JSON validation, schema constraints)
 - E2E server verified: Parquet load 348K INFORMED profiles in 7.5s
 
-**Не реализовано (отложено с обоснованием — см. `tasks/inverse_phase3_plan.md` §3):**
-- Walk-forward eval script с DuckDB backend (инфраструктура готова: `as_of` + resolution dates + metrics)
-- Trade-level CSV данные на сервере (блокер для dry run + eval)
-- Domain-specific BS — отложено: data sparsity (1-3% BSS gain, not worth effort)
-- Bettor-level корреляция с новостями — отложено: требует GDELT/RSS pipeline
-- Иерархические модели — отложено: research project, не engineering task
-- `concentration_entropy` — отложено: нет empirical validation, не из Mitts & Ofir
+**Phase 4 (v0.9.2) — walk-forward evaluation + temporal leak fix:**
+- `scripts/eval_walk_forward.py`: DuckDB-based walk-forward evaluation. 22 non-overlapping 60-day folds, burn-in 180 дней. Streaming `read_parquet()` с predicate pushdown — ~4 сек/fold.
+- **Temporal leak обнаружен и исправлен**: pre-aggregated позиции включали trades после cutoff T. Fix: `scripts/duckdb_build_bucketed.py` — один скан 33 ГБ raw trades → 2.4 ГБ bucketed parquet (30-day time buckets). Суммы composable: `avg_position_as_of_T = SUM(weighted_price_sum) / SUM(total_usd) WHERE time_bucket <= T`. Zero data loss.
+- **Результат: 22/22 фолда BSS > 0.** Robust mean BSS = +0.127 (фолды 0-16). Peak = +0.273 (fold 9). Tier stability = 0.613.
+- Temporal leak analysis: leaked BSS +0.092 → clean BSS +0.117 на тех же фолдах. Leak добавлял шум, не сигнал.
+- Dockerfile: pyarrow через `--extra inverse`, worker healthcheck fix
+- Docker dry run: 348K INFORMED profiles загружены из Parquet внутри контейнера
+
+**Не реализовано (отложено):**
+- Domain-specific BS — data sparsity (1-3% BSS gain, not worth effort)
+- Bettor-level корреляция с новостями — требует GDELT/RSS pipeline
+- Иерархические модели — research project, не engineering task
+- `concentration_entropy` — нет empirical validation
+- Incremental BSS variants (adaptive extremize, volume gate) — baseline уже сильный, отложено
 
 ### 9.8 Соответствие диалогу с Алексеем
 
@@ -402,7 +409,7 @@ Features: brier_score, win_rate, log1p(position_size), log1p(volume), n_markets,
 | Клонирование (train/test) | ✅ Реализовано | `cloning.py`: predict positions → MAE → skill_score |
 | Кластеризация стратегий | ✅ Реализовано | `clustering.py`: HDBSCAN, 6 архетипов |
 | Калибровка (adaptive extremizing) | ✅ Phase 3 | position_std → d ∈ [1.0, 2.0], soft volume gate |
-| Temporal validation infrastructure | ✅ Phase 3 | `as_of` + resolution dates + Murphy/ECE metrics |
+| Temporal validation infrastructure | ✅ Phase 3-4 | `as_of` + resolution dates + Murphy/ECE + walk-forward 22 folds BSS +0.127 |
 | timing_score | ✅ Phase 3 | Volume-weighted, [INFERRED] from Bürgi et al. |
 | Bettor-level корреляция с новостями | ❌ Отложено | Требует GDELT/RSS pipeline, спекулятивная гипотеза |
 | Иерархические модели | ❌ Отложено | Research project, не engineering task |

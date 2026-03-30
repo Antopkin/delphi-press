@@ -4,6 +4,37 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.9.2] - 2026-03-30
+
+### Added
+- **Inverse Problem Phase 4: walk-forward evaluation + temporal leak fix + deploy**
+  - `scripts/eval_walk_forward.py` (NEW): Walk-forward BSS evaluation с DuckDB backend. 22 фолда, non-overlapping 60-day windows, burn-in 180 дней. **Почему:** нужно доказать что informed consensus реально помогает на out-of-sample данных — не просто in-sample fit.
+  - `scripts/duckdb_build_bucketed.py` (NEW): Time-bucketed partial aggregates из 470M raw trades. Один скан 33 ГБ → 2.4 ГБ bucketed parquet. **Почему:** pre-aggregated позиции содержали temporal leak (trades после cutoff T включены в avg_position). Bucketed подход: суммы composable, averages — нет. `avg_position_as_of_T = SUM(weighted_price_sum) / SUM(total_usd) WHERE time_bucket <= T`.
+  - Dockerfile: `--extra inverse` в обоих `uv sync` → pyarrow в Docker image без ручной установки
+  - docker-compose: bind mount `/data/inverse` для app и worker; worker healthcheck `test -f /proc/1/status` вместо curl (ARQ не имеет HTTP endpoint)
+
+### Results
+- **22/22 фолда BSS > 0** — informed consensus всегда улучшает raw market price
+- **Robust mean BSS = +0.127** (фолды 0-16, >= 944 test markets) — 12.7% снижение Brier Score
+- Peak BSS = +0.273 (fold 9, 34K informed bettors)
+- Tier stability = 0.613 (61% Jaccard overlap между фолдами)
+- Temporal leak analysis: leaked BSS +0.092 vs clean BSS **+0.117** на тех же фолдах — leak добавлял шум, не сигнал
+- **Первое walk-forward evaluation на Polymarket bettor profiles** (нет опубликованных аналогов)
+
+### Fixed
+- Temporal leak в pre-aggregated позициях (trades после cutoff T были в avg_position)
+- Worker healthcheck: `pgrep` → `test -f /proc/1/status` (pgrep отсутствует в python:3.12-slim)
+- `mean_coverage` в walk-forward: per-market average вместо per-fold total (cosmetic)
+- `avg_position` clamped to [0,1] в SQL merge (`LEAST/GREATEST`)
+- Удалены мёртвые CLI аргументы (`--adaptive-extremize`, `--volume-gate`) из eval скрипта
+
+### Metrics
+- Тесты: 1226 → 1242 (+16 walk-forward eval)
+- Walk-forward: 22 фолда за 82 мин (bucketed) vs 15 фолдов за 5+ часов + OOM (old)
+- Docker: 4/4 containers healthy (включая worker)
+
+---
+
 ## [0.9.1] - 2026-03-30
 
 ### Added
