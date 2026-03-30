@@ -28,6 +28,7 @@ dependencies = [
     "bcrypt>=4.2",
     "email-validator>=2.0",
     "python-multipart>=0.0.22",
+    "pyarrow>=15.0",
 ]
 
 [project.optional-dependencies]
@@ -36,9 +37,6 @@ ml = [
 ]
 eval = [
     "statsmodels>=0.14",
-]
-inverse = [
-    "pyarrow>=15.0",
 ]
 dev = [
     "pytest>=8.0",

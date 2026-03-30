@@ -34,7 +34,7 @@ class LLMRequest(BaseModel):
     messages: list[LLMMessage]
     model: str = Field(..., description="Идентификатор модели")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=4096, ge=1, le=128_000)
+    max_tokens: int | None = Field(default=4096, ge=1, le=128_000)
     top_p: float = Field(default=1.0, ge=0.0, le=1.0)
     json_mode: bool = Field(default=False, description="Запросить JSON output (response_format)")
     stop_sequences: list[str] = Field(default_factory=list)
@@ -91,5 +91,5 @@ class ModelAssignment(BaseModel):
     )
     provider: str = Field(default="openrouter")
     temperature: float = Field(default=0.7)
-    max_tokens: int = Field(default=8192)
+    max_tokens: int | None = Field(default=8192)
     json_mode: bool = Field(default=False)

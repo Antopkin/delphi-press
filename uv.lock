@@ -397,6 +397,7 @@ dependencies = [
     { name = "jinja2" },
     { name = "numpy" },
     { name = "openai" },
+    { name = "pyarrow" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
@@ -420,9 +421,6 @@ dev = [
 eval = [
     { name = "statsmodels" },
 ]
-inverse = [
-    { name = "pyarrow" },
-]
 ml = [
     { name = "hdbscan" },
 ]
@@ -442,7 +440,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "openai", specifier = ">=1.0" },
-    { name = "pyarrow", marker = "extra == 'inverse'", specifier = ">=15.0" },
+    { name = "pyarrow", specifier = ">=15.0" },
     { name = "pydantic", specifier = ">=2.0,<3.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "pyjwt", specifier = ">=2.9" },
@@ -460,7 +458,7 @@ requires-dist = [
     { name = "trafilatura", specifier = ">=1.12" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
-provides-extras = ["ml", "eval", "inverse", "dev"]
+provides-extras = ["ml", "eval", "dev"]
 
 [[package]]
 name = "distro"

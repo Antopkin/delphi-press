@@ -15,14 +15,12 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.agents.collectors.protocols import OutletCatalogProto, OutletInfo
 from src.data_sources.feed_discovery import discover_feeds
 from src.data_sources.wikidata_client import wikidata_lookup
-from src.db.models import Outlet
 from src.db.repositories import OutletRepository
 
 logger = logging.getLogger(__name__)

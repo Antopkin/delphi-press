@@ -103,9 +103,10 @@ class OpenRouterClient(LLMProvider):
                         {"role": m.role.value, "content": m.content} for m in request.messages
                     ],
                     "temperature": request.temperature,
-                    "max_tokens": request.max_tokens,
                     "top_p": request.top_p,
                 }
+                if request.max_tokens is not None:
+                    kwargs["max_tokens"] = request.max_tokens
                 if request.json_mode:
                     kwargs["response_format"] = {"type": "json_object"}
                 if request.stop_sequences:

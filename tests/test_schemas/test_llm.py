@@ -64,6 +64,12 @@ def test_llm_request_max_tokens_below_1_rejected():
         LLMRequest(**_llm_request_kwargs(max_tokens=0))
 
 
+def test_llm_request_max_tokens_none_allowed():
+    """None means 'let the model decide' — no limit sent to API."""
+    req = LLMRequest(**_llm_request_kwargs(max_tokens=None))
+    assert req.max_tokens is None
+
+
 # ── LLMResponse ──────────────────────────────────────────────────────
 
 

@@ -58,42 +58,19 @@ class InMemoryProfileCache:
 # ---------------------------------------------------------------------------
 # Cheap model assignments
 # ---------------------------------------------------------------------------
-_LARGE_OUTPUT_TASKS = {
-    "delphi_r1_realist",
-    "delphi_r1_geostrateg",
-    "delphi_r1_economist",
-    "delphi_r1_media",
-    "delphi_r1_devils",
-    "delphi_r2_realist",
-    "delphi_r2_geostrateg",
-    "delphi_r2_economist",
-    "delphi_r2_media",
-    "delphi_r2_devils",
-    "mediator",
-    "judge",
-    "media_analysis",
-    "framing",
-    "geopolitical_analysis",
-    "economic_analysis",
-    "trajectory_analysis",
-    "cross_impact_analysis",
-}
-
-
 def build_cheap_assignments(model: str) -> dict[str, ModelAssignment]:
     """Clone DEFAULT_ASSIGNMENTS, replacing all models with the cheap one.
 
-    Tasks with large JSON output get max_tokens=16384 to prevent truncation.
+    max_tokens=None lets the model use its full output capacity (no truncation).
     """
     cheap = {}
     for task, orig in DEFAULT_ASSIGNMENTS.items():
-        max_tok = 16384 if task in _LARGE_OUTPUT_TASKS else orig.max_tokens
         cheap[task] = ModelAssignment(
             task=orig.task,
             primary_model=model,
             fallback_models=[model],
             temperature=orig.temperature,
-            max_tokens=max_tok,
+            max_tokens=None,
             json_mode=orig.json_mode,
         )
     return cheap
