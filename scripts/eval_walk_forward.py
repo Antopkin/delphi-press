@@ -519,8 +519,54 @@ def main() -> None:
     con.execute(f"SET threads={args.threads}")
     con.execute("SET preserve_insertion_order=false")
 
-    # Load resolved markets with end dates
-    logger.info("Loading resolved markets...")
+    # Merge pre-aggregated positions — use COPY TO parquet to avoid OOM.
+    # Pattern from duckdb_build_profiles.py: fresh connection + spill for heavy ops.
+    import shutil
+
+    merged_path = args.data_dir / "_merged_positions.parquet"
+    if merged_path.exists():
+        logger.info(
+            "Using cached merged positions: %s (%.1f MB)",
+            merged_path,
+            merged_path.stat().st_size / 1e6,
+        )
+    else:
+        logger.info("Merging maker + taker positions to %s ...", merged_path)
+        spill = Path("/tmp/duckdb_spill")
+        if spill.exists():
+            shutil.rmtree(spill, ignore_errors=True)
+        con.close()
+        con = duckdb.connect()
+        con.execute(f"SET memory_limit='{args.memory_limit}'")
+        con.execute("SET temp_directory='/tmp/duckdb_spill'")
+        con.execute(f"SET threads={args.threads}")
+        con.execute("SET preserve_insertion_order=false")
+        con.execute(f"""
+            COPY (
+                SELECT user_id, condition_id,
+                    SUM(avg_position * total_usd) / NULLIF(SUM(total_usd), 0) AS avg_position,
+                    SUM(total_usd) AS total_usd,
+                    MAX(last_ts) AS last_ts,
+                    SUM(n_trades) AS n_trades
+                FROM (
+                    SELECT * FROM read_parquet('{maker_path}')
+                    UNION ALL
+                    SELECT * FROM read_parquet('{taker_path}')
+                )
+                GROUP BY user_id, condition_id
+            ) TO '{merged_path}' (FORMAT PARQUET, COMPRESSION ZSTD)
+        """)
+        logger.info("Merged to %s (%.1f MB)", merged_path, merged_path.stat().st_size / 1e6)
+
+    # Fresh connection for walk-forward queries (low memory after merge)
+    con.close()
+    con = duckdb.connect()
+    con.execute(f"SET memory_limit='{args.memory_limit}'")
+    con.execute("SET temp_directory='/tmp/duckdb_spill'")
+    con.execute(f"SET threads={args.threads}")
+    con.execute("SET preserve_insertion_order=false")
+
+    # Re-create resolved_markets table
     con.execute(f"""
         CREATE TABLE resolved_markets AS
         SELECT condition_id,
@@ -538,27 +584,17 @@ def main() -> None:
             OR CAST(json_extract(replace(outcome_prices, '''', '"'), '$[0]') AS DOUBLE) < 0.01
         )
     """)
-    n_resolved = con.execute("SELECT COUNT(*) FROM resolved_markets").fetchone()[0]
-    logger.info("Loaded %d resolved markets with dates", n_resolved)
 
-    # Merge pre-aggregated positions
-    logger.info("Merging maker + taker positions...")
-    con.execute(f"""
-        CREATE TABLE positions AS
-        SELECT user_id, condition_id,
-            SUM(avg_position * total_usd) / NULLIF(SUM(total_usd), 0) AS avg_position,
-            SUM(total_usd) AS total_usd,
-            MAX(last_ts) AS last_ts,
-            SUM(n_trades) AS n_trades
-        FROM (
-            SELECT * FROM read_parquet('{maker_path}')
-            UNION ALL
-            SELECT * FROM read_parquet('{taker_path}')
-        )
-        GROUP BY user_id, condition_id
-    """)
+    # Load merged positions from parquet (much smaller after aggregation)
+    con.execute(f"CREATE TABLE positions AS SELECT * FROM read_parquet('{merged_path}')")
     n_pos = con.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
-    logger.info("Merged %d positions in %.1fs", n_pos, time.perf_counter() - t0)
+    n_resolved = con.execute("SELECT COUNT(*) FROM resolved_markets").fetchone()[0]
+    logger.info(
+        "Loaded %d positions, %d resolved markets in %.1fs",
+        n_pos,
+        n_resolved,
+        time.perf_counter() - t0,
+    )
 
     # Run walk-forward
     results = run_walk_forward(
