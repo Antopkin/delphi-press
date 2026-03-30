@@ -143,6 +143,7 @@ def mock_polymarket() -> AsyncMock:
             "url": "https://polymarket.com/m/1",
         },
     ]
+    client.fetch_trades_batch.return_value = {}
     return client
 
 

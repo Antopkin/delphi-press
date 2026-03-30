@@ -88,6 +88,7 @@ class ForesightCollector(BaseAgent):
         self._gdelt = gdelt_client
         self._inverse_profiles = inverse_profiles
         self._inverse_trades = inverse_trades or {}
+        self._live_trades: dict[str, list] = {}
 
     def get_timeout_seconds(self) -> int:
         """Allow 120s for three parallel API calls."""
@@ -225,8 +226,39 @@ class ForesightCollector(BaseAgent):
         return await self._metaculus.fetch_questions(query, limit=MAX_FORESIGHT_EVENTS)
 
     async def _fetch_polymarket(self, query: str) -> list[dict[str, Any]]:
-        """Fetch Polymarket markets, enriched with CLOB price history."""
-        return await self._polymarket.fetch_enriched_markets(query, limit=30)
+        """Fetch Polymarket markets, enriched with CLOB price history.
+
+        When inverse_profiles are loaded, also fetches live trades from
+        Data API for each market's condition_id (auto-activated).
+        """
+        markets = await self._polymarket.fetch_enriched_markets(query, limit=30)
+        self._live_trades = {}  # Reset before each fetch cycle
+
+        if self._inverse_profiles and markets:
+            condition_ids = [m["condition_id"] for m in markets if m.get("condition_id")]
+            if condition_ids:
+                try:
+                    raw_by_market = await self._polymarket.fetch_trades_batch(condition_ids)
+                    from src.inverse.loader import adapt_data_api_trades
+
+                    self._live_trades: dict[str, list] = {}
+                    for cid, raw_trades in raw_by_market.items():
+                        if raw_trades:
+                            records = adapt_data_api_trades(raw_trades, cid)
+                            if records:
+                                self._live_trades[cid] = records
+                    self.logger.info(
+                        "Data API: fetched trades for %d/%d markets",
+                        len(self._live_trades),
+                        len(condition_ids),
+                    )
+                except Exception:
+                    self.logger.warning(
+                        "Data API trade fetch failed, using pre-loaded trades",
+                        exc_info=True,
+                    )
+
+        return markets
 
     async def _fetch_gdelt(self, query: str, *, language: str = "english") -> list[dict[str, Any]]:
         """Fetch GDELT articles. Exceptions propagate to gather."""
@@ -304,18 +336,21 @@ class ForesightCollector(BaseAgent):
                     }
                 )
 
-            # Inverse problem enrichment: informed consensus from bettor profiles
+            # Inverse problem enrichment: informed consensus from bettor profiles.
+            # Prefer live trades (Data API) over pre-loaded (HuggingFace).
             market_id = entry["market_id"]
+            live_trades = self._live_trades
+            trades_source = live_trades.get(market_id) or self._inverse_trades.get(market_id)
             if (
                 self._inverse_profiles
                 and market_id
                 and entry["probability"] is not None
-                and market_id in self._inverse_trades
+                and trades_source
             ):
                 from src.inverse.signal import compute_informed_signal
 
                 informed = compute_informed_signal(
-                    trades=self._inverse_trades[market_id],
+                    trades=trades_source,
                     profiles=self._inverse_profiles,
                     raw_probability=entry["probability"],
                     market_id=market_id,

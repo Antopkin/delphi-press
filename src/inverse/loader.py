@@ -26,6 +26,7 @@ from src.inverse.schemas import TradeRecord
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "adapt_data_api_trades",
     "load_holders_from_dataset",
     "load_market_horizons",
     "load_market_prices",
@@ -389,7 +390,7 @@ def _parse_trade_row(
         return None
 
     return TradeRecord(
-        user_id=row[cmap["user_id"]].strip(),
+        user_id=row[cmap["user_id"]].strip().lower(),
         market_id=row[cmap["market_id"]].strip(),
         side=side,
         price=price,
@@ -775,7 +776,7 @@ def _parse_holder_ndjson(
             default_price = market_prices[condition_id]
 
         for holder in obj.get("holders", []):
-            wallet = holder.get("proxyWallet", "").strip()
+            wallet = holder.get("proxyWallet", "").strip().lower()
             amount = holder.get("amount", 0)
             outcome_index = holder.get("outcomeIndex", 0)
 
@@ -798,5 +799,81 @@ def _parse_holder_ndjson(
                     timestamp=timestamp,
                 )
             )
+
+    return records
+
+
+# ---------------------------------------------------------------------------
+# Data API trade adapter
+# ---------------------------------------------------------------------------
+
+
+def _map_data_api_side(side: str, outcome_index: int) -> str | None:
+    """Map Polymarket Data API (side, outcomeIndex) to 'YES' or 'NO'.
+
+    BUY on YES token (0) = YES, BUY on NO token (1) = NO.
+    SELL on YES token (0) = NO,  SELL on NO token (1) = YES.
+    """
+    if side == "BUY":
+        return "YES" if outcome_index == 0 else "NO"
+    if side == "SELL":
+        return "NO" if outcome_index == 0 else "YES"
+    return None
+
+
+def adapt_data_api_trades(
+    raw_trades: list[dict[str, Any]],
+    condition_id: str,
+) -> list[TradeRecord]:
+    """Convert Polymarket Data API trade dicts to TradeRecord list.
+
+    Data API endpoint: GET data-api.polymarket.com/trades
+    Fields: proxyWallet, side (BUY/SELL), outcomeIndex (0/1),
+            price, size, timestamp, conditionId, outcome.
+    """
+    records: list[TradeRecord] = []
+    for raw in raw_trades:
+        wallet = str(raw.get("proxyWallet", "")).strip().lower()
+        if not wallet:
+            continue
+
+        side_raw = str(raw.get("side", "")).upper()
+        try:
+            outcome_index = int(raw.get("outcomeIndex") or 0)
+        except (ValueError, TypeError):
+            continue
+        side = _map_data_api_side(side_raw, outcome_index)
+        if side is None:
+            continue
+
+        try:
+            price = float(raw.get("price", -1))
+        except (ValueError, TypeError):
+            continue
+        if price < 0.0 or price > 1.0:
+            continue
+
+        try:
+            size = float(raw.get("size", 0))
+        except (ValueError, TypeError):
+            continue
+        if size <= 0.0:
+            continue
+
+        ts_raw = str(raw.get("timestamp", ""))
+        timestamp = _parse_timestamp(ts_raw)
+        if timestamp is None:
+            continue
+
+        records.append(
+            TradeRecord(
+                user_id=wallet,
+                market_id=condition_id,
+                side=side,
+                price=price,
+                size=size,
+                timestamp=timestamp,
+            )
+        )
 
     return records

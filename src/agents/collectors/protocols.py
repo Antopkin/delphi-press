@@ -135,6 +135,8 @@ class PolymarketClientProto(Protocol):
         self, query: str, *, limit: int = 20
     ) -> list[dict[str, Any]]: ...
 
+    async def fetch_trades_batch(self, condition_ids: list[str]) -> dict[str, list[dict]]: ...
+
 
 class GdeltClientProto(Protocol):
     """Протокол для GDELT DOC 2.0 API клиента."""

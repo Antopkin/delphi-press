@@ -22,7 +22,9 @@ def mock_metaculus() -> AsyncMock:
 
 @pytest.fixture
 def mock_polymarket() -> AsyncMock:
-    return AsyncMock()
+    client = AsyncMock()
+    client.fetch_trades_batch.return_value = {}
+    return client
 
 
 @pytest.fixture
@@ -488,9 +490,9 @@ async def test_foresight_collector_inverse_enrichment_uses_condition_id(
     mock_router,
 ):
     """Inverse enrichment matches on condition_id, not Gamma internal id."""
-    from unittest.mock import patch
+    from datetime import datetime, timezone
 
-    from src.inverse.schemas import BettorProfile, BettorTier, InformedSignal
+    from src.inverse.schemas import BettorProfile, BettorTier, TradeRecord
 
     cid = "0xabc123def456"
     profiles = {
@@ -505,8 +507,6 @@ async def test_foresight_collector_inverse_enrichment_uses_condition_id(
         ),
     }
     # Trades keyed by condition_id (not Gamma internal id)
-    from src.inverse.schemas import TradeRecord
-    from datetime import datetime, timezone
 
     trades = {
         cid: [
@@ -620,3 +620,253 @@ async def test_foresight_collector_passes_end_date(
     result = await agent.execute(make_context())
     sig = result["foresight_signals"][0]
     assert sig["end_date"] == "2026-06-01T00:00:00Z"
+
+
+# ── Live trade enrichment via Data API ──────────────────────────────
+
+_LIVE_CID = "0xlive_condition_abc"
+
+
+def _make_inverse_fixtures() -> tuple[dict, list[dict], dict]:
+    """Return (profiles, raw_data_api_trades, market_with_condition_id)."""
+    from src.inverse.schemas import BettorProfile, BettorTier
+
+    profiles = {
+        "0xwallet_informed": BettorProfile(
+            user_id="0xwallet_informed",
+            tier=BettorTier.INFORMED,
+            brier_score=0.10,
+            n_resolved_bets=80,
+            mean_position_size=300.0,
+            total_volume=200000.0,
+            recency_weight=0.95,
+        ),
+    }
+
+    # Raw Data API trade dicts (as returned by fetch_trades_batch)
+    raw_trades = [
+        {
+            "proxyWallet": "0xWallet_Informed",
+            "side": "BUY",
+            "conditionId": _LIVE_CID,
+            "size": "500.00",
+            "price": "0.80",
+            "timestamp": "2026-03-29T10:00:00Z",
+            "outcome": "Yes",
+            "outcomeIndex": "0",
+        },
+    ]
+
+    market = {
+        "id": "999",
+        "condition_id": _LIVE_CID,
+        "question": "Live market?",
+        "slug": "live-market",
+        "yes_probability": 0.50,
+        "volume": 50000,
+        "categories": [],
+    }
+
+    return profiles, raw_trades, market
+
+
+async def test_live_trades_enrichment_fires(
+    make_context,
+    mock_metaculus,
+    mock_polymarket,
+    mock_gdelt,
+    mock_router,
+):
+    """When Data API returns trades for a market, inverse enrichment fires."""
+    profiles, raw_trades, market = _make_inverse_fixtures()
+
+    agent = ForesightCollector(
+        mock_router,
+        metaculus_client=mock_metaculus,
+        polymarket_client=mock_polymarket,
+        gdelt_client=mock_gdelt,
+        inverse_profiles=profiles,
+    )
+
+    mock_metaculus.fetch_questions.return_value = []
+    mock_polymarket.fetch_enriched_markets.return_value = [market]
+    mock_polymarket.fetch_trades_batch.return_value = {_LIVE_CID: raw_trades}
+    mock_gdelt.fetch_articles.return_value = []
+
+    result = await agent.execute(make_context())
+    sig = result["foresight_signals"][0]
+
+    assert "informed_probability" in sig
+    assert sig["informed_n_bettors"] >= 1
+    # Informed bettor bet YES@0.80 while market is 0.50 → informed should shift up
+    assert sig["informed_probability"] > 0.50
+
+
+async def test_live_trades_fallback_to_preloaded(
+    make_context,
+    mock_metaculus,
+    mock_polymarket,
+    mock_gdelt,
+    mock_router,
+):
+    """When Data API fails, pre-loaded inverse_trades are used."""
+    from datetime import datetime, timezone
+
+    from src.inverse.schemas import TradeRecord
+
+    profiles, _, market = _make_inverse_fixtures()
+
+    preloaded_trades = {
+        _LIVE_CID: [
+            TradeRecord(
+                user_id="0xwallet_informed",
+                market_id=_LIVE_CID,
+                side="YES",
+                price=0.75,
+                size=200.0,
+                timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            ),
+        ],
+    }
+
+    agent = ForesightCollector(
+        mock_router,
+        metaculus_client=mock_metaculus,
+        polymarket_client=mock_polymarket,
+        gdelt_client=mock_gdelt,
+        inverse_profiles=profiles,
+        inverse_trades=preloaded_trades,
+    )
+
+    mock_metaculus.fetch_questions.return_value = []
+    mock_polymarket.fetch_enriched_markets.return_value = [market]
+    mock_polymarket.fetch_trades_batch.side_effect = RuntimeError("Data API down")
+    mock_gdelt.fetch_articles.return_value = []
+
+    result = await agent.execute(make_context())
+    sig = result["foresight_signals"][0]
+
+    # Fallback to preloaded trades → enrichment should still fire
+    assert "informed_probability" in sig
+    assert sig["informed_n_bettors"] >= 1
+
+
+async def test_live_trades_skip_without_profiles(
+    make_context,
+    mock_metaculus,
+    mock_polymarket,
+    mock_gdelt,
+    mock_router,
+):
+    """Without inverse_profiles, fetch_trades_batch is not called."""
+    _, _, market = _make_inverse_fixtures()
+
+    agent = ForesightCollector(
+        mock_router,
+        metaculus_client=mock_metaculus,
+        polymarket_client=mock_polymarket,
+        gdelt_client=mock_gdelt,
+    )
+
+    mock_metaculus.fetch_questions.return_value = []
+    mock_polymarket.fetch_enriched_markets.return_value = [market]
+    mock_gdelt.fetch_articles.return_value = []
+
+    await agent.execute(make_context())
+
+    mock_polymarket.fetch_trades_batch.assert_not_called()
+
+
+async def test_live_trades_prefer_live_over_preloaded(
+    make_context,
+    mock_metaculus,
+    mock_polymarket,
+    mock_gdelt,
+    mock_router,
+):
+    """Live trades take priority over pre-loaded trades for the same market."""
+    from datetime import datetime, timezone
+
+    from src.inverse.schemas import TradeRecord
+
+    profiles, raw_live_trades, market = _make_inverse_fixtures()
+
+    # Pre-loaded: bettor bets YES@0.55 (close to market 0.50)
+    preloaded_trades = {
+        _LIVE_CID: [
+            TradeRecord(
+                user_id="0xwallet_informed",
+                market_id=_LIVE_CID,
+                side="YES",
+                price=0.55,
+                size=200.0,
+                timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            ),
+        ],
+    }
+
+    agent = ForesightCollector(
+        mock_router,
+        metaculus_client=mock_metaculus,
+        polymarket_client=mock_polymarket,
+        gdelt_client=mock_gdelt,
+        inverse_profiles=profiles,
+        inverse_trades=preloaded_trades,
+    )
+
+    mock_metaculus.fetch_questions.return_value = []
+    mock_polymarket.fetch_enriched_markets.return_value = [market]
+    # Live trades: bettor bets YES@0.80 (far from 0.50 → bigger shift)
+    mock_polymarket.fetch_trades_batch.return_value = {_LIVE_CID: raw_live_trades}
+    mock_gdelt.fetch_articles.return_value = []
+
+    result = await agent.execute(make_context())
+    sig = result["foresight_signals"][0]
+
+    # Live trade (0.80) should produce higher informed_probability than preloaded (0.55)
+    # With market at 0.50, coverage=1/20=0.05:
+    #   preloaded: 0.05*0.55 + 0.95*0.50 = 0.5025
+    #   live:      0.05*0.80 + 0.95*0.50 = 0.515
+    assert sig["informed_probability"] > 0.51
+
+
+async def test_live_trades_reset_between_calls(
+    make_context,
+    mock_metaculus,
+    mock_polymarket,
+    mock_gdelt,
+    mock_router,
+):
+    """Second execute() with no live trades must not see stale trades from call 1."""
+    profiles, raw_trades, market = _make_inverse_fixtures()
+
+    agent = ForesightCollector(
+        mock_router,
+        metaculus_client=mock_metaculus,
+        polymarket_client=mock_polymarket,
+        gdelt_client=mock_gdelt,
+        inverse_profiles=profiles,
+    )
+
+    mock_metaculus.fetch_questions.return_value = []
+    mock_gdelt.fetch_articles.return_value = []
+
+    # Call 1: live trades available → enrichment fires
+    mock_polymarket.fetch_enriched_markets.return_value = [market]
+    mock_polymarket.fetch_trades_batch.return_value = {_LIVE_CID: raw_trades}
+    result1 = await agent.execute(make_context())
+    assert "informed_probability" in result1["foresight_signals"][0]
+
+    # Call 2: SAME condition_id but fetch_trades_batch RAISES.
+    # Stale _live_trades from call 1 must not be used.
+    mock_polymarket.fetch_enriched_markets.return_value = [
+        {**market, "yes_probability": 0.90}  # Different market price
+    ]
+    mock_polymarket.fetch_trades_batch.side_effect = RuntimeError("Data API down")
+    result2 = await agent.execute(make_context())
+    sig2 = result2["foresight_signals"][0]
+    # If stale live trades leak: informed_probability would be computed
+    # from call 1's trades (YES@0.80) vs new raw prob 0.90.
+    # Correct behavior: no live trades → no informed_probability
+    # (because no pre-loaded trades exist either)
+    assert "informed_probability" not in sig2

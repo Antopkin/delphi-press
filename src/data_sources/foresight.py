@@ -177,8 +177,14 @@ class PolymarketClient:
             timeout=httpx.Timeout(timeout),
             headers={"User-Agent": _USER_AGENT},
         )
+        self._data_client = httpx.AsyncClient(
+            base_url="https://data-api.polymarket.com",
+            timeout=httpx.Timeout(timeout),
+            headers={"User-Agent": _USER_AGENT},
+        )
         self._cache: dict[str, tuple[float, list[dict]]] = {}
         self._price_cache: dict[str, tuple[float, list[float]]] = {}
+        self._trades_cache: dict[str, tuple[float, list[dict]]] = {}
         self._cache_ttl = 900  # 15 min
         self._semaphore = asyncio.Semaphore(10)
 
@@ -526,10 +532,96 @@ class PolymarketClient:
         await asyncio.gather(*[_enrich(m) for m in markets], return_exceptions=True)
         return markets
 
+    # ------------------------------------------------------------------
+    # Data API — live trades
+    # ------------------------------------------------------------------
+
+    async def fetch_market_trades(
+        self,
+        condition_id: str,
+        *,
+        limit: int = 10_000,
+    ) -> list[dict]:
+        """Fetch trades for a single market from the Polymarket Data API.
+
+        Endpoint: GET https://data-api.polymarket.com/trades
+        No auth required. Rate limit: 200 req/10s.
+
+        Returns raw trade dicts with keys: proxyWallet, side, conditionId,
+        size, price, timestamp, outcome, outcomeIndex.
+        """
+        if not condition_id:
+            return []
+
+        cache_key = f"data_trades:{condition_id}:{limit}"
+        cached = self._trades_cache.get(cache_key)
+        if cached and (time.monotonic() - cached[0]) < self._cache_ttl:
+            return cached[1]
+
+        try:
+            async with self._semaphore:
+                response = await retry_with_backoff(
+                    lambda: self._data_client.get(
+                        "/trades",
+                        params={
+                            "market": condition_id,
+                            "takerOnly": "false",
+                            "limit": limit,
+                        },
+                    ),
+                    max_retries=2,
+                    base_delay=1.0,
+                )
+            response.raise_for_status()
+            data = response.json()
+            if not isinstance(data, list):
+                logger.warning("Data API returned non-list for %s: %s", condition_id, type(data))
+                return []
+            trades: list[dict] = data
+        except Exception:
+            logger.warning("Data API fetch failed for %s", condition_id, exc_info=True)
+            return []
+
+        self._trades_cache[cache_key] = (time.monotonic(), trades)
+        _evict_oldest(self._trades_cache)
+        return trades
+
+    async def fetch_trades_batch(
+        self,
+        condition_ids: list[str],
+    ) -> dict[str, list[dict]]:
+        """Fetch trades for multiple markets in parallel via Data API.
+
+        Uses asyncio.gather with semaphore(10) for concurrency control.
+        Failed fetches return empty lists (graceful degradation).
+        """
+        if not condition_ids:
+            return {}
+
+        async def _fetch(cid: str) -> tuple[str, list[dict]]:
+            trades = await self.fetch_market_trades(cid)
+            return cid, trades
+
+        results = await asyncio.gather(
+            *[_fetch(cid) for cid in condition_ids],
+            return_exceptions=True,
+        )
+
+        out: dict[str, list[dict]] = {}
+        for i, res in enumerate(results):
+            cid = condition_ids[i]
+            if isinstance(res, Exception):
+                logger.warning("Batch trade fetch failed for %s: %s", cid, res)
+                out[cid] = []
+            else:
+                out[cid] = res[1]
+        return out
+
     async def close(self) -> None:
         """Close the underlying HTTP clients."""
         await self._client.aclose()
         await self._clob_client.aclose()
+        await self._data_client.aclose()
 
 
 class GdeltDocClient:

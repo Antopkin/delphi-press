@@ -881,6 +881,148 @@ class TestPolymarketHistoricalPrice:
 
 
 # ===========================================================================
+# PolymarketClient — Data API (trades)
+# ===========================================================================
+
+DATA_API_TRADES_RESPONSE = [
+    {
+        "proxyWallet": "0xWallet1",
+        "side": "BUY",
+        "conditionId": "0xabc123",
+        "size": "150.00",
+        "price": "0.65",
+        "timestamp": "2026-03-29T10:00:00Z",
+        "outcome": "Yes",
+        "outcomeIndex": "0",
+    },
+    {
+        "proxyWallet": "0xWallet2",
+        "side": "SELL",
+        "conditionId": "0xabc123",
+        "size": "80.00",
+        "price": "0.70",
+        "timestamp": "2026-03-29T11:00:00Z",
+        "outcome": "Yes",
+        "outcomeIndex": "0",
+    },
+]
+
+
+class TestPolymarketDataAPI:
+    async def test_fetch_market_trades_success(self) -> None:
+        client = PolymarketClient()
+        mock_resp = _make_response(200, DATA_API_TRADES_RESPONSE)
+        with patch.object(
+            client._data_client, "get", new_callable=AsyncMock, return_value=mock_resp
+        ):
+            trades = await client.fetch_market_trades("0xabc123")
+
+        assert len(trades) == 2
+        assert trades[0]["proxyWallet"] == "0xWallet1"
+
+    async def test_fetch_market_trades_empty_condition_id(self) -> None:
+        client = PolymarketClient()
+        trades = await client.fetch_market_trades("")
+        assert trades == []
+
+    async def test_fetch_market_trades_http_error(self) -> None:
+        client = PolymarketClient()
+        with patch.object(
+            client._data_client,
+            "get",
+            new_callable=AsyncMock,
+            side_effect=httpx.ConnectError("timeout"),
+        ):
+            trades = await client.fetch_market_trades("0xfail")
+
+        assert trades == []
+
+    async def test_fetch_market_trades_caching(self) -> None:
+        client = PolymarketClient()
+        mock_resp = _make_response(200, DATA_API_TRADES_RESPONSE)
+        mock_get = AsyncMock(return_value=mock_resp)
+        with patch.object(client._data_client, "get", mock_get):
+            first = await client.fetch_market_trades("0xcache")
+            second = await client.fetch_market_trades("0xcache")
+
+        assert mock_get.await_count == 1
+        assert first == second
+
+    async def test_fetch_market_trades_sends_correct_params(self) -> None:
+        client = PolymarketClient()
+        mock_resp = _make_response(200, [])
+        mock_get = AsyncMock(return_value=mock_resp)
+        with patch.object(client._data_client, "get", mock_get):
+            await client.fetch_market_trades("0xcheck")
+
+        params = mock_get.call_args.kwargs.get("params", {})
+        assert params["market"] == "0xcheck"
+        assert params["limit"] == 10_000
+
+    async def test_fetch_trades_batch_success(self) -> None:
+        client = PolymarketClient()
+        mock_resp_a = _make_response(200, [DATA_API_TRADES_RESPONSE[0]])
+        mock_resp_b = _make_response(200, [DATA_API_TRADES_RESPONSE[1]])
+
+        call_count = 0
+
+        async def _side_effect(url: str, **kwargs: object) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            params = kwargs.get("params", {})
+            if params.get("market") == "0xid_a":
+                return mock_resp_a
+            return mock_resp_b
+
+        with patch.object(client._data_client, "get", side_effect=_side_effect):
+            result = await client.fetch_trades_batch(["0xid_a", "0xid_b"])
+
+        assert len(result) == 2
+        assert len(result["0xid_a"]) == 1
+        assert len(result["0xid_b"]) == 1
+
+    async def test_fetch_trades_batch_partial_failure(self) -> None:
+        client = PolymarketClient()
+        mock_resp_ok = _make_response(200, DATA_API_TRADES_RESPONSE)
+
+        async def _side_effect(url: str, **kwargs: object) -> httpx.Response:
+            params = kwargs.get("params", {})
+            if params.get("market") == "0xfail":
+                raise httpx.ConnectError("boom")
+            return mock_resp_ok
+
+        with patch.object(client._data_client, "get", side_effect=_side_effect):
+            result = await client.fetch_trades_batch(["0xok", "0xfail"])
+
+        assert len(result["0xok"]) == 2
+        assert result["0xfail"] == []
+
+    async def test_fetch_market_trades_non_list_response(self) -> None:
+        """Data API returning a JSON object (e.g. error) instead of list → empty."""
+        client = PolymarketClient()
+        mock_resp = _make_response(200, {"error": "rate limited"})
+        with patch.object(
+            client._data_client, "get", new_callable=AsyncMock, return_value=mock_resp
+        ):
+            trades = await client.fetch_market_trades("0xbad_response")
+
+        assert trades == []
+
+    async def test_close_closes_data_client(self) -> None:
+        client = PolymarketClient()
+        with (
+            patch.object(client._client, "aclose", new_callable=AsyncMock) as mock_gamma,
+            patch.object(client._clob_client, "aclose", new_callable=AsyncMock) as mock_clob,
+            patch.object(client._data_client, "aclose", new_callable=AsyncMock) as mock_data,
+        ):
+            await client.close()
+
+        mock_gamma.assert_awaited_once()
+        mock_clob.assert_awaited_once()
+        mock_data.assert_awaited_once()
+
+
+# ===========================================================================
 # GdeltDocClient
 # ===========================================================================
 

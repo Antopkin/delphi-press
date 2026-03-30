@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import timezone
 from pathlib import Path
 
 import pytest
 
 from src.inverse.loader import (
+    _map_data_api_side,
     _normalize_side,
     _parse_timestamp,
+    adapt_data_api_trades,
     load_market_horizons,
     load_resolutions_csv,
     load_trades_csv,
@@ -65,7 +67,7 @@ class TestLoadTradesCsv:
     def test_first_trade_fields(self, trades_csv: Path) -> None:
         trades = load_trades_csv(trades_csv)
         t = trades[0]
-        assert t.user_id == "0xAAA"
+        assert t.user_id == "0xaaa"
         assert t.market_id == "market-1"
         assert t.side == "YES"  # BUY → YES
         assert t.price == 0.65
@@ -107,7 +109,7 @@ class TestLoadTradesCsv:
         }
         trades = load_trades_csv(p, column_map=cmap)
         assert len(trades) == 1
-        assert trades[0].user_id == "0xAAA"
+        assert trades[0].user_id == "0xaaa"
 
     def test_missing_columns_raises(self, tmp_path: Path) -> None:
         p = tmp_path / "bad.csv"
@@ -267,3 +269,221 @@ class TestLoadMarketHorizons:
         horizons = load_market_horizons(p)
         assert "market-1" in horizons
         assert abs(horizons["market-1"] - 7.0) < 0.01
+
+
+# ---------------------------------------------------------------------------
+# _map_data_api_side
+# ---------------------------------------------------------------------------
+
+
+class TestMapDataApiSide:
+    def test_buy_yes_token(self) -> None:
+        assert _map_data_api_side("BUY", 0) == "YES"
+
+    def test_buy_no_token(self) -> None:
+        assert _map_data_api_side("BUY", 1) == "NO"
+
+    def test_sell_yes_token(self) -> None:
+        assert _map_data_api_side("SELL", 0) == "NO"
+
+    def test_sell_no_token(self) -> None:
+        assert _map_data_api_side("SELL", 1) == "YES"
+
+    def test_unknown_side_returns_none(self) -> None:
+        assert _map_data_api_side("HOLD", 0) is None
+        assert _map_data_api_side("", 1) is None
+
+
+# ---------------------------------------------------------------------------
+# adapt_data_api_trades
+# ---------------------------------------------------------------------------
+
+# Sample Data API response (realistic field types — all strings from JSON)
+_SAMPLE_TRADES = [
+    {
+        "proxyWallet": "0xAbc123",
+        "side": "BUY",
+        "conditionId": "0xcond1",
+        "size": "150.00",
+        "price": "0.65",
+        "timestamp": "2026-03-29T10:00:00Z",
+        "outcome": "Yes",
+        "outcomeIndex": "0",
+    },
+    {
+        "proxyWallet": "0xDef456",
+        "side": "SELL",
+        "conditionId": "0xcond1",
+        "size": "80.00",
+        "price": "0.70",
+        "timestamp": "2026-03-29T11:00:00Z",
+        "outcome": "Yes",
+        "outcomeIndex": "0",
+    },
+    {
+        "proxyWallet": "0xGhi789",
+        "side": "BUY",
+        "conditionId": "0xcond1",
+        "size": "200.00",
+        "price": "0.35",
+        "timestamp": "1711929600",
+        "outcome": "No",
+        "outcomeIndex": "1",
+    },
+]
+
+
+class TestAdaptDataApiTrades:
+    def test_happy_path_maps_all_fields(self) -> None:
+        """BUY on YES token → side='YES', price preserved, wallet lowered."""
+        records = adapt_data_api_trades([_SAMPLE_TRADES[0]], "0xcond1")
+        assert len(records) == 1
+        r = records[0]
+        assert r.user_id == "0xabc123"  # lowercased
+        assert r.market_id == "0xcond1"
+        assert r.side == "YES"
+        assert r.price == 0.65
+        assert r.size == 150.0
+        assert r.timestamp.year == 2026
+
+    def test_sell_yes_token_maps_to_no(self) -> None:
+        """SELL on outcomeIndex=0 (YES token) → side='NO'."""
+        records = adapt_data_api_trades([_SAMPLE_TRADES[1]], "0xcond1")
+        assert len(records) == 1
+        assert records[0].side == "NO"
+        assert records[0].price == 0.70
+
+    def test_buy_no_token_maps_to_no(self) -> None:
+        """BUY on outcomeIndex=1 (NO token) → side='NO'."""
+        records = adapt_data_api_trades([_SAMPLE_TRADES[2]], "0xcond1")
+        assert len(records) == 1
+        assert records[0].side == "NO"
+        assert records[0].price == 0.35
+
+    def test_multiple_trades(self) -> None:
+        """All 3 sample trades convert successfully."""
+        records = adapt_data_api_trades(_SAMPLE_TRADES, "0xcond1")
+        assert len(records) == 3
+
+    def test_skips_invalid_price(self) -> None:
+        """Price outside [0, 1] is skipped."""
+        bad = {**_SAMPLE_TRADES[0], "price": "1.50"}
+        records = adapt_data_api_trades([bad], "0xcond1")
+        assert len(records) == 0
+
+    def test_skips_empty_wallet(self) -> None:
+        """Empty proxyWallet is skipped."""
+        bad = {**_SAMPLE_TRADES[0], "proxyWallet": "  "}
+        records = adapt_data_api_trades([bad], "0xcond1")
+        assert len(records) == 0
+
+    def test_skips_zero_size(self) -> None:
+        """Size <= 0 is skipped."""
+        bad = {**_SAMPLE_TRADES[0], "size": "0"}
+        records = adapt_data_api_trades([bad], "0xcond1")
+        assert len(records) == 0
+
+    def test_parses_unix_timestamp(self) -> None:
+        """Unix timestamp string is parsed to datetime."""
+        records = adapt_data_api_trades([_SAMPLE_TRADES[2]], "0xcond1")
+        assert len(records) == 1
+        assert records[0].timestamp.tzinfo == timezone.utc
+
+    def test_empty_input(self) -> None:
+        """Empty list returns empty list."""
+        assert adapt_data_api_trades([], "0xcond1") == []
+
+    def test_missing_timestamp_skipped(self) -> None:
+        """Trade with missing/unparseable timestamp is skipped (no now() fallback)."""
+        trade_no_ts = {
+            "proxyWallet": "0xWallet1",
+            "side": "BUY",
+            "outcomeIndex": "0",
+            "price": "0.60",
+            "size": "100.0",
+            # no timestamp field
+        }
+        trade_bad_ts = {
+            "proxyWallet": "0xWallet2",
+            "side": "BUY",
+            "outcomeIndex": "0",
+            "price": "0.60",
+            "size": "100.0",
+            "timestamp": "not-a-date",
+        }
+        records = adapt_data_api_trades([trade_no_ts, trade_bad_ts], "0xcond1")
+        assert len(records) == 0
+
+    def test_null_outcome_index_handled(self) -> None:
+        """outcomeIndex: null in JSON should not crash — trade skipped."""
+        trade = {
+            "proxyWallet": "0xWallet1",
+            "side": "BUY",
+            "outcomeIndex": None,  # JSON null
+            "price": "0.60",
+            "size": "100.0",
+            "timestamp": "1711929600",
+        }
+        records = adapt_data_api_trades([trade], "0xcond1")
+        # Should not crash; trade skipped or defaults gracefully
+        assert len(records) <= 1
+
+    def test_wallet_case_normalized_to_lowercase(self) -> None:
+        """proxyWallet is lowercased to match profile keys from all loaders."""
+        # Data API returns mixed-case EIP-55 checksummed addresses
+        trade = {
+            "proxyWallet": "0xAbCdEf1234567890AbCdEf1234567890AbCdEf12",
+            "side": "BUY",
+            "outcomeIndex": "0",
+            "price": "0.60",
+            "size": "100.0",
+            "timestamp": "1711929600",
+        }
+        records = adapt_data_api_trades([trade], "0xcond1")
+        assert len(records) == 1
+        assert records[0].user_id == "0xabcdef1234567890abcdef1234567890abcdef12"
+
+
+class TestWalletCaseConsistency:
+    """Verify all loaders produce lowercase user_id for cross-source matching."""
+
+    def test_parse_trade_row_lowercases_user_id(self) -> None:
+        """CSV trade loader lowercases maker_address."""
+        from src.inverse.loader import _parse_trade_row
+
+        row = {
+            "maker_address": "0xAbCdEf",
+            "market": "m1",
+            "side": "BUY",
+            "price": "0.50",
+            "size": "100.0",
+            "timestamp": "1711929600",
+        }
+        cmap = {
+            "user_id": "maker_address",
+            "market_id": "market",
+            "side": "side",
+            "price": "price",
+            "size": "size",
+            "timestamp": "timestamp",
+        }
+        record = _parse_trade_row(row, cmap, min_size=0.0)
+        assert record is not None
+        assert record.user_id == "0xabcdef"
+
+    def test_holder_ndjson_lowercases_wallet(self, tmp_path: Path) -> None:
+        """NDJSON holder loader lowercases proxyWallet."""
+        import json
+
+        from src.inverse.loader import _parse_holder_ndjson
+
+        data = {
+            "conditionId": "0xcond1",
+            "endDate": "2026-01-01T00:00:00Z",
+            "holders": [{"proxyWallet": "0xAbCdEf", "amount": 100, "outcomeIndex": 0}],
+        }
+        p = tmp_path / "holders.ndjson"
+        p.write_text(json.dumps(data) + "\n")
+        records = _parse_holder_ndjson(p)
+        assert len(records) == 1
+        assert records[0].user_id == "0xabcdef"
