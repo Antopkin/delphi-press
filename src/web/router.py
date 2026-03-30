@@ -6,6 +6,7 @@
     GET /             — Landing page with form + recent predictions
     GET /predict/{id} — Progress page (SSE) or redirect to results
     GET /results/{id} — Completed prediction with headline cards
+    GET /markets      — Market signal dashboard (informed consensus)
     GET /about        — Methodology page
     GET /login        — Login form
     POST /login       — Process login (set cookie, redirect)
@@ -345,6 +346,39 @@ async def prediction_results(
             "results.html",
             {"prediction": prediction, "current_user": user},
         )
+
+
+@router.get("/markets", response_class=HTMLResponse)
+async def markets(
+    request: Request,
+    user: User | None = Depends(get_current_user),
+) -> HTMLResponse:
+    """Market Signal Dashboard — informed consensus vs raw market prices."""
+    market_service = getattr(request.app.state, "market_service", None)
+    markets_data: list = []
+    summary = None
+    error: str | None = None
+
+    if market_service is not None:
+        try:
+            markets_data = await market_service.get_top_markets(limit=10)
+            summary = market_service.summary
+        except Exception as exc:
+            logger.warning("Market service error: %s", exc, exc_info=True)
+            error = "Не удалось загрузить данные рынков"
+    else:
+        error = "Профили трейдеров не загружены"
+
+    return templates.TemplateResponse(
+        request,
+        "markets.html",
+        {
+            "current_user": user,
+            "markets": markets_data,
+            "summary": summary,
+            "error": error,
+        },
+    )
 
 
 @router.get("/about", response_class=HTMLResponse)

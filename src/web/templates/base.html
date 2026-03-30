@@ -45,6 +45,7 @@
         <div class="hidden md:flex items-center gap-6">
             <ul class="flex items-center gap-6 list-none m-0 p-0">
                 <li><a href="/" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">Главная</a></li>
+                <li><a href="/markets" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/markets' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">Рынки</a></li>
                 <li><a href="/about" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/about' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">О методологии</a></li>
                 {% if current_user %}
                 <li><a href="/settings" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/settings' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">Настройки</a></li>
@@ -61,6 +62,7 @@
             <summary class="cursor-pointer list-none text-2xl leading-none p-2 text-text-muted select-none [&::-webkit-details-marker]:hidden">&#9776;</summary>
             <ul class="absolute right-0 top-full mt-2 bg-surface-0 border border-border rounded-md shadow-lg py-2 min-w-[160px] list-none m-0 p-0 z-50">
                 <li><a href="/" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">Главная</a></li>
+                <li><a href="/markets" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">Рынки</a></li>
                 <li><a href="/about" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">О методологии</a></li>
                 {% if current_user %}
                 <li><a href="/settings" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">Настройки</a></li>
