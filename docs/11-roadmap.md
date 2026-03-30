@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-30. Production deployed. Обновлено: 2026-03-30 (v0.9.3 Phase 5 BSS variants + conditionId fix + v0.9.2 walk-forward eval + v0.9.1 calibration + v0.9.0 Phase 2 + v0.8.0 OutletResolver + v0.7.1 security audit).
+> Статус на 2026-03-30. Production deployed. Обновлено: 2026-03-30 (v0.9.4 Market Dashboard + pipeline resilience + UI fixes + v0.9.3 Phase 5 BSS variants + conditionId fix + v0.9.2 walk-forward eval + v0.9.1 calibration + v0.9.0 Phase 2 + v0.8.0 OutletResolver + v0.7.1 security audit).
 
 ---
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Inverse Problem v0.9.3**: conditionId fix (Gamma API enrichment работает), BSS variants (volume gate, adaptive extremize, timing weight), bootstrap CI, single-pass multi-variant (5x speedup), weekly profile refresh cron. Walk-forward baseline: +0.196 mean BSS (22/22 positive), CI [+0.094, +0.297], p=2.38e-07. Temporal leak fixed, 22 фолда за 82 мин (bucketed DuckDB). Parquet store (506→62 МБ, 348K INFORMED), Bayesian shrinkage, parametric λ, HDBSCAN. **1242 теста** зелёных. OutletResolver v0.8.0: Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: 40/40 findings closed. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation. Единственный LLM-провайдер — OpenRouter.
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Market Dashboard v0.9.4**: `/markets` — live informed consensus vs raw Polymarket price (TTL 15 мин, Chart.js sparklines), блок релевантных рынков на `/results/{id}` (fuzzy match), resilient event_identification (fallback + детальные ошибки), UI: пресеты Light+Opus, дата до +7 дней. **Inverse Problem v0.9.3**: conditionId fix, BSS variants, bootstrap CI, single-pass multi-variant (5x speedup), weekly profile refresh cron. Walk-forward baseline: +0.196 mean BSS (22/22 positive), CI [+0.094, +0.297], p=2.38e-07. Parquet store (506→62 МБ, 348K INFORMED), Bayesian shrinkage, parametric λ, HDBSCAN. **1296 тестов** зелёных. OutletResolver v0.8.0: Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: 40/40 findings closed. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation. Единственный LLM-провайдер — OpenRouter.
 
 ### Реализованные компоненты
 
@@ -26,7 +26,7 @@
 | **Schemas** | 60+ Pydantic-моделей в 7 файлах | DONE | Контрактные тесты |
 | **Prompts** | 21 prompt-класс для всех агентов | DONE | — |
 | **API** | JWT auth, predictions CRUD, outlets, health, API keys | DONE | Есть |
-| **Frontend** | Auth (login/register/logout), settings (API keys), index (мои прогнозы, пресеты), progress (SSE), results, about | DONE | 29 тестов |
+| **Frontend** | Auth, settings, index (пресеты Light+Opus), progress (SSE), results (+market signal block), about, **markets** (live dashboard) | DONE | 56 тестов |
 | **Data Sources** | RSS, web search, scraper, foresight (Metaculus/Polymarket/GDELT) | DONE | 104 теста |
 | **Evaluation (пилот)** | Brier Score + bootstrap CI, Log Score, Composite Score, Wayback CDX | DONE | 18 тестов |
 | **Evaluation (market)** | Market-calibrated eval (resolved markets, BS по горизонтам), news↔market correlation (Spearman, Granger) | DONE | 49 тестов |
@@ -67,6 +67,7 @@ scripts/eval_news_correlation.py    — news↔market Spearman/Granger → markd
 src/eval/correlation.py             — detect movements, news window, Spearman, Granger
 src/utils/fuzzy_match.py            — 3-tier fuzzy match (extracted from Judge)
 src/inverse/                        — bettor profiling + informed consensus + parametric models
+src/web/market_service.py           — MarketSignalService (live informed consensus for /markets)
 scripts/convert_json_to_parquet.py  — одноразовая миграция 506 МБ → ~60 МБ Parquet
 tests/fixtures/mock_llm.py          — MockLLMClient (task-based dispatch)
 tests/fixtures/llm_responses.py     — 25+ JSON fixture factories
@@ -76,6 +77,34 @@ tests/test_integration/             — 7 E2E integration tests
 ---
 
 ## Оставшиеся сессии
+
+### Market Dashboard + Pipeline Resilience (v0.9.4)
+
+**Цель:** Вывести данные Inverse Problem на веб-страницы + повысить устойчивость пайплайна.
+
+**Статус:** DONE (2026-03-30)
+
+**Что реализовано:**
+
+- [x] **`/markets` page** — live informed consensus vs raw Polymarket price. MarketSignalService: профили в памяти при старте, live API fetch с TTL 15 мин. Chart.js sparklines, expandable details, delta badges, coverage/confidence chips. Graceful degradation без профилей или API.
+- [x] **Market signal block on `/results/{id}`** — fuzzy match prediction headlines → active Polymarket markets (reuses `fuzzy_match_to_market` из Judge). Компактные карточки: raw → informed, delta badge, n_informed.
+- [x] **Resilient event_identification** — EventTrendAnalyzer: graceful fallback при LLM parse error (сырые заголовки вместо краша стадии). Orchestrator: детальные ошибки агентов в stage failure message.
+- [x] **UI fixes** — убрана вертикальная линия таймлайна на progress page; дата прогноза: max +7 дней (было +30); пресеты: Light + Opus (Standard скрыт из UI).
+
+**Ключевые файлы:**
+
+- `src/web/market_service.py` — MarketSignalService + MarketCard schema
+- `src/web/templates/markets.html` — dashboard template
+- `src/web/templates/partials/market_signal.html` — partial для /results
+- `src/web/static/js/markets.js` — Chart.js sparklines
+- `src/agents/analysts/event_trend.py` — `_fallback_threads()` graceful degradation
+- `src/agents/orchestrator.py` — agent-level error propagation
+
+**Тесты:** 1296 зелёных (+54 новых: 10 service, 9 route, 1 preset, остальные существующие).
+
+**Коммиты:** `dea4dab`, `b0dee58`, `f3e2f8b`, `34bd2e4`
+
+---
 
 ### Phase 5: BSS Variants + Data Integrity Fixes (v0.9.3)
 
@@ -406,4 +435,4 @@ evaluation = [
 
 ---
 
-*Создано: 2026-03-28. Обновлено: 2026-03-30 (v0.9.3 Phase 5, 1242 теста).*
+*Создано: 2026-03-28. Обновлено: 2026-03-30 (v0.9.4 Market Dashboard, 1296 тестов).*
