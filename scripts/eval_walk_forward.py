@@ -231,11 +231,12 @@ def compute_fold_metrics(
     reliability, resolution, uncertainty, calibration_slope, ece.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from src.eval.metrics import (
-        brier_decomposition,
-        calibration_slope,
-        expected_calibration_error,
-    )
+    import importlib
+
+    _metrics_mod = importlib.import_module("src.eval.metrics")
+    brier_decomposition = _metrics_mod.brier_decomposition
+    calibration_slope = _metrics_mod.calibration_slope
+    expected_calibration_error = _metrics_mod.expected_calibration_error
 
     # Compute BS directly (avoid bootstrap overhead)
     import numpy as _np
