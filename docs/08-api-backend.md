@@ -94,15 +94,6 @@ class Settings(BaseSettings):
         description="Base URL OpenRouter API.",
     )
 
-    yandex_folder_id: str = Field(
-        default="",
-        description="ID каталога в Yandex Cloud (для YandexGPT).",
-    )
-    yandex_api_key: str = Field(
-        default="",
-        description="API-ключ Yandex Cloud.",
-    )
-
     # === Model Routing ===
 
     default_model_cheap: str = Field(
@@ -118,7 +109,7 @@ class Settings(BaseSettings):
         description="Модель для сложных задач (медиатор, судья).",
     )
     default_model_russian: str = Field(
-        default="yandexgpt",
+        default="anthropic/claude-sonnet-4",
         description="Модель для русскоязычных задач (стилистика, генерация).",
     )
 
@@ -250,14 +241,11 @@ REDIS_URL=redis://redis:6379
 # === LLM Providers ===
 OPENROUTER_API_KEY=sk-or-...
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-YANDEX_FOLDER_ID=
-YANDEX_API_KEY=
-
 # === Model Routing ===
 DEFAULT_MODEL_CHEAP=openai/gpt-4o-mini
 DEFAULT_MODEL_REASONING=anthropic/claude-sonnet-4
 DEFAULT_MODEL_STRONG=anthropic/claude-opus-4
-DEFAULT_MODEL_RUSSIAN=yandexgpt
+DEFAULT_MODEL_RUSSIAN=anthropic/claude-sonnet-4
 
 # === Pipeline Tuning ===
 DELPHI_ROUNDS=2
@@ -2784,7 +2772,7 @@ async def test_client(test_engine):
 
 ### Контекст
 
-Пользователи предоставляют свои LLM API-ключи (OpenRouter, YandexGPT) через веб-интерфейс. Ключи хранятся в зашифрованном виде (Fernet). Авторизация — JWT-токены.
+Пользователи предоставляют свои LLM API-ключи (OpenRouter) через веб-интерфейс. Ключи хранятся в зашифрованном виде (Fernet). Авторизация — JWT-токены.
 
 ### Новые ORM-модели (`src/db/models.py`)
 
@@ -2831,7 +2819,7 @@ class UserAPIKey(Base):
     )
     provider: Mapped[str] = mapped_column(
         String(50), nullable=False,
-        doc="Провайдер: 'openrouter' | 'yandex'",
+        doc="Провайдер: 'openrouter'",
     )
     encrypted_key: Mapped[str] = mapped_column(
         Text, nullable=False,
@@ -2912,10 +2900,9 @@ class APIKeyInfo(BaseModel):
 
 # POST /api/v1/keys — добавить ключ
 class APIKeyCreate(BaseModel):
-    provider: Literal["openrouter", "yandex"]
+    provider: Literal["openrouter"]
     api_key: str = Field(..., min_length=10)
     label: str = Field(default="", max_length=100)
-    yandex_folder_id: str = Field(default="")  # Только для yandex
 
 # DELETE /api/v1/keys/{key_id} — удалить ключ
 # POST /api/v1/keys/{key_id}/validate — проверить ключ (тестовый запрос к API)
@@ -2975,7 +2962,7 @@ async def require_user(
    → require_user → получить user_id из JWT
 2. Загрузить зашифрованные ключи из user_api_keys WHERE user_id=...
 3. Расшифровать ключи через KeyVault
-4. create_providers(openrouter_key=..., yandex_key=...)
+4. create_providers(openrouter_key=...)
 5. Настроить ModelRouter с бюджетом пресета
 6. Enqueue в ARQ с provider_keys (зашифрованными)
 7. Worker: расшифровка → создание провайдеров → запуск пайплайна

@@ -106,11 +106,11 @@ All R2: primary `claude-opus-4.6`, fallback `claude-sonnet-4.5`.
 |---|---|---|---|---|---|
 | ~~`judge`~~ | Judge | _(deterministic since v0.7.0 — no LLM call)_ | — | — | — |
 | `framing` | FramingAnalyzer | claude-opus-4.6 | claude-sonnet-4.5 | 0.5 | Yes |
-| `style_generation` | StyleReplicator | yandexgpt | claude-opus-4.6 | 0.8 | No |
-| `style_generation_ru` | StyleReplicator | yandexgpt | claude-opus-4.6 | 0.8 | No |
+| `style_generation` | StyleReplicator | claude-sonnet-4.5 | claude-opus-4.6 | 0.8 | No |
+| `style_generation_ru` | StyleReplicator | claude-sonnet-4.5 | claude-opus-4.6 | 0.8 | No |
 | `style_generation_en` | StyleReplicator | claude-opus-4.6 | claude-sonnet-4.5 | 0.8 | No |
 | `quality_factcheck` | QualityGate | claude-opus-4.6 | claude-sonnet-4.5 | 0.2 | Yes |
-| `quality_style` | QualityGate | yandexgpt | claude-opus-4.6 | 0.3 | Yes |
+| `quality_style` | QualityGate | claude-sonnet-4.5 | claude-opus-4.6 | 0.3 | Yes |
 
 ---
 
@@ -224,13 +224,13 @@ Pure data-collection agent. Accepts `llm_client` (BaseAgent contract) but never 
 
 ### 7.7 StyleReplicator selects task by outlet language
 
-Russian outlets → `style_generation_ru` (YandexGPT), English → `style_generation_en` (Claude). Language comes from `OutletProfile.language`. If `outlet_profile` is None or has wrong language, wrong LLM task is used.
+Russian outlets → `style_generation_ru`, English → `style_generation_en`. Both use Claude models via OpenRouter. Language comes from `OutletProfile.language`. If `outlet_profile` is None or has wrong language, wrong LLM task is used.
 
 **Affected**: `src/agents/generators/style_replicator.py`.
 
-### 7.8 YandexGPT is a stub
+### 7.8 Single provider
 
-`src/llm/providers.py` — waiting for `yandex-cloud-ml-sdk`. OpenRouter fallback works for all tasks.
+All LLM tasks route through OpenRouter. No secondary providers.
 
 ### 7.9 Budget default is $50
 

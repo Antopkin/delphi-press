@@ -6,7 +6,7 @@
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). Polymarket enrichment (4 фазы): distribution metrics, CLOB API, Judge 6-я персона "market". Frontend: auth UI, settings, мои прогнозы, пресеты (Light/Standard/Full). **1142 теста** зелёных. OutletResolver v0.8.0: динамическая резолюция СМИ через Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: CSRF middleware, IDOR protection, rate limiting, hardened secrets, **40/40 findings closed** (M26 cache-busting done). Hardening (retry, SSRF, cron, monitoring) завершён. Foresight bugfix v0.5.1: Metaculus API migration, cache key fix, CLOB param fix. Delphi parse-error fix v0.5.2: personas PromptParseError fallback, orchestrator quorum 4→3. Market eval v0.6.0: resolved markets API, historical price, market_brier_comparison, news↔market correlation (Spearman/Granger). YandexGPT удалён — только OpenRouter.
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Inverse Problem v0.9.1**: adaptive extremizing (position_std), soft volume gate ($10K–$100K), `as_of` temporal cutoff для walk-forward, `timing_score` (volume-weighted), Murphy decomposition + calibration slope + ECE, 6 crash fixes. Parquet store (506→62 МБ, 348K INFORMED → 7.5s load), Bayesian shrinkage, parametric λ, HDBSCAN clustering, enriched signal. **1226 тестов** зелёных. OutletResolver v0.8.0: динамическая резолюция СМИ через Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: CSRF middleware, IDOR protection, rate limiting, hardened secrets, **40/40 findings closed**. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation (Spearman/Granger). Единственный LLM-провайдер — OpenRouter.
 
 ### Реализованные компоненты
 
@@ -46,7 +46,7 @@
 
 ### Известные stubs
 
-Нет. YandexGPTClient удалён (v0.8.0). Все LLM-задачи через OpenRouter.
+Нет. Все LLM-задачи через OpenRouter.
 
 ### Ключевые файлы пайплайна
 
