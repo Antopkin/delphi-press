@@ -4,6 +4,29 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.9.3] - 2026-03-30
+
+### Fixed
+- **Gamma API conditionId mismatch** — Foresight collector используéт `id` (numeric) вместо `conditionId` (CTF hex hash) для enrichment matching. Обогащение информированными сигналами молча падало в production. Файлы: `src/data_sources/foresight.py` (extract `conditionId`), `src/agents/collectors/foresight_collector.py` (join key). **Почему:** Gamma API возвращает оба поля — `id` рёбро-локальный, `conditionId` глобально уникален. Функция поиска `condition_markets` возвращает по `conditionId`, надо матчить по тому же ключу.
+- Health endpoint: версия 0.8.0 → 0.9.2 (оставлено 0.9.2 за основу v0.9.3)
+
+### Added
+- **BSS variant flags** в `scripts/eval_walk_forward.py`:
+  - `--volume-gate` — soft $10K–$100K interpolation вместо hard cutoff. **Почему:** Clinton & Huang (2024): accuracy Polymarket падает на тонких рынках.
+  - `--adaptive-extremize` — d вычисляется из position std (Satopää et al. 2014) вместо фиксированного d=1.5. **Почему:** оптимальный d зависит от inter-bettor корреляции (1.16–3.92).
+  - `--timing-weight` — volume-weighted фракция lifetime at bet time. **Почему:** цены точнее ближе к resolution (Bürgi et al. 2025).
+- **Bootstrap CI** — `--bootstrap N` flag: paired fold bootstrap + block bootstrap (блоки по 3) + sign test p-value. **Почему:** доверительный интервал на BSS при малом N фолдов (15-22).
+- **Single-pass multi-variant** — `--all-variants` flag: DuckDB SQL `_fetch_test_markets()` один раз per fold, потом `_apply_variant()` per variant (Python). Сипидакс: ~83 мин для всех 5 вариантов vs ~415 мин отдельный прогон каждого.
+- **Weekly profile refresh** — `scripts/refresh_profiles.sh` (NEW): проверка freshness на HuggingFace → download → rebuild bucketed → rebuild profiles → restart worker. Cron: Sunday 03:00 UTC.
+
+### Results
+- **Baseline BSS (v0.9.2 + fixes)**: +0.196 mean, 95% CI [+0.094, +0.297], p=2.38e-07, 22/22 positive folds (5.5% улучшение vs v0.9.2 +0.127)
+
+### Metrics
+- Тесты: 1242 → 1242 (код production-grade, баги исходили из data integrity, не logic)
+
+---
+
 ## [0.9.2] - 2026-03-30
 
 ### Added

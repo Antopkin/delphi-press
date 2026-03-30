@@ -1,12 +1,12 @@
 # 11 — Implementation Roadmap
 
-> Статус на 2026-03-30. Production deployed. Обновлено: 2026-03-30 (v0.9.2 Inverse Phase 4 walk-forward eval + v0.9.1 Phase 3 calibration + v0.9.0 Phase 2 + v0.8.0 OutletResolver + v0.7.1 security audit).
+> Статус на 2026-03-30. Production deployed. Обновлено: 2026-03-30 (v0.9.3 Phase 5 BSS variants + conditionId fix + v0.9.2 walk-forward eval + v0.9.1 calibration + v0.9.0 Phase 2 + v0.8.0 OutletResolver + v0.7.1 security audit).
 
 ---
 
 ## Текущее состояние: Production deployed
 
-Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Inverse Problem v0.9.2**: walk-forward evaluation — 22 фолда, BSS +0.127 (12.7% BS reduction), 100% positive. Temporal leak eliminated via bucketed partial aggregates (33 ГБ → 2.4 ГБ bucketed parquet). Adaptive extremizing, soft volume gate, `as_of` cutoff, `timing_score`, Murphy decomposition + calibration slope + ECE. Parquet store (506→62 МБ, 348K INFORMED), Bayesian shrinkage, parametric λ, HDBSCAN. **1242 теста** зелёных. OutletResolver v0.8.0: Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: 40/40 findings closed. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation. Единственный LLM-провайдер — OpenRouter.
+Все 18 агентов реализованы. **Production deploy** на `delphi.antopkin.ru` (4 Docker-контейнера, TLS). **Inverse Problem v0.9.3**: conditionId fix (Gamma API enrichment работает), BSS variants (volume gate, adaptive extremize, timing weight), bootstrap CI, single-pass multi-variant (5x speedup), weekly profile refresh cron. Walk-forward baseline: +0.196 mean BSS (22/22 positive), CI [+0.094, +0.297], p=2.38e-07. Temporal leak fixed, 22 фолда за 82 мин (bucketed DuckDB). Parquet store (506→62 МБ, 348K INFORMED), Bayesian shrinkage, parametric λ, HDBSCAN. **1242 теста** зелёных. OutletResolver v0.8.0: Wikidata SPARQL + RSS autodiscovery. Security audit v0.7.1: 40/40 findings closed. Market eval v0.6.0: resolved markets API, BS по горизонтам, news↔market correlation. Единственный LLM-провайдер — OpenRouter.
 
 ### Реализованные компоненты
 
@@ -76,6 +76,37 @@ tests/test_integration/             — 7 E2E integration tests
 ---
 
 ## Оставшиеся сессии
+
+### Phase 5: BSS Variants + Data Integrity Fixes (v0.9.3)
+
+**Цель:** Доказать что informed consensus реально помогает при разных стратегиях обогащения и научиться публиковать профили в production.
+
+**Статус:** DONE (2026-03-30)
+
+**Что реализовано:**
+
+- [x] **Fix conditionId** — Gamma API enrichment использовала `id` вместо `conditionId`. Обогащение молча падало. Файлы: `src/data_sources/foresight.py`, `src/agents/collectors/foresight_collector.py`. Теперь join работает.
+- [x] **BSS variant flags** — `--volume-gate` (soft $10K–$100K), `--adaptive-extremize` (d из std), `--timing-weight` (lifetime fraction). Каждый флаг — 5.5–8% улучшение.
+- [x] **Bootstrap CI** — `--bootstrap N` для доверительных интервалов на малом N (15-22 фолдов).
+- [x] **Single-pass multi-variant** — DuckDB SQL fetch + Python apply. 5x speedup: 83 мин вместо 415 мин.
+- [x] **Weekly profile refresh** — `scripts/refresh_profiles.sh`, cron Sunday 03:00 UTC. Freshness check на HuggingFace, download → rebuild → restart worker.
+
+**Результаты:**
+
+- Baseline BSS +0.196 (95% CI [+0.094, +0.297], p=2.38e-07, 22/22 positive) — +5.5% улучшение vs v0.9.2 +0.127
+- Варианты reproducible в production (можно выбрать стратегию per-market)
+- Профили готовы к еженедельному обновлению
+
+**Ключевые файлы:**
+
+- `src/data_sources/foresight.py` — extract `conditionId` из Gamma API
+- `src/agents/collectors/foresight_collector.py` — join key = `conditionId`
+- `scripts/eval_walk_forward.py` — `--all-variants`, `--bootstrap`, volume-gate/extremize/timing flags
+- `scripts/refresh_profiles.sh` — production cron для HuggingFace sync
+
+**Коммиты:** 1c3c2b1, 47fe589, 1f84e10
+
+---
 
 ### Сессия 0: Frontend: Tailwind CSS Migration
 
@@ -375,4 +406,4 @@ evaluation = [
 
 ---
 
-*Создано: 2026-03-28. Обновлено: 2026-03-29 (v0.6.0, 902 теста).*
+*Создано: 2026-03-28. Обновлено: 2026-03-30 (v0.9.3 Phase 5, 1242 теста).*
