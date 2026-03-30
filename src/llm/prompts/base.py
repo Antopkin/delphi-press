@@ -65,9 +65,25 @@ class BasePrompt:
         if self.output_schema is None:
             return ""
         schema = self.output_schema.model_json_schema()
+        # Build a concrete example so weaker models don't confuse Field descriptions with keys
+        example = {}
+        for name, prop in schema.get("properties", {}).items():
+            t = prop.get("type", "string")
+            if t == "integer":
+                example[name] = 3
+            elif t == "number":
+                example[name] = 0.5
+            elif t == "boolean":
+                example[name] = True
+            elif t == "array":
+                example[name] = []
+            else:
+                example[name] = f"<{name}>"
         return (
             "\n\nRespond ONLY with valid JSON matching this schema:\n"
             f"```json\n{json.dumps(schema, indent=2, ensure_ascii=False)}\n```"
+            f"\n\nExample response:\n"
+            f"```json\n{json.dumps(example, indent=2, ensure_ascii=False)}\n```"
         )
 
     def parse_response(self, content: str) -> BaseModel | None:

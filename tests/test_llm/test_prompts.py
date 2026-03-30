@@ -66,6 +66,14 @@ class TestOutputSchema:
         assert "name" in instruction
         assert "score" in instruction
 
+    def test_schema_instruction_includes_example(self):
+        p = SamplePrompt()
+        instruction = p.render_output_schema_instruction()
+        assert "Example response:" in instruction
+        # Example should contain actual field names, not descriptions
+        assert '"name"' in instruction
+        assert '"score"' in instruction
+
     def test_schema_instruction_none_when_no_schema(self):
         p = NoSchemaPrompt()
         assert p.render_output_schema_instruction() == ""

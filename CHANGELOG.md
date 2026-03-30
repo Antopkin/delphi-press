@@ -4,6 +4,35 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.9.4] - 2026-03-31
+
+### Added
+- **Market Dashboard** (`/markets`) — live informed consensus vs raw Polymarket price, Chart.js sparklines, TTL 15 мин
+- **Market signal block** на `/results/{id}` — fuzzy match релевантных рынков к прогнозу
+- **Dual-model dry run** — `--persona-model` flag: Gemini lite для collection, Opus 4.6 для персон/анализа
+- **Prompts catalog** (`docs/prompts-catalog.md`) — каталог 21 промпта
+- **README rewrite** — methodology-first документ с BSS результатами
+
+### Changed
+- **All production tasks on Opus 4.6** — sonnet-4 заменён на opus-4.6 для style_generation и quality_style
+- **max_tokens unlimited** — `ModelAssignment.max_tokens` default=None, модель решает сама. **Почему:** Gemini/Opus обрезали JSON при фиксированных 8192/16384 tokens, ломая парсинг в trajectory_analysis и delphi personas
+- **pyarrow в base deps** — перенесён из optional [inverse] в основные зависимости. **Почему:** `uv run` на сервере не ставит optional deps, parquet profiles не загружались
+- **Dockerfile** — убран `--extra inverse` (pyarrow теперь в base)
+- **Schema instruction** — добавлен concrete example в `render_output_schema_instruction()`. **Почему:** Gemini flash lite путал Field descriptions с ожидаемыми JSON-ключами
+
+### Fixed
+- **Resilient event_identification** — fallback при timeout trajectory_analysis, детальные ошибки
+- **Quality gate timeout** — factcheck/style на cheap model (66 вызовов за 30s вместо 300s+)
+- **Trajectory/cross-impact на cheap model** в dry run — timeout 300s в stage 2
+- **UI**: timeline line, дата до +7 дней, пресеты Light+Opus only
+- **Mermaid диаграммы**, нумерация стадий, horizon bands на /about
+
+### Metrics
+- Тесты: 1242 → 1289 (+47: markets, quality gate, schemas)
+- Первый полный 9/9 прогон: ТАСС 2026-04-02, 8 заголовков, $3.76
+
+---
+
 ## [0.9.3] - 2026-03-30
 
 ### Fixed

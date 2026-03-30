@@ -14,7 +14,7 @@ async def test_health_returns_200_when_all_ok(test_client):
 
 async def test_health_includes_version(test_client):
     resp = await test_client.get("/api/v1/health")
-    assert resp.json()["version"] == "0.9.2"
+    assert resp.json()["version"] == "0.9.4"
 
 
 async def test_health_includes_uptime(test_client):
