@@ -105,6 +105,11 @@
 </section>
 {% endif %}
 
+{# ===== SECTION 2.5: MARKET SIGNALS ===== #}
+{% if matched_markets %}
+{% include "partials/market_signal.html" %}
+{% endif %}
+
 {# ===== SECTION 3: HOW WE PREDICTED ===== #}
 <section class="mt-12 animate-fade-in-up">
     <h2 class="text-xl mb-4">Как мы прогнозировали</h2>

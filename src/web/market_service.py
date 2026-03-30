@@ -184,3 +184,62 @@ class MarketSignalService:
             return []
         finally:
             await client.close()
+
+    async def get_relevant_markets(
+        self,
+        search_texts: list[str],
+        categories: set[str] | None = None,
+        *,
+        limit: int = 5,
+    ) -> list[MarketCard]:
+        """Find markets relevant to prediction content via fuzzy matching.
+
+        Uses the same three-tier matching as Judge (src/utils/fuzzy_match.py):
+        Tier 1 — high title similarity (>=0.65), Tier 2 — moderate + category overlap.
+
+        Args:
+            search_texts: Headline texts, event descriptions to match against.
+            categories: Prediction categories for Tier 2 Jaccard overlap.
+            limit: Max markets to return.
+
+        Returns:
+            Matched MarketCards sorted by dispersion (desc). Empty if no matches.
+        """
+        if not search_texts:
+            return []
+
+        from src.utils.fuzzy_match import fuzzy_match_to_market
+
+        # Get all cached markets (reuses TTL cache from /markets page)
+        all_markets = await self.get_top_markets(limit=30)
+        if not all_markets:
+            return []
+
+        # Build market index: lowercase question → card (as dict for fuzzy_match API)
+        market_index: dict[str, dict] = {}
+        card_by_question: dict[str, MarketCard] = {}
+        for card in all_markets:
+            key = card.question.lower()
+            market_index[key] = {
+                "question": card.question,
+                "categories": card.categories,
+                "market_id": card.market_id,
+            }
+            card_by_question[key] = card
+
+        # Match each search text independently, collect unique matches
+        matched: dict[str, MarketCard] = {}
+        for text in search_texts:
+            result = fuzzy_match_to_market(
+                [text],
+                market_index,
+                event_categories=categories,
+            )
+            if result is not None:
+                key = result["question"].lower()
+                if key in card_by_question and key not in matched:
+                    matched[key] = card_by_question[key]
+
+        # Sort by dispersion and limit
+        cards = sorted(matched.values(), key=lambda c: c.dispersion, reverse=True)
+        return cards[:limit]

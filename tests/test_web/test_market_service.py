@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -226,3 +227,78 @@ def test_market_card_schema():
     # Frozen model
     with pytest.raises(Exception):
         card.market_id = "m2"  # type: ignore[misc]
+
+
+# ── get_relevant_markets tests ────────────────────────────────────
+
+
+def _card(question: str, dispersion: float = 0.1) -> MarketCard:
+    return MarketCard(
+        market_id="m1",
+        question=question,
+        raw_probability=0.5,
+        informed_probability=0.5 + dispersion,
+        dispersion=dispersion,
+        n_informed_bettors=10,
+        n_total_bettors=100,
+        coverage=0.5,
+        confidence=0.4,
+        categories=["Politics"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_relevant_markets_finds_match(profiles, summary):
+    """Fuzzy match returns card when headline closely matches market question."""
+    service = MarketSignalService(profiles, summary)
+    # Pre-populate cache — search text must be similar enough for token_sort_ratio >= 0.65
+    card = _card("Will there be a ceasefire in Ukraine by July?", dispersion=0.12)
+    service._cache = (time.monotonic(), [card])
+
+    result = await service.get_relevant_markets(
+        ["Will there be a ceasefire in Ukraine by July"],
+    )
+
+    assert len(result) == 1
+    assert result[0].question == card.question
+
+
+@pytest.mark.asyncio
+async def test_relevant_markets_no_match(profiles, summary):
+    """Returns empty list when no market matches the search texts."""
+    service = MarketSignalService(profiles, summary)
+    card = _card("Will Bitcoin reach $200K by end of 2026?")
+    service._cache = (time.monotonic(), [card])
+
+    result = await service.get_relevant_markets(
+        ["New agricultural policy announced in Brazil"],
+    )
+
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_relevant_markets_empty_search(profiles, summary):
+    """Returns empty list when search_texts is empty."""
+    service = MarketSignalService(profiles, summary)
+    service._cache = (time.monotonic(), [_card("Some market?")])
+
+    result = await service.get_relevant_markets([])
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_relevant_markets_deduplicates(profiles, summary):
+    """Same market matched by multiple headlines is returned once."""
+    service = MarketSignalService(profiles, summary)
+    card = _card("Will Russia withdraw from occupied territories?", dispersion=0.15)
+    service._cache = (time.monotonic(), [card])
+
+    result = await service.get_relevant_markets(
+        [
+            "Russia withdraws troops from occupied territory",
+            "Russian withdrawal from occupied areas confirmed",
+        ]
+    )
+
+    assert len(result) <= 1

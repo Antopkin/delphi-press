@@ -1,9 +1,10 @@
-"""Tests for GET /markets route."""
+"""Tests for GET /markets route and market signal block on /results."""
 
 from __future__ import annotations
 
 import time
 import uuid
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi import FastAPI
@@ -14,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 
 from src.config import Settings
 from src.db.engine import create_session_factory
-from src.db.models import Base
+from src.db.models import Base, Headline, Prediction, PredictionStatus
 from src.inverse.schemas import BettorProfile, BettorTier, ProfileSummary
 from src.web.market_service import MarketCard, MarketSignalService
 
@@ -43,8 +44,13 @@ class FakeArqPool:
 class FakeMarketService:
     """MarketSignalService stub that returns pre-built cards."""
 
-    def __init__(self, cards: list[MarketCard] | None = None):
+    def __init__(
+        self,
+        cards: list[MarketCard] | None = None,
+        relevant: list[MarketCard] | None = None,
+    ):
         self._cards = cards or []
+        self._relevant = relevant
         self.summary = ProfileSummary(
             total_users=100_000,
             profiled_users=50_000,
@@ -58,6 +64,17 @@ class FakeMarketService:
 
     async def get_top_markets(self, *, limit: int = 10) -> list[MarketCard]:
         return self._cards[:limit]
+
+    async def get_relevant_markets(
+        self,
+        search_texts: list[str],
+        categories: set[str] | None = None,
+        *,
+        limit: int = 5,
+    ) -> list[MarketCard]:
+        if self._relevant is not None:
+            return self._relevant[:limit]
+        return []
 
 
 # ── Fixtures ──────────────────────────────────────────────────────
@@ -198,3 +215,103 @@ async def test_markets_empty_service(markets_engine):
         resp = await client.get("/markets")
     assert resp.status_code == 200
     assert "Нет активных рынков" in resp.text
+
+
+# ── Results page: market signal block ─────────────────────────────
+
+
+async def _seed_completed_prediction(session_factory, prediction_id: str) -> None:
+    """Insert a completed Prediction + Headline into the test DB."""
+    async with session_factory() as session:
+        pred = Prediction(
+            id=prediction_id,
+            outlet_name="Test Outlet",
+            outlet_normalized="test_outlet",
+            target_date=date(2026, 5, 1),
+            status=PredictionStatus.COMPLETED,
+            completed_at=datetime.now(UTC),
+        )
+        session.add(pred)
+        await session.flush()
+        headline = Headline(
+            prediction_id=prediction_id,
+            rank=1,
+            headline_text="Ceasefire agreement reached in conflict zone",
+            first_paragraph="A ceasefire was signed today.",
+            confidence=0.85,
+            confidence_label="high",
+            category="politics",
+        )
+        session.add(headline)
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_results_page_shows_matched_markets(markets_engine):
+    """Results page includes market signal block when matches exist."""
+    relevant_card = MarketCard(
+        market_id="m_rel",
+        question="Will ceasefire hold through 2026?",
+        slug="ceasefire-2026",
+        raw_probability=0.45,
+        informed_probability=0.60,
+        dispersion=0.15,
+        n_informed_bettors=8,
+        n_total_bettors=150,
+        coverage=0.4,
+        confidence=0.35,
+    )
+    service = FakeMarketService([], relevant=[relevant_card])
+    app = _build_app(markets_engine, market_service=service)
+
+    pred_id = str(uuid.uuid4())
+    await _seed_completed_prediction(app.state.session_factory, pred_id)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        resp = await client.get(f"/results/{pred_id}")
+
+    assert resp.status_code == 200
+    assert "Сигналы prediction markets" in resp.text
+    assert "Will ceasefire hold through 2026?" in resp.text
+    assert "60.0%" in resp.text  # informed_probability
+
+
+@pytest.mark.asyncio
+async def test_results_page_no_markets_no_block(markets_engine):
+    """Results page omits market signal block when no matches."""
+    service = FakeMarketService([], relevant=[])
+    app = _build_app(markets_engine, market_service=service)
+
+    pred_id = str(uuid.uuid4())
+    await _seed_completed_prediction(app.state.session_factory, pred_id)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        resp = await client.get(f"/results/{pred_id}")
+
+    assert resp.status_code == 200
+    assert "Сигналы prediction markets" not in resp.text
+
+
+@pytest.mark.asyncio
+async def test_results_page_no_service_still_renders(markets_engine):
+    """Results page renders normally when market_service is None."""
+    app = _build_app(markets_engine, market_service=None)
+
+    pred_id = str(uuid.uuid4())
+    await _seed_completed_prediction(app.state.session_factory, pred_id)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        resp = await client.get(f"/results/{pred_id}")
+
+    assert resp.status_code == 200
+    assert "Сигналы prediction markets" not in resp.text
+    assert "Test Outlet" in resp.text

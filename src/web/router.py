@@ -236,6 +236,23 @@ def _check_prediction_ownership(prediction: Prediction, user: User | None) -> No
         )
 
 
+# ── Helpers: market signal matching ────────────────────────────────
+
+
+async def _get_matched_markets(request: Request, prediction: Prediction) -> list:
+    """Find Polymarket markets relevant to prediction headlines (best-effort)."""
+    market_service = getattr(request.app.state, "market_service", None)
+    if market_service is None or not prediction.headlines:
+        return []
+    try:
+        search_texts = [h.headline_text for h in prediction.headlines if h.headline_text]
+        categories = {h.category for h in prediction.headlines if h.category}
+        return await market_service.get_relevant_markets(search_texts, categories or None, limit=5)
+    except Exception:
+        logger.debug("Market matching failed for prediction %s", prediction.id, exc_info=True)
+        return []
+
+
 # ── Main pages ────────────────────────────────────────────────────
 
 
@@ -292,10 +309,15 @@ async def prediction_progress(
             _check_prediction_ownership(prediction, user)
 
         if prediction and prediction.status == PredictionStatus.COMPLETED:
+            matched_markets = await _get_matched_markets(request, prediction)
             return templates.TemplateResponse(
                 request,
                 "results.html",
-                {"prediction": prediction, "current_user": user},
+                {
+                    "prediction": prediction,
+                    "current_user": user,
+                    "matched_markets": matched_markets,
+                },
             )
 
         return templates.TemplateResponse(
@@ -341,10 +363,15 @@ async def prediction_results(
                 },
             )
 
+        matched_markets = await _get_matched_markets(request, prediction)
         return templates.TemplateResponse(
             request,
             "results.html",
-            {"prediction": prediction, "current_user": user},
+            {
+                "prediction": prediction,
+                "current_user": user,
+                "matched_markets": matched_markets,
+            },
         )
 
 
