@@ -896,3 +896,26 @@ async def test_metaculus_none_skips_silently(
     assert result["foresight_events"] == []
     assert "metaculus" not in result["sources_used"]
     assert "Metaculus fetch failed" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_gdelt_query_no_cyrillic(mock_router, mock_polymarket, mock_gdelt, make_context):
+    """GDELT query must not contain Cyrillic — GDELT API rejects it."""
+    mock_polymarket.fetch_markets.return_value = []
+    mock_gdelt.fetch_articles.return_value = []
+
+    agent = ForesightCollector(
+        mock_router,
+        metaculus_client=None,
+        polymarket_client=mock_polymarket,
+        gdelt_client=mock_gdelt,
+    )
+    await agent.execute(make_context(outlet="ТАСС"))
+
+    # GDELT fetch_articles was called — check the query arg
+    mock_gdelt.fetch_articles.assert_called_once()
+    gdelt_query = mock_gdelt.fetch_articles.call_args[0][0]
+    # Must not contain Cyrillic characters
+    import re
+
+    assert not re.search(r"[а-яА-ЯёЁ]", gdelt_query), f"GDELT query has Cyrillic: {gdelt_query}"

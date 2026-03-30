@@ -117,10 +117,12 @@ class ForesightCollector(BaseAgent):
         """
         query = self._build_query(context.outlet, context.target_date)
         gdelt_lang = self._resolve_gdelt_language(context.outlet)
+        # GDELT API rejects Cyrillic characters — use date-only query
+        gdelt_query = f"news forecast {context.target_date.isoformat()}"
 
         metaculus_task = self._fetch_metaculus(query)
         polymarket_task = self._fetch_polymarket(query)
-        gdelt_task = self._fetch_gdelt(query, language=gdelt_lang)
+        gdelt_task = self._fetch_gdelt(gdelt_query, language=gdelt_lang)
 
         results = await asyncio.gather(
             metaculus_task,
