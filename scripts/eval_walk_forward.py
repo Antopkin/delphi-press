@@ -226,6 +226,10 @@ def compute_fold_signals(
     Returns:
         (raw_probs, informed_probs, outcomes, coverages) — parallel lists.
     """
+    # Only fetch last_bucket when timing_weight is needed (saves memory)
+    extra_col = ", MAX(time_bucket) AS last_bucket" if timing_weight else ""
+    extra_sel = ", p.last_bucket" if timing_weight else ", NULL AS last_bucket"
+
     if bucketed_path:
         cutoff_bucket = int(test_start // BUCKET_SIZE_SECONDS)
         test_rows = con.execute(
@@ -235,14 +239,14 @@ def compute_fold_signals(
                     LEAST(1.0, GREATEST(0.0,
                         SUM(weighted_price_sum) / NULLIF(SUM(total_usd), 0)
                     )) AS avg_position,
-                    SUM(total_usd) AS total_usd,
-                    MAX(time_bucket) AS last_bucket
+                    SUM(total_usd) AS total_usd
+                    {extra_col}
                 FROM read_parquet('{bucketed_path}')
                 WHERE time_bucket <= {cutoff_bucket}
                 GROUP BY user_id, condition_id
             )
             SELECT r.condition_id, r.resolved_yes,
-                   p.user_id, p.avg_position, p.total_usd, p.last_bucket
+                   p.user_id, p.avg_position, p.total_usd{extra_sel}
             FROM resolved_markets r
             JOIN positions_at_cutoff p ON r.condition_id = p.condition_id
             WHERE r.end_date >= ? AND r.end_date < ?
@@ -252,7 +256,7 @@ def compute_fold_signals(
         ).fetchall()
     else:
         test_rows = con.execute(
-            """
+            f"""
             SELECT r.condition_id, r.resolved_yes,
                    p.user_id, p.avg_position, p.total_usd, NULL AS last_bucket
             FROM resolved_markets r
