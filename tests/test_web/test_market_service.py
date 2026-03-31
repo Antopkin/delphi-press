@@ -227,6 +227,8 @@ def test_market_card_schema():
     # Frozen model
     with pytest.raises(Exception):
         card.market_id = "m2"  # type: ignore[misc]
+    # has_informed defaults to True
+    assert card.has_informed is True
 
 
 # ── get_relevant_markets tests ────────────────────────────────────

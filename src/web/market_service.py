@@ -57,6 +57,9 @@ class MarketCard(BaseModel):
     parametric_probability: float | None = Field(default=None, ge=0.0, le=1.0)
     parametric_model: str | None = Field(default=None)
     dominant_cluster: int | None = Field(default=None)
+    has_informed: bool = Field(
+        default=True, description="Whether informed consensus data is available"
+    )
 
 
 def _build_card(
