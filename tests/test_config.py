@@ -83,7 +83,7 @@ def test_settings_arq_fields():
 
     s = Settings()
     assert s.arq_max_jobs == 10
-    assert s.arq_job_timeout == 1800
+    assert s.arq_job_timeout == 5400
     assert s.arq_concurrency == 2
 
 
