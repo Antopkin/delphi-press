@@ -50,6 +50,9 @@
 - **Пустая страница `/markets`** — добавлен fallback UX: если ни один informed трейдер не матчится, страница показывает топ рынков по объёму с raw market price (без informed bar, с баннером). `MarketCard.has_informed` field для условного рендеринга. Страница больше никогда не бывает пустой при наличии активных рынков
 - **Мусорные рынки на `/markets`** — на топ выходили expired и essentially-resolved рынки (raw 0.1%, dispersion 75%) из-за стейловых позиций informed бетторов. **Почему:** `fetch_markets()` фильтровал только `end_date > cutoff` (слишком далеко), но пропускал expired (`end_date < now`). Также не было фильтра по вероятности. Фикс: два фильтра — skip expired + skip `raw < 5%` / `> 95%`
 
+### Changed
+- **`/markets` скрыт из навигации** — страница доступна по прямому URL, но убрана из desktop/mobile nav. **Почему:** стейловые профили из Kaggle-датасета дают 1 рынок вместо 10+. Вернём после реализации cron rebuild профилей (см. roadmap)
+
 ### Metrics
 - Тесты: 1302 → 1324 (+22: stage_callback, replace_headlines, date serialization, timeline JSON, profile normalization, fallback cards, template rendering)
 
