@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 from datetime import UTC, datetime
@@ -121,19 +122,24 @@ class EventTrendAnalyzer(BaseAgent):
 
         self.logger.info("Identified %d event threads from %d signals", len(threads), len(signals))
 
-        # Trajectory analysis (graceful: if LLM parse fails, return empty)
-        try:
-            trajectories = await self._analyze_trajectories(threads)
-        except Exception as exc:
-            self.logger.warning("Trajectory analysis failed, continuing without: %s", exc)
-            trajectories = []
+        # Trajectory analysis + cross-impact matrix (independent — run in parallel)
+        traj_result, ci_result = await asyncio.gather(
+            self._analyze_trajectories(threads),
+            self._build_cross_impact_matrix(threads),
+            return_exceptions=True,
+        )
 
-        # Cross-impact matrix (graceful)
-        try:
-            cross_impact = await self._build_cross_impact_matrix(threads)
-        except Exception as exc:
-            self.logger.warning("Cross-impact matrix failed, continuing without: %s", exc)
-            cross_impact = None
+        if isinstance(traj_result, BaseException):
+            self.logger.warning("Trajectory analysis failed, continuing without: %s", traj_result)
+            trajectories: list[EventTrajectory] = []
+        else:
+            trajectories = traj_result
+
+        if isinstance(ci_result, BaseException):
+            self.logger.warning("Cross-impact matrix failed, continuing without: %s", ci_result)
+            cross_impact: CrossImpactMatrix | None = None
+        else:
+            cross_impact = ci_result
 
         return {
             "event_threads": threads,

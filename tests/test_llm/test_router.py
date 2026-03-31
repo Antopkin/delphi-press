@@ -181,6 +181,41 @@ class TestBudgetEstimate:
         )
 
 
+class TestWithModelOverride:
+    def test_override_changes_primary_model(self, mock_openrouter):
+        router = ModelRouter(
+            providers={"openrouter": mock_openrouter},
+            budget_usd=50.0,
+        )
+        overridden = router.with_model_override("anthropic/claude-opus-4.6")
+        assert overridden.get_model_for_task("event_clustering") == "anthropic/claude-opus-4.6"
+
+    def test_exclude_tasks_preserves_original(self, mock_openrouter):
+        router = ModelRouter(
+            providers={"openrouter": mock_openrouter},
+            budget_usd=50.0,
+        )
+        overridden = router.with_model_override(
+            "anthropic/claude-opus-4.6",
+            exclude_tasks={"event_clustering", "news_scout_search", "event_calendar"},
+        )
+        # Excluded tasks keep their default (Flash Lite)
+        assert (
+            overridden.get_model_for_task("event_clustering")
+            == "google/gemini-3.1-flash-lite-preview"
+        )
+        assert (
+            overridden.get_model_for_task("news_scout_search")
+            == "google/gemini-3.1-flash-lite-preview"
+        )
+        assert (
+            overridden.get_model_for_task("event_calendar")
+            == "google/gemini-3.1-flash-lite-preview"
+        )
+        # Non-excluded tasks are overridden
+        assert overridden.get_model_for_task("trajectory_analysis") == "anthropic/claude-opus-4.6"
+
+
 class TestDefaultAssignments:
     def test_has_core_tasks(self):
         expected = {

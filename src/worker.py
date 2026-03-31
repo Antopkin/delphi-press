@@ -238,7 +238,11 @@ async def run_prediction_task(
         providers=providers,
         budget_usd=preset_config.estimated_cost_usd * 2,
     )
-    llm_client = llm_client.with_model_override(preset_config.model)
+    # Keep cheap/fast models for simple classification tasks (event_clustering,
+    # news_scout_search, event_calendar) — Opus provides no quality benefit
+    # but is 10-20x slower than Flash Lite for these.
+    _FAST_TASKS: set[str] = {"event_clustering", "news_scout_search", "event_calendar"}
+    llm_client = llm_client.with_model_override(preset_config.model, exclude_tasks=_FAST_TASKS)
 
     # Collector dependencies (data sources)
     rss_fetcher = RSSFetcher()

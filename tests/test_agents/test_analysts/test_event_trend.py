@@ -236,6 +236,53 @@ class TestEventTrendExecute:
         assert agent.validate_context(ctx) is not None
 
     @pytest.mark.asyncio
+    async def test_trajectory_failure_does_not_break_cross_impact(
+        self, mock_router, make_context, sample_signals
+    ):
+        """Trajectory LLM failure should not prevent cross-impact from succeeding."""
+        from src.agents.analysts.event_trend import EventTrendAnalyzer
+
+        agent = EventTrendAnalyzer(llm_client=mock_router)
+        ctx = make_context()
+        ctx.signals = sample_signals
+
+        label_response = make_llm_response(
+            json.dumps(
+                {
+                    "clusters": [
+                        {
+                            "title": f"Cluster {i}",
+                            "summary": f"About cluster {i}.",
+                            "category": "politics",
+                            "importance": 0.8,
+                            "entity_prominence": 0.7,
+                        }
+                        for i in range(3)
+                    ]
+                }
+            )
+        )
+        cross_impact_response = make_llm_response(
+            json.dumps(
+                {
+                    "pairs": [
+                        {"source": 1, "target": 2, "impact": 0.5, "explanation": "Link"},
+                    ]
+                }
+            )
+        )
+
+        mock_router.complete.side_effect = [
+            label_response,
+            RuntimeError("LLM timeout for trajectory"),
+            cross_impact_response,
+        ]
+
+        result = await agent.execute(ctx)
+        assert result["trajectories"] == []  # Graceful fallback
+        assert result["cross_impact_matrix"] is not None  # Unaffected
+
+    @pytest.mark.asyncio
     async def test_few_signals_skip_clustering(self, mock_router, make_context):
         """< 10 signals → each signal becomes its own thread."""
         from src.agents.analysts.event_trend import EventTrendAnalyzer
