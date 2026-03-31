@@ -63,6 +63,12 @@ async def retry_with_backoff(
             await asyncio.sleep(delay + random.uniform(0, base_delay / 2))
 
 
+# OpenRouter reserves credits based on max_tokens; omitting it reserves the
+# model's full output capacity (e.g. 64000 for Opus), which can exhaust
+# low-balance accounts unnecessarily.  16384 covers every pipeline task.
+_DEFAULT_MAX_TOKENS = 16_384
+
+
 class OpenRouterClient(LLMProvider):
     """Клиент OpenRouter — OpenAI-совместимый API."""
 
@@ -105,8 +111,7 @@ class OpenRouterClient(LLMProvider):
                     "temperature": request.temperature,
                     "top_p": request.top_p,
                 }
-                if request.max_tokens is not None:
-                    kwargs["max_tokens"] = request.max_tokens
+                kwargs["max_tokens"] = request.max_tokens or _DEFAULT_MAX_TOKENS
                 if request.json_mode:
                     kwargs["response_format"] = {"type": "json_object"}
                 if request.stop_sequences:
