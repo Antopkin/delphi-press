@@ -217,6 +217,42 @@ async def test_markets_empty_service(markets_engine):
     assert "Нет активных рынков" in resp.text
 
 
+@pytest.mark.asyncio
+async def test_markets_page_fallback_shows_raw_only(markets_engine):
+    """Fallback cards show raw price but NOT informed consensus bar."""
+    fallback_card = MarketCard(
+        market_id="m_fb",
+        question="Will AI regulation pass?",
+        slug="ai-regulation",
+        raw_probability=0.70,
+        informed_probability=0.70,  # same as raw (no informed data)
+        dispersion=0.0,
+        n_informed_bettors=0,
+        n_total_bettors=500,
+        coverage=0.0,
+        confidence=0.0,
+        volume=200_000,
+        has_informed=False,
+    )
+    service = FakeMarketService([fallback_card])
+    app = _build_app(markets_engine, market_service=service)
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        resp = await client.get("/markets")
+
+    assert resp.status_code == 200
+    assert "Will AI regulation pass?" in resp.text
+    assert "70.0%" in resp.text  # raw probability shown
+    # Informed consensus BAR label should NOT be rendered for fallback cards.
+    # (Hero/disclaimer mention "Informed consensus" as plain text — that's OK.)
+    # The bar renders as <span>Informed consensus</span> — absent for fallback.
+    assert "Informed consensus</span>" not in resp.text
+    # Fallback banner should be shown
+    assert "нет профилированных" in resp.text.lower()
+
+
 # ── Results page: market signal block ─────────────────────────────
 
 

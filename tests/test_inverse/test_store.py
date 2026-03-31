@@ -83,8 +83,8 @@ class TestJsonRoundTrip:
         save_profiles(profiles, summary, path)
 
         loaded, _ = load_profiles(path, tier_filter=None)
-        p = loaded["0xAAA"]
-        assert p.user_id == "0xAAA"
+        p = loaded["0xaaa"]
+        assert p.user_id == "0xAAA"  # original casing preserved in profile object
         assert p.brier_score == 0.08
         assert p.tier == BettorTier.INFORMED
         assert p.win_rate == 0.80
@@ -106,7 +106,7 @@ class TestJsonRoundTrip:
         save_profiles(profiles, summary, path)
 
         loaded, _ = load_profiles(path, tier_filter=None)
-        assert set(loaded.keys()) == {"0xAAA", "0xBBB", "0xCCC"}
+        assert set(loaded.keys()) == {"0xaaa", "0xbbb", "0xccc"}
 
     def test_creates_parent_dirs(self, tmp_path: Path, sample_data: tuple) -> None:
         profiles, summary = sample_data
@@ -143,7 +143,17 @@ class TestJsonRoundTrip:
 
         loaded, _ = load_profiles(path, tier_filter="informed")
         assert len(loaded) == 1
-        assert "0xAAA" in loaded
+        assert "0xaaa" in loaded
+
+    def test_json_keys_normalized_to_lowercase(self, tmp_path: Path, sample_data: tuple) -> None:
+        """Dict keys are lowercased; profile.user_id preserves original casing."""
+        profiles, summary = sample_data
+        path = tmp_path / "profiles.json"
+        save_profiles(profiles, summary, path)
+
+        loaded, _ = load_profiles(path, tier_filter=None)
+        assert set(loaded.keys()) == {"0xaaa", "0xbbb", "0xccc"}
+        assert loaded["0xaaa"].user_id == "0xAAA"
 
     def test_json_tier_filter_none_returns_all(self, tmp_path: Path, sample_data: tuple) -> None:
         profiles, summary = sample_data
@@ -177,8 +187,8 @@ class TestParquetRoundTrip:
         save_profiles(profiles, summary, path)
 
         loaded, _ = load_profiles(path, tier_filter=None)
-        p = loaded["0xAAA"]
-        assert p.user_id == "0xAAA"
+        p = loaded["0xaaa"]
+        assert p.user_id == "0xAAA"  # original casing preserved in profile object
         assert abs(p.brier_score - 0.08) < 1e-6
         assert p.tier == BettorTier.INFORMED
         assert abs(p.win_rate - 0.80) < 1e-6
@@ -209,8 +219,8 @@ class TestParquetRoundTrip:
 
         loaded, _ = load_profiles(path, tier_filter="informed")
         assert len(loaded) == 1
-        assert "0xAAA" in loaded
-        assert loaded["0xAAA"].tier == BettorTier.INFORMED
+        assert "0xaaa" in loaded
+        assert loaded["0xaaa"].tier == BettorTier.INFORMED
 
     def test_tier_filter_none_returns_all(self, tmp_path: Path, sample_data: tuple) -> None:
         profiles, summary = sample_data
@@ -228,7 +238,7 @@ class TestParquetRoundTrip:
 
         loaded, _ = load_profiles(path)
         assert len(loaded) == 1
-        assert "0xAAA" in loaded
+        assert "0xaaa" in loaded
 
     def test_creates_parent_dirs(self, tmp_path: Path, sample_data: tuple) -> None:
         profiles, summary = sample_data
@@ -257,6 +267,21 @@ class TestParquetRoundTrip:
         loaded, loaded_summary = load_profiles(path, tier_filter=None)
         assert len(loaded) == 0
         assert loaded_summary.profiled_users == 0
+
+    def test_parquet_keys_normalized_to_lowercase(
+        self, tmp_path: Path, sample_data: tuple
+    ) -> None:
+        """Dict keys are lowercased; profile.user_id preserves original casing."""
+        profiles, summary = sample_data
+        path = tmp_path / "profiles.parquet"
+        save_profiles(profiles, summary, path)
+
+        loaded, _ = load_profiles(path, tier_filter=None)
+        assert set(loaded.keys()) == {"0xaaa", "0xbbb", "0xccc"}
+        # Original casing preserved inside profile objects
+        assert loaded["0xaaa"].user_id == "0xAAA"
+        assert loaded["0xbbb"].user_id == "0xBBB"
+        assert loaded["0xccc"].user_id == "0xCCC"
 
     def test_summary_reconstructed_when_sidecar_missing(
         self, tmp_path: Path, sample_data: tuple

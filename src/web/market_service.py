@@ -57,12 +57,17 @@ class MarketCard(BaseModel):
     parametric_probability: float | None = Field(default=None, ge=0.0, le=1.0)
     parametric_model: str | None = Field(default=None)
     dominant_cluster: int | None = Field(default=None)
+    has_informed: bool = Field(
+        default=True, description="Whether informed consensus data is available"
+    )
 
 
 def _build_card(
     market: dict,
     signal: InformedSignal,
     price_history: list[float],
+    *,
+    has_informed: bool = True,
 ) -> MarketCard:
     """Combine market metadata + informed signal into a MarketCard."""
     return MarketCard(
@@ -85,6 +90,7 @@ def _build_card(
         parametric_probability=signal.parametric_probability,
         parametric_model=signal.parametric_model,
         dominant_cluster=signal.dominant_cluster,
+        has_informed=has_informed,
     )
 
 
@@ -139,7 +145,8 @@ class MarketSignalService:
             cids = [m["condition_id"] for m in markets_with_cid]
             trades_batch = await client.fetch_trades_batch(cids)
 
-            cards: list[MarketCard] = []
+            informed_cards: list[MarketCard] = []
+            fallback_cards: list[MarketCard] = []
             n_with_trades = 0
             n_adapted = 0
             all_trader_ids: set[str] = set()
@@ -171,7 +178,6 @@ class MarketSignalService:
                     cid,
                 )
 
-                # Skip markets with no informed bettors
                 if signal.n_informed_bettors == 0:
                     logger.debug(
                         "Market %s: %d trades, %d traders, %d profiled, 0 informed",
@@ -180,26 +186,35 @@ class MarketSignalService:
                         len(market_traders),
                         len(market_matched),
                     )
+                    fallback_cards.append(
+                        _build_card(market, signal, [], has_informed=False),
+                    )
                     continue
 
                 # Fetch price history for sparkline
                 token_id = market.get("clob_token_id", "")
                 price_history = await client.fetch_price_history(token_id) if token_id else []
 
-                cards.append(_build_card(market, signal, price_history))
+                informed_cards.append(_build_card(market, signal, price_history))
 
-            # Sort by dispersion (largest difference = most interesting)
-            cards.sort(key=lambda c: c.dispersion, reverse=True)
+            # Prefer informed cards; fall back to volume-sorted raw cards
+            if informed_cards:
+                informed_cards.sort(key=lambda c: c.dispersion, reverse=True)
+                cards = informed_cards
+            else:
+                fallback_cards.sort(key=lambda c: c.volume, reverse=True)
+                cards = fallback_cards[:limit]
 
             logger.info(
                 "Market funnel: %d fetched -> %d with cid -> %d with trades -> "
-                "%d adapted -> %d with informed. "
+                "%d adapted -> %d informed, %d fallback. "
                 "Unique traders: %d, profiled: %d (of %d in store)",
                 len(markets),
                 len(markets_with_cid),
                 n_with_trades,
                 n_adapted,
-                len(cards),
+                len(informed_cards),
+                len(fallback_cards),
                 len(all_trader_ids),
                 len(matched_trader_ids),
                 len(self.profiles),

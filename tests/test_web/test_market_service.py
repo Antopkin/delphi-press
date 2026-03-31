@@ -186,8 +186,8 @@ async def test_api_failure_returns_empty(profiles, summary):
 
 
 @pytest.mark.asyncio
-async def test_no_informed_bettors_filtered_out(summary):
-    """Markets where no trade matches an informed profile are excluded."""
+async def test_fallback_cards_when_no_informed(summary):
+    """Markets with 0 informed bettors are returned as fallback (has_informed=False)."""
     # Empty profiles dict — no bettors will match
     service = MarketSignalService({}, summary)
 
@@ -206,7 +206,44 @@ async def test_no_informed_bettors_filtered_out(summary):
 
         result = await service.get_top_markets(limit=10)
 
-    assert result == []
+    assert len(result) == 1
+    card = result[0]
+    assert card.has_informed is False
+    assert card.n_informed_bettors == 0
+    assert card.raw_probability == 0.6
+
+
+@pytest.mark.asyncio
+async def test_informed_preferred_over_fallback(profiles, summary):
+    """When some markets have informed bettors, only those are returned."""
+    service = MarketSignalService(profiles, summary)
+
+    # m1: has informed bettors (wallet_a in profiles)
+    # m2: no informed bettors (unknown_wallet)
+    fake_markets = [
+        _fake_market("m1", "cond1", "Informed market?", 0.6, 80_000),
+        _fake_market("m2", "cond2", "No informed market?", 0.5, 100_000),
+    ]
+    fake_trades = {
+        "cond1": [_fake_trade("wallet_a")],
+        "cond2": [_fake_trade("unknown_wallet")],
+    }
+
+    with patch(
+        "src.data_sources.foresight.PolymarketClient",
+        autospec=True,
+    ) as MockClient:
+        client_inst = MockClient.return_value
+        client_inst.fetch_markets = AsyncMock(return_value=fake_markets)
+        client_inst.fetch_trades_batch = AsyncMock(return_value=fake_trades)
+        client_inst.fetch_price_history = AsyncMock(return_value=[0.5, 0.6])
+        client_inst.close = AsyncMock()
+
+        result = await service.get_top_markets(limit=10)
+
+    assert len(result) == 1
+    assert result[0].question == "Informed market?"
+    assert result[0].has_informed is True
 
 
 def test_market_card_schema():
@@ -227,6 +264,8 @@ def test_market_card_schema():
     # Frozen model
     with pytest.raises(Exception):
         card.market_id = "m2"  # type: ignore[misc]
+    # has_informed defaults to True
+    assert card.has_informed is True
 
 
 # ── get_relevant_markets tests ────────────────────────────────────
