@@ -410,6 +410,14 @@
     list-style: none;
   }
   .fn-step-phase:first-child { padding-top: 0; }
+  .fn-timeline .fn-step-phase {
+    margin-left: -0.5rem;
+    padding: 1.25rem 0 0.375rem 0;
+    position: relative;
+    z-index: 1;
+    background: var(--color-surface-1);
+  }
+  .fn-timeline .fn-step-phase:first-child { padding-top: 0.25rem; }
 
   .fn-timeline {
     position: relative;
