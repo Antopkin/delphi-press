@@ -272,10 +272,23 @@ async def index(
 
     async with get_session(session_factory) as session:
         repo = PredictionRepository(session)
+        public_predictions = await repo.get_public(limit=10)
         if user is not None:
-            recent_predictions = await repo.get_by_user(user.id, limit=10)
-        else:
+            user_predictions = await repo.get_by_user(user.id, limit=10)
+            # Merge: user's own + public, deduplicated, sorted by date
+            seen = set()
             recent_predictions = []
+            for p in sorted(
+                list(user_predictions) + list(public_predictions),
+                key=lambda x: x.created_at,
+                reverse=True,
+            ):
+                if p.id not in seen:
+                    seen.add(p.id)
+                    recent_predictions.append(p)
+            recent_predictions = recent_predictions[:10]
+        else:
+            recent_predictions = list(public_predictions)
 
         return templates.TemplateResponse(
             request,

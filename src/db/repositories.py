@@ -150,6 +150,21 @@ class PredictionRepository:
         )
         return result.scalars().all()
 
+    async def get_public(
+        self,
+        *,
+        limit: int = 20,
+    ) -> Sequence[Prediction]:
+        """Публичные прогнозы (user_id IS NULL, status = COMPLETED)."""
+        limit = min(limit, 100)
+        result = await self.session.execute(
+            select(Prediction)
+            .where(Prediction.user_id.is_(None), Prediction.status == PredictionStatus.COMPLETED)
+            .order_by(Prediction.created_at.desc())
+            .limit(limit)
+        )
+        return result.scalars().all()
+
     async def save_headlines(
         self,
         prediction_id: str,
