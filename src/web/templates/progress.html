@@ -5,15 +5,15 @@
 
 {% block content %}
 
-<section class="mb-8">
-    <h1 class="text-2xl mb-2">Формируем прогноз</h1>
-    <p class="text-text-muted">
-        <strong class="text-text">{{ outlet }}</strong> &middot; {{ target_date }}
-    </p>
+{# ===== HERO HEADER ===== #}
+<section class="py-12 pb-6">
+    <p class="text-sm font-semibold text-primary uppercase tracking-wide mb-2 animate-fade-in-up">Формируем прогноз</p>
+    <h1 class="text-4xl md:text-5xl leading-tight mb-3 animate-fade-in-up [animation-delay:100ms]">{{ outlet }}</h1>
+    <p class="text-text-muted text-lg animate-fade-in-up [animation-delay:200ms]">{{ target_date }}</p>
 </section>
 
 {# ===== PROGRESS BAR ===== #}
-<section class="mb-8">
+<section class="pb-8">
     <progress id="progress-bar" value="0" max="100"></progress>
     <div class="fn-progress-meta">
         <span id="progress-percent" class="tabular-nums">0%</span>
@@ -21,90 +21,124 @@
     </div>
 </section>
 
-{# ===== STEP LIST ===== #}
-<section class="mb-8">
-    <div class="bg-surface-1 border border-border rounded-lg p-6">
-        <ul id="step-list" class="list-none p-0 m-0 fn-timeline">
-            <li class="fn-step fn-step--pending" data-stage="collection">
-                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content flex-1">
-                    <strong class="block">Собираем новости</strong>
-                    <small class="text-text-muted">RSS-фиды, поисковые системы, архивы издания</small>
-                </div>
-                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
-            </li>
-            <li class="fn-step fn-step--pending" data-stage="event_identification">
-                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content flex-1">
-                    <strong class="block">Выявляем ключевые события</strong>
-                    <small class="text-text-muted">Кластеризация сигналов, определение трендов</small>
-                </div>
-                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
-            </li>
-            <li class="fn-step fn-step--pending" data-stage="trajectory">
-                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content flex-1">
-                    <strong class="block">Анализируем траектории событий</strong>
-                    <small class="text-text-muted">Сценарии развития, перекрёстные влияния</small>
-                </div>
-                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
-            </li>
-            <li class="fn-step fn-step--pending" data-stage="delphi_r1">
-                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content flex-1">
-                    <strong class="block">Экспертная панель: раунд 1</strong>
-                    <small class="text-text-muted">Пять ИИ-экспертов независимо оценивают ситуацию</small>
-                </div>
-                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
-            </li>
-            <li class="fn-step fn-step--pending" data-stage="delphi_r2">
-                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content flex-1">
-                    <strong class="block">Экспертная панель: раунд 2</strong>
-                    <small class="text-text-muted">Медиация расхождений, уточнение прогнозов</small>
-                </div>
-                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
-            </li>
-            <li class="fn-step fn-step--pending" data-stage="consensus">
-                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content flex-1">
-                    <strong class="block">Формируем консенсус</strong>
-                    <small class="text-text-muted">Агрегация оценок, калибровка вероятностей</small>
-                </div>
-                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
-            </li>
-            <li class="fn-step fn-step--pending" data-stage="framing">
-                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content flex-1">
-                    <strong class="block">Анализируем стиль издания</strong>
-                    <small class="text-text-muted">Как {{ outlet }} подаст каждое событие</small>
-                </div>
-                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
-            </li>
-            <li class="fn-step fn-step--pending" data-stage="generation">
-                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content flex-1">
-                    <strong class="block">Генерируем заголовки</strong>
-                    <small class="text-text-muted">Стилизация под формат издания</small>
-                </div>
-                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
-            </li>
-            <li class="fn-step fn-step--pending" data-stage="quality_gate">
-                <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
-                <div class="fn-step-content flex-1">
-                    <strong class="block">Проверяем качество</strong>
-                    <small class="text-text-muted">Факт-чек, стилистика, дедупликация</small>
-                </div>
-                <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
-            </li>
-        </ul>
-    </div>
-</section>
+{# ===== TWO-COLUMN: STEPS + NARRATIVE SIDEBAR ===== #}
+<section class="pb-10">
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8">
 
-{# ===== NARRATIVE MESSAGE ===== #}
-<section class="mb-8">
-    <div id="narrative-area" class="text-center" hidden>
-        <p id="narrative-message" class="font-heading italic text-text-muted animate-fade-in"></p>
+        {# -- Left: step list -- #}
+        <div class="bg-surface-1 border border-border rounded-lg p-6">
+            <ul id="step-list" class="list-none p-0 m-0 fn-timeline fn-timeline--line" data-stagger>
+
+                {# Phase 1: Data Collection #}
+                <li class="fn-step-phase" style="--fn-stagger-i: 0">Сбор данных</li>
+
+                <li class="fn-step fn-step--pending" data-stage="collection" style="--fn-stagger-i: 1">
+                    <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                    <div class="fn-step-content flex-1">
+                        <strong class="block">Собираем новости</strong>
+                        <small class="text-text-muted">RSS-фиды, поисковые системы, архивы издания</small>
+                        <p class="fn-step-detail text-sm text-text-muted mt-1"></p>
+                    </div>
+                    <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
+                </li>
+                <li class="fn-step fn-step--pending" data-stage="event_identification" style="--fn-stagger-i: 2">
+                    <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                    <div class="fn-step-content flex-1">
+                        <strong class="block">Выявляем ключевые события</strong>
+                        <small class="text-text-muted">Кластеризация сигналов, определение трендов</small>
+                        <p class="fn-step-detail text-sm text-text-muted mt-1"></p>
+                    </div>
+                    <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
+                </li>
+
+                {# Phase 2: Expert Analysis #}
+                <li class="fn-step-phase" style="--fn-stagger-i: 3">Экспертный анализ</li>
+
+                <li class="fn-step fn-step--pending" data-stage="trajectory" style="--fn-stagger-i: 4">
+                    <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                    <div class="fn-step-content flex-1">
+                        <strong class="block">Анализируем траектории событий</strong>
+                        <small class="text-text-muted">Сценарии развития, перекрёстные влияния</small>
+                        <p class="fn-step-detail text-sm text-text-muted mt-1"></p>
+                    </div>
+                    <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
+                </li>
+                <li class="fn-step fn-step--pending" data-stage="delphi_r1" style="--fn-stagger-i: 5">
+                    <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                    <div class="fn-step-content flex-1">
+                        <strong class="block">Экспертная панель: раунд 1</strong>
+                        <small class="text-text-muted">Пять ИИ-экспертов независимо оценивают ситуацию</small>
+                        <p class="fn-step-detail text-sm text-text-muted mt-1"></p>
+                    </div>
+                    <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
+                </li>
+                <li class="fn-step fn-step--pending" data-stage="delphi_r2" style="--fn-stagger-i: 6">
+                    <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                    <div class="fn-step-content flex-1">
+                        <strong class="block">Экспертная панель: раунд 2</strong>
+                        <small class="text-text-muted">Медиация расхождений, уточнение прогнозов</small>
+                        <p class="fn-step-detail text-sm text-text-muted mt-1"></p>
+                    </div>
+                    <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
+                </li>
+                <li class="fn-step fn-step--pending" data-stage="consensus" style="--fn-stagger-i: 7">
+                    <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                    <div class="fn-step-content flex-1">
+                        <strong class="block">Формируем консенсус</strong>
+                        <small class="text-text-muted">Агрегация оценок, калибровка вероятностей</small>
+                        <p class="fn-step-detail text-sm text-text-muted mt-1"></p>
+                    </div>
+                    <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
+                </li>
+
+                {# Phase 3: Output Generation #}
+                <li class="fn-step-phase" style="--fn-stagger-i: 8">Генерация</li>
+
+                <li class="fn-step fn-step--pending" data-stage="framing" style="--fn-stagger-i: 9">
+                    <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                    <div class="fn-step-content flex-1">
+                        <strong class="block">Анализируем стиль издания</strong>
+                        <small class="text-text-muted">Как {{ outlet }} подаст каждое событие</small>
+                        <p class="fn-step-detail text-sm text-text-muted mt-1"></p>
+                    </div>
+                    <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
+                </li>
+                <li class="fn-step fn-step--pending" data-stage="generation" style="--fn-stagger-i: 10">
+                    <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                    <div class="fn-step-content flex-1">
+                        <strong class="block">Генерируем заголовки</strong>
+                        <small class="text-text-muted">Стилизация под формат издания</small>
+                        <p class="fn-step-detail text-sm text-text-muted mt-1"></p>
+                    </div>
+                    <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
+                </li>
+                <li class="fn-step fn-step--pending" data-stage="quality_gate" style="--fn-stagger-i: 11">
+                    <span class="fn-step-icon shrink-0 text-lg w-6 text-center leading-relaxed" aria-hidden="true">&#9675;</span>
+                    <div class="fn-step-content flex-1">
+                        <strong class="block">Проверяем качество</strong>
+                        <small class="text-text-muted">Факт-чек, стилистика, дедупликация</small>
+                        <p class="fn-step-detail text-sm text-text-muted mt-1"></p>
+                    </div>
+                    <span class="fn-step-duration shrink-0 text-sm text-text-muted whitespace-nowrap self-center"></span>
+                </li>
+            </ul>
+        </div>
+
+        {# -- Right: sticky narrative sidebar (desktop only) -- #}
+        <aside class="hidden lg:block">
+            <div class="sticky top-6">
+                <div id="narrative-area" class="bg-surface-1 border border-border rounded-lg p-6" hidden>
+                    <h3 class="text-sm font-semibold text-text-muted uppercase tracking-wide mb-3">Сейчас происходит</h3>
+                    <p id="narrative-message" class="font-heading text-lg italic text-text leading-relaxed"></p>
+                </div>
+            </div>
+        </aside>
+
+        {# -- Narrative for mobile (below steps) -- #}
+        <div id="narrative-area-mobile" class="lg:hidden text-center" hidden>
+            <p id="narrative-message-mobile" class="font-heading italic text-text-muted animate-fade-in"></p>
+        </div>
+
     </div>
 </section>
 

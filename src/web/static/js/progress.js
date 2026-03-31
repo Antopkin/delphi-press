@@ -36,6 +36,8 @@
   var stepList = document.getElementById("step-list");
   var narrativeArea = document.getElementById("narrative-area");
   var narrativeMessage = document.getElementById("narrative-message");
+  var narrativeAreaMobile = document.getElementById("narrative-area-mobile");
+  var narrativeMessageMobile = document.getElementById("narrative-message-mobile");
   var errorSection = document.getElementById("error-section");
   var errorMessage = document.getElementById("error-message");
 
@@ -123,6 +125,7 @@
     if (stage === "completed") {
       markAllDone();
       source.close();
+      showNarrative("Прогноз готов!");
       // Small delay so user sees 100% before redirect
       setTimeout(function () {
         window.location.href = "/results/" + predictionId;
@@ -144,6 +147,15 @@
       showNarrative(data.detail);
     } else if (message) {
       showNarrative(message);
+    }
+
+    // --- Update per-step inline detail ---
+    if (data.detail && stage) {
+      var activeLi = stepList.querySelector('[data-stage="' + stage + '"]');
+      if (activeLi) {
+        var detailEl = activeLi.querySelector(".fn-step-detail");
+        if (detailEl) detailEl.textContent = data.detail;
+      }
     }
   }
 
@@ -201,6 +213,10 @@
     li.className = "fn-step fn-step--done";
     li.querySelector(".fn-step-icon").textContent = ICON_DONE;
 
+    // Clear per-step detail on completion
+    var detailEl = li.querySelector(".fn-step-detail");
+    if (detailEl) detailEl.textContent = "";
+
     // Calculate and display duration for this stage
     var startMs = stageStartTimes[stageName];
     if (startMs !== undefined) {
@@ -233,6 +249,11 @@
   function showNarrative(text) {
     narrativeMessage.textContent = text;
     narrativeArea.hidden = false;
+    // Mirror to mobile narrative
+    if (narrativeMessageMobile) {
+      narrativeMessageMobile.textContent = text;
+      narrativeAreaMobile.hidden = false;
+    }
   }
 
   /**

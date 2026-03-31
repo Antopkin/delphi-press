@@ -4,6 +4,23 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.9.6] - 2026-03-31
+
+### Changed
+- **Progress page redesign** — полная реструктуризация `/predict/{id}`. **Почему:** layout и типографика отставали от главной страницы. Теперь: hero h1 с названием издания (outlet = заголовок, "Формируем прогноз" = лейбл), двухколоночный layout (шаги + sticky narrative sidebar), фазовая группировка шагов (Сбор данных / Экспертный анализ / Генерация), CSS counters для серифных цифр (Newsreader) без изменений в JS, shimmer на активном шаге, scale-in на чекмарке, per-step inline detail из SSE, stagger-анимация, прогресс-бар с gradient shimmer
+- **Results page redesign** — карточный layout `/results/{id}`. **Почему:** перегруженная метадата, нет hover-состояний, conditional first-card styling. Теперь: `fn-headline-card` bordered cards с hover, единый стиль (убран `loop.index == 1` антипаттерн), metadata реорганизована (категория + badge сверху, крупный ранг + заголовок ниже), reasoning как blockquote, methodology в одном контейнере
+- **Hero h1 на обеих страницах** — `text-2xl` → `text-4xl md:text-5xl` для консистентности с главной
+- **Section spacing** — стандартизирован `mt-12` между major sections на results page
+- **Meta chips** — дата получила `font-semibold`, Opus preset — `bg-primary/10 text-primary`
+- **Progress bar** — высота 0.5rem → 0.75rem, gradient с shimmer анимацией
+
+### Added
+- **CSS-компоненты**: `fn-headline-card` (bordered card с hover), `fn-step-phase` (фазовый разделитель), CSS counters для timeline (серифные цифры через `::before`), `fn-step-duration` анимация появления
+- **Mobile narrative** — зеркало desktop narrative для мобильных устройств
+- **Completion celebration** — "Прогноз готов!" в narrative при завершении pipeline
+
+---
+
 ## [0.9.5] - 2026-03-31
 
 ### Added
