@@ -124,6 +124,29 @@ tests/test_integration/             — 7 E2E integration tests
 
 ---
 
+### Gemini Flash — broken JSON outputs (planned)
+
+**Цель:** Починить или заменить модель для Light-пресета.
+
+**Статус:** PLANNED. Light-пресет (`google/gemini-2.5-flash`) генерирует кривые JSON-ответы на ряде pipeline-стадий (structured output parsing fails).
+
+**Проблема:** Gemini 2.5 Flash через OpenRouter не стабильно выдаёт валидный JSON для Pydantic-моделей. Результат: стадии падают с parse error, fallback-логика не всегда спасает.
+
+**Варианты:**
+- [ ] **Диагностика** — собрать логи кривых ответов, определить какие именно стадии ломаются (trajectory? delphi? generation?)
+- [ ] **Retry + repair** — добавить JSON repair middleware (strip markdown fences, fix trailing commas) перед Pydantic parse
+- [ ] **Prompt engineering** — усилить JSON-инструкции в промптах для Flash (explicit schema в system prompt)
+- [ ] **Альтернативная модель** — заменить на `google/gemini-2.5-flash-lite` или `anthropic/claude-haiku-4-5` для Light-пресета. Сравнить cost/quality
+- [ ] **Model fallback chain** — при JSON parse error на Flash, автоматический retry на Haiku
+
+**Ключевые файлы:**
+- `src/llm/router.py` — `DEFAULT_ASSIGNMENTS` (task-to-model mapping)
+- `src/llm/client.py` — OpenRouterClient (parse + retry logic)
+- `src/config.py` — `PRESETS` (Light/Opus model selection)
+- `src/agents/orchestrator.py` — stage error handling
+
+---
+
 ### Market Dashboard + Pipeline Resilience (v0.9.4)
 
 **Цель:** Вывести данные Inverse Problem на веб-страницы + повысить устойчивость пайплайна.
