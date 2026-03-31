@@ -78,6 +78,7 @@
       try {
         var resp = await fetch("/api/v1/keys/" + keyId, {
           method: "DELETE",
+          headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
         });
 

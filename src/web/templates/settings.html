@@ -28,7 +28,9 @@
                     <td>{{ key.provider }}</td>
                     <td>{{ key.label or '—' }}</td>
                     <td>
-                        {% if key.is_active %}
+                        {% if key.health == "corrupted" %}
+                        <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-speculative" title="Ключ невозможно расшифровать. Удалите и добавьте заново.">Повреждён</span>
+                        {% elif key.is_active %}
                         <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-very-high">Активен</span>
                         {% else %}
                         <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-speculative">Неактивен</span>

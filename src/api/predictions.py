@@ -59,6 +59,7 @@ class CreatePredictionResponse(BaseModel):
     outlet_resolved: bool = False
     outlet_language: str = ""
     outlet_url: str = ""
+    key_source: str = ""  # "user" | "manual" | "server" | "none"
 
 
 class HeadlineSchema(BaseModel):
@@ -211,6 +212,8 @@ async def create_prediction(
 
     # Resolve API key: manual input > saved user key > server fallback
     effective_api_key = body.api_key
+    key_source = "manual" if effective_api_key else "none"
+
     if not effective_api_key and user is not None:
         try:
             async with get_session(session_factory) as session:
@@ -224,9 +227,17 @@ async def create_prediction(
 
                         vault = KeyVault(request.app.state.settings.fernet_key)
                         effective_api_key = vault.decrypt(key.encrypted_key)
+                        key_source = "user"
                         break
         except Exception:
-            logger.warning("Failed to decrypt saved API key for user %s", user.id)
+            logger.warning(
+                "Saved API key corrupted for user %s — cannot decrypt. "
+                "User should re-save key in Settings.",
+                user.id,
+            )
+
+    if not effective_api_key and request.app.state.settings.openrouter_api_key:
+        key_source = "server"
 
     try:
         await arq_pool.enqueue_job(
@@ -254,6 +265,7 @@ async def create_prediction(
         outlet_resolved=outlet_resolved,
         outlet_language=outlet_language,
         outlet_url=outlet_url,
+        key_source=key_source,
     )
 
 

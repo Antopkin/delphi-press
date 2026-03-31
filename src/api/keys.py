@@ -38,6 +38,7 @@ class APIKeyInfo(BaseModel):
     is_active: bool
     created_at: datetime
     last_used_at: datetime | None
+    health: str = "ok"  # "ok" | "corrupted"
 
 
 class APIKeyCreate(BaseModel):
@@ -64,22 +65,31 @@ async def list_keys(
     from src.db.repositories import UserRepository
 
     session_factory = request.app.state.session_factory
+    key_vault = request.app.state.key_vault
 
     async with get_session(session_factory) as session:
         repo = UserRepository(session)
         keys = await repo.get_api_keys(user.id)
 
-    return [
-        APIKeyInfo(
-            id=k.id,
-            provider=k.provider,
-            label=k.label,
-            is_active=k.is_active,
-            created_at=k.created_at,
-            last_used_at=k.last_used_at,
+    result = []
+    for k in keys:
+        health = "ok"
+        try:
+            key_vault.decrypt(k.encrypted_key)
+        except Exception:
+            health = "corrupted"
+        result.append(
+            APIKeyInfo(
+                id=k.id,
+                provider=k.provider,
+                label=k.label,
+                is_active=k.is_active,
+                created_at=k.created_at,
+                last_used_at=k.last_used_at,
+                health=health,
+            )
         )
-        for k in keys
-    ]
+    return result
 
 
 @router.post("", response_model=APIKeyInfo, status_code=201)
@@ -168,7 +178,13 @@ async def validate_key(
     if key is None:
         raise HTTPException(status_code=404, detail="Ключ не найден.")
 
-    plaintext_key = key_vault.decrypt(key.encrypted_key)
+    try:
+        plaintext_key = key_vault.decrypt(key.encrypted_key)
+    except Exception:
+        return ValidateResult(
+            valid=False,
+            message="Ключ повреждён (невозможно расшифровать). Удалите и добавьте заново.",
+        )
 
     try:
         if key.provider == "openrouter":
