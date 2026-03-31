@@ -174,11 +174,13 @@ async def validate_key(
         if key.provider == "openrouter":
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(
-                    "https://openrouter.ai/api/v1/models",
+                    "https://openrouter.ai/api/v1/auth/key",
                     headers={"Authorization": f"Bearer {plaintext_key}"},
                 )
             if resp.status_code == 200:
                 return ValidateResult(valid=True, message="Ключ OpenRouter валиден.")
+            if resp.status_code == 401:
+                return ValidateResult(valid=False, message="Ключ невалиден или отозван.")
             return ValidateResult(valid=False, message=f"OpenRouter вернул {resp.status_code}.")
 
     except httpx.HTTPError as exc:

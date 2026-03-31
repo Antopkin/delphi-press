@@ -85,7 +85,7 @@
       var hint = document.createElement("li");
       hint.setAttribute("role", "option");
       hint.className = "text-text-muted italic";
-      hint.textContent = "Издание не найдено";
+      hint.textContent = "Издание не в каталоге — будет найдено автоматически";
       suggestionsList.appendChild(hint);
       suggestionsList.hidden = false;
       if (outletUrlGroup) outletUrlGroup.hidden = false;
