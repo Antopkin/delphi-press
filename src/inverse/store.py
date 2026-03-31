@@ -148,7 +148,7 @@ def _load_parquet(
     profiles: dict[str, BettorProfile] = {}
     for raw in rows:
         profile = BettorProfile(**raw)
-        profiles[profile.user_id] = profile
+        profiles[profile.user_id.lower()] = profile
 
     # Load summary from sidecar
     summary = _load_summary_sidecar(path, profiles, tier_filter)
