@@ -56,8 +56,8 @@ COPY --chown=appuser:appgroup scripts/download_profiles.py /app/scripts/download
 COPY --chown=appuser:appgroup docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Data directory for SQLite
-RUN mkdir -p /app/data && chown appuser:appgroup /app/data
+# Data directories (SQLite + inverse profiles)
+RUN mkdir -p /app/data /app/data/inverse && chown -R appuser:appgroup /app/data
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
