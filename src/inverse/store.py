@@ -243,7 +243,7 @@ def _load_json(
         if tier_filter is not None and raw.get("tier") != tier_filter:
             continue
         profile = BettorProfile(**raw)
-        profiles[profile.user_id] = profile
+        profiles[profile.user_id.lower()] = profile
 
     logger.info(
         "Loaded %d profiles from %s (tier_filter=%s)",

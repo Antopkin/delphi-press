@@ -83,8 +83,8 @@ class TestJsonRoundTrip:
         save_profiles(profiles, summary, path)
 
         loaded, _ = load_profiles(path, tier_filter=None)
-        p = loaded["0xAAA"]
-        assert p.user_id == "0xAAA"
+        p = loaded["0xaaa"]
+        assert p.user_id == "0xAAA"  # original casing preserved in profile object
         assert p.brier_score == 0.08
         assert p.tier == BettorTier.INFORMED
         assert p.win_rate == 0.80
@@ -106,7 +106,7 @@ class TestJsonRoundTrip:
         save_profiles(profiles, summary, path)
 
         loaded, _ = load_profiles(path, tier_filter=None)
-        assert set(loaded.keys()) == {"0xAAA", "0xBBB", "0xCCC"}
+        assert set(loaded.keys()) == {"0xaaa", "0xbbb", "0xccc"}
 
     def test_creates_parent_dirs(self, tmp_path: Path, sample_data: tuple) -> None:
         profiles, summary = sample_data
@@ -143,7 +143,17 @@ class TestJsonRoundTrip:
 
         loaded, _ = load_profiles(path, tier_filter="informed")
         assert len(loaded) == 1
-        assert "0xAAA" in loaded
+        assert "0xaaa" in loaded
+
+    def test_json_keys_normalized_to_lowercase(self, tmp_path: Path, sample_data: tuple) -> None:
+        """Dict keys are lowercased; profile.user_id preserves original casing."""
+        profiles, summary = sample_data
+        path = tmp_path / "profiles.json"
+        save_profiles(profiles, summary, path)
+
+        loaded, _ = load_profiles(path, tier_filter=None)
+        assert set(loaded.keys()) == {"0xaaa", "0xbbb", "0xccc"}
+        assert loaded["0xaaa"].user_id == "0xAAA"
 
     def test_json_tier_filter_none_returns_all(self, tmp_path: Path, sample_data: tuple) -> None:
         profiles, summary = sample_data
