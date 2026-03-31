@@ -142,7 +142,14 @@
     </div>
 </section>
 
-{# ===== STALL WARNING (hidden by default) ===== #}
+{# ===== INFO BANNER ===== #}
+<section class="pb-4">
+    <div class="border-l-4 border-primary/40 bg-primary/5 rounded-md p-4">
+        <p class="text-text-muted text-sm">Формирование прогноза занимает 30\u201340 минут. Пожалуйста, не перезагружайте страницу — прогресс обновляется автоматически.</p>
+    </div>
+</section>
+
+{# ===== STALL WARNING (hidden, kept for JS compatibility) ===== #}
 <section id="stall-warning" class="pb-4" hidden>
     <div class="border-l-4 border-amber-400 bg-amber-50/80 dark:bg-amber-950/20 rounded-md p-4 animate-fade-in">
         <p id="stall-message" class="text-text-muted text-sm"></p>

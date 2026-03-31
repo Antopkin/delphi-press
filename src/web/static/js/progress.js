@@ -401,18 +401,8 @@
    * Check if progress has stalled and show appropriate warning.
    */
   function checkStall() {
-    var elapsed = Date.now() - lastEventTime;
-
-    if (elapsed >= 180000) {
-      showStallWarning("Процесс не отвечает уже больше 3 минут. Попробуйте обновить страницу.");
-      markActiveStepStalled(true);
-    } else if (elapsed >= 60000) {
-      showStallWarning("Эта стадия занимает больше времени, чем обычно\u2026");
-      markActiveStepStalled(true);
-    } else {
-      hideStallWarning();
-      markActiveStepStalled(false);
-    }
+    // No-op: stall warnings disabled.
+    // The info banner in progress.html tells users to expect 30-40 min.
   }
 
   /**
