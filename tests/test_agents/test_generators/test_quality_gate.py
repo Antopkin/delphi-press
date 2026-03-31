@@ -412,3 +412,72 @@ class TestQualityGateConcurrency:
         # If parallel: ~0.1s. If sequential: 5 × 0.1 = 0.5s.
         assert elapsed < 0.3, f"Expected concurrent scoring, but took {elapsed:.3f}s"
         assert len(result["final_predictions"]) == 5
+
+    @pytest.mark.asyncio
+    async def test_execute_limits_concurrency_with_semaphore(self, mock_router, make_context):
+        """Concurrent scoring should respect semaphore limit (max 5 at a time)."""
+        import asyncio
+        import time
+        from unittest.mock import patch
+
+        from src.agents.generators.quality_gate import QualityGate
+
+        gate = QualityGate(llm_client=mock_router)
+        ctx = make_context()
+
+        # 10 headlines to exceed the semaphore limit of 5
+        headline_texts = [
+            "ЦБ повысил ставку до 23%",
+            "Путин подписал указ о бюджете",
+            "Минфин опубликовал прогноз на 2027 год",
+            "Нефть превысила отметку $90 за баррель",
+            "Рубль укрепился к доллару после заседания ЦБ",
+            "Газпром увеличил поставки в Китай",
+            "ФНС ужесточила контроль за криптовалютой",
+            "Правительство утвердило новый нацпроект",
+            "Сбербанк повысил ставки по ипотеке",
+            "МВФ пересмотрел прогноз роста ВВП России",
+        ]
+        headlines = []
+        predictions = []
+        framings = []
+        for i in range(10):
+            tid = f"thread_{i:04d}"
+            headlines.append(
+                make_generated_headline(event_thread_id=tid, headline=headline_texts[i])
+            )
+            predictions.append(make_ranked_prediction(event_thread_id=tid, rank=i + 1))
+            framings.append(make_framing_brief(event_thread_id=tid))
+
+        ctx.generated_headlines = headlines
+        ctx.ranked_predictions = predictions
+        ctx.framing_briefs = framings
+        ctx.outlet_profile = make_outlet_profile()
+
+        max_concurrent = 0
+        current_concurrent = 0
+        lock = asyncio.Lock()
+
+        async def tracked_score_one(*args, **kwargs):
+            nonlocal max_concurrent, current_concurrent
+            async with lock:
+                current_concurrent += 1
+                max_concurrent = max(max_concurrent, current_concurrent)
+            try:
+                await asyncio.sleep(0.05)
+                return QualityScore(
+                    headline_id=args[0].id if args else "x",
+                    factual_score=4,
+                    factual_feedback="ok",
+                    style_score=4,
+                    style_feedback="ok",
+                )
+            finally:
+                async with lock:
+                    current_concurrent -= 1
+
+        with patch.object(gate, "_score_one", side_effect=tracked_score_one):
+            await gate.execute(ctx)
+
+        assert max_concurrent <= 5, f"Expected max 5 concurrent, but saw {max_concurrent}"
+        assert max_concurrent >= 2, f"Expected at least 2 concurrent, but saw {max_concurrent}"
