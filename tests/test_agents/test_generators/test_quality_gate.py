@@ -6,6 +6,8 @@ import json
 
 import pytest
 
+from src.schemas.headline import CheckResult
+
 from .conftest import (
     make_framing_brief,
     make_generated_headline,
@@ -313,3 +315,42 @@ class TestBuildFinalPredictions:
 
         assert finals[0]["rank"] == 1
         assert finals[1]["rank"] == 2
+
+
+class TestQualityGateConcurrency:
+    """Test concurrent execution of scoring checks."""
+
+    @pytest.mark.asyncio
+    async def test_score_one_runs_factual_and_style_concurrently(self, mock_router):
+        """Factual and style checks within _score_one should run in parallel."""
+        import asyncio
+        import time
+        from unittest.mock import AsyncMock, patch
+
+        from src.agents.generators.quality_gate import QualityGate
+
+        gate = QualityGate(llm_client=mock_router)
+        headline = make_generated_headline()
+        prediction = make_ranked_prediction()
+        profile = make_outlet_profile()
+
+        async def slow_factual(*args, **kwargs):
+            await asyncio.sleep(0.1)
+            return CheckResult(score=4, feedback="ok")
+
+        async def slow_style(*args, **kwargs):
+            await asyncio.sleep(0.1)
+            return CheckResult(score=4, feedback="ok")
+
+        with (
+            patch.object(gate, "_check_factual", side_effect=slow_factual),
+            patch.object(gate, "_check_style", side_effect=slow_style),
+        ):
+            start = time.monotonic()
+            score = await gate._score_one(headline, prediction, profile)
+            elapsed = time.monotonic() - start
+
+        # If parallel: ~0.1s. If sequential: ~0.2s.
+        assert elapsed < 0.15, f"Expected concurrent execution, but took {elapsed:.3f}s"
+        assert score.factual_score == 4
+        assert score.style_score == 4

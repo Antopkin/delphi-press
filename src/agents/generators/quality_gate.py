@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
@@ -113,22 +114,20 @@ class QualityGate(BaseAgent):
         *,
         min_score: int = FACTUAL_MIN_SCORE,
     ) -> QualityScore:
-        """Score a single headline: factual + style checks."""
-        from src.llm.prompts.base import PromptParseError
+        """Score a single headline: factual + style checks (concurrent)."""
+        neutral_factual = CheckResult(
+            score=min_score, feedback="factual check error — neutral score"
+        )
+        neutral_style = CheckResult(score=min_score, feedback="style check error — neutral score")
 
-        try:
-            factual = await self._check_factual(headline, prediction, min_score=min_score)
-        except (PromptParseError, Exception):
-            factual = CheckResult(
-                score=min_score, feedback="factual check parse error — neutral score"
-            )
+        results = await asyncio.gather(
+            self._check_factual(headline, prediction, min_score=min_score),
+            self._check_style(headline, profile, min_score=min_score),
+            return_exceptions=True,
+        )
 
-        try:
-            style = await self._check_style(headline, profile, min_score=min_score)
-        except (PromptParseError, Exception):
-            style = CheckResult(
-                score=min_score, feedback="style check parse error — neutral score"
-            )
+        factual = results[0] if isinstance(results[0], CheckResult) else neutral_factual
+        style = results[1] if isinstance(results[1], CheckResult) else neutral_style
 
         return QualityScore(
             headline_id=headline.id,
