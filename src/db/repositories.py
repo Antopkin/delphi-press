@@ -159,7 +159,10 @@ class PredictionRepository:
         limit = min(limit, 100)
         result = await self.session.execute(
             select(Prediction)
-            .where(Prediction.user_id.is_(None), Prediction.status == PredictionStatus.COMPLETED)
+            .where(
+                Prediction.user_id.is_(None),
+                Prediction.status.in_((PredictionStatus.COMPLETED, "COMPLETED")),
+            )
             .order_by(Prediction.created_at.desc())
             .limit(limit)
         )
