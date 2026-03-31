@@ -4,6 +4,23 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.9.5] - 2026-03-31
+
+### Added
+- **Incremental pipeline save** — `stage_callback` в orchestrator сохраняет PipelineSteps и headlines после каждой стадии, а не только в конце. **Почему:** QualityGate timeout (smoke test #4) терял 33 сгенерированных заголовка — worker сохранял данные только при `status=completed`. Теперь draft headlines записываются в БД после Stage 8 (Generation), а после Stage 9 (QualityGate) заменяются финальными. При падении поздних стадий данные не теряются.
+- **`replace_headlines()`** в PredictionRepository — атомарная замена заголовков (delete + insert)
+- **`--scrape` flag** в `scripts/dry_run.py` — переключает NoopScraper на TrafilaturaScraper для реального скрейпинга статей
+
+### Changed
+- **Worker simplified** — финальный блок сохранения убран (headlines и pipeline_steps уже записаны через stage_callback). Осталось только `update_status()` с метаданными
+- **Web search "no providers" → debug** — понижен уровень логирования с WARNING до DEBUG. **Почему:** 10 warnings в каждом прогоне без API-ключей засоряли логи
+- **CLAUDE.md sync** — пресеты Light/Opus, Metaculus disabled, pyarrow в base deps, версия 0.9.4
+
+### Metrics
+- Тесты: 1302 → 1316 (+14: stage_callback, replace_headlines, draft/final headline builders)
+
+---
+
 ## [0.9.4] - 2026-03-31
 
 ### Added
