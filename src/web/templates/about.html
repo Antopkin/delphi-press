@@ -207,8 +207,8 @@ flowchart TD
     subgraph delphi["Дельфи-консенсус"]
         P1["Реалист"] & P2["Геостратег"] & P3["Экономист"] & P4["Медиа-эксперт"] & P5["Адвокат дьявола"]
         P1 & P2 & P3 & P4 & P5 --> MED["Медиатор"]
-        MED --> R2["Раунд 2"]
-        R2 --> JUDGE["Judge"]
+        MED --> R2["Раунд 2<br/>пересмотр оценок"]
+        R2 --> JUDGE["Judge<br/>таймлайн"]
     end
 
     subgraph output["Генерация"]
@@ -381,7 +381,7 @@ flowchart TD
 
     <pre class="mermaid mb-6">
 flowchart TD
-    A["470M исторических ставок<br/>1.7M участников Polymarket"] --> B["Brier Score каждого участника<br/>на разрешённых рынках"]
+    A["470M ставок<br/>1.7M участников"] --> B["Brier Score<br/>разрешённые рынки"]
     B --> C{"Классификация"}
     C -->|"BS < p20"| D["348K INFORMED<br/>точные прогнозисты"]
     C -->|"p20–p70"| E["MODERATE<br/>средняя точность"]
@@ -1159,11 +1159,11 @@ flowchart TD
 
     <pre class="mermaid mb-6">
 graph TB
-    User["Пользователь<br/>(API key или Claude Code)"]
-    Web["Web UI<br/>(FastAPI + Jinja2)"]
-    Worker["Background Worker<br/>(ARQ + Redis)"]
-    DB["SQLite DB<br/>(SQLAlchemy 2.0)"]
-    LLM["LLM Provider<br/>(OpenRouter → Claude, GPT-4, Gemini)"]
+    User["Пользователь"]
+    Web["Web UI<br/>FastAPI + Jinja2"]
+    Worker["Worker<br/>ARQ + Redis"]
+    DB["SQLite<br/>SQLAlchemy 2.0"]
+    LLM["LLM<br/>OpenRouter"]
 
     User -->|POST /api/v1/predictions| Web
     Web -->|enqueue| Worker
@@ -1345,4 +1345,20 @@ graph TB
 
 {% block extra_js %}
 <script src="{{ url_for('static', path='js/reveal.js') }}?v={{ app_version }}"></script>
+<script>
+// Re-render KaTeX inside <details> when opened (auto-render fires on page load,
+// but closed <details> content may not get processed correctly).
+document.querySelectorAll('details').forEach(function(el) {
+    el.addEventListener('toggle', function() {
+        if (el.open && typeof renderMathInElement === 'function') {
+            renderMathInElement(el, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '\\(', right: '\\)', display: false}
+                ]
+            });
+        }
+    });
+});
+</script>
 {% endblock %}
