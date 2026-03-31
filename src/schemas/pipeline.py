@@ -173,10 +173,13 @@ class PipelineContext(BaseModel):
         description="Результаты всех завершённых стадий.",
     )
 
-    # === Progress callback (private, not serialized) ===
+    # === Callbacks (private, not serialized) ===
 
     _progress_callback: Callable[[str, str, float], Awaitable[None]] | None = PrivateAttr(
         default=None
+    )
+    _stage_callback: Callable[[StageResult, "PipelineContext"], Awaitable[None]] | None = (
+        PrivateAttr(default=None)
     )
 
     # === Методы ===
@@ -192,6 +195,17 @@ class PipelineContext(BaseModel):
         """
         self._progress_callback = callback
 
+    def set_stage_callback(
+        self,
+        callback: Callable[[StageResult, "PipelineContext"], Awaitable[None]],
+    ) -> None:
+        """Установить callback для инкрементального сохранения стадий.
+
+        Args:
+            callback: Async функция (stage_result, context) -> None.
+        """
+        self._stage_callback = callback
+
     async def emit_progress(
         self,
         stage_name: str,
@@ -204,6 +218,14 @@ class PipelineContext(BaseModel):
         """
         if self._progress_callback is not None:
             await self._progress_callback(stage_name, message, progress_pct)
+
+    async def emit_stage_complete(self, stage_result: StageResult) -> None:
+        """Уведомить о завершении стадии для инкрементального сохранения.
+
+        Безопасно вызывать даже если callback не установлен (no-op).
+        """
+        if self._stage_callback is not None:
+            await self._stage_callback(stage_result, self)
 
     def merge_agent_result(self, result: AgentResult) -> None:
         """Записать данные из AgentResult в соответствующий слот контекста.

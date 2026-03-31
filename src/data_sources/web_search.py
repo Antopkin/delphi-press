@@ -225,7 +225,7 @@ class WebSearchService:
     ) -> list[SearchResult]:
         """Search with fallback. Matches WebSearchProto signature."""
         if not self._providers:
-            logger.warning("No search providers configured (no API keys)")
+            logger.debug("No search providers configured (no API keys)")
             return []
 
         # Check cache

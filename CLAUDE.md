@@ -3,11 +3,12 @@
 Веб-продукт для прогнозирования заголовков СМИ. Мультиагентный Дельфи-пайплайн (5 персон, 2 раунда).
 
 **Два режима работы:**
-- **Web UI** — пользователь вводит свой API-ключ (OpenRouter). JWT-авторизация. Пресеты: Light / Standard / Full.
+- **Web UI** — пользователь вводит свой API-ключ (OpenRouter). JWT-авторизация. Пресеты: Light / Opus.
 - **Claude Code mode** — пользователь клонирует репо, запускает `/predict`. Субагенты Claude Code = 5 персон (Opus 4.6).
 
-**Стек**: Python 3.12+, FastAPI, ARQ (Redis), SQLite/SQLAlchemy 2.0, Pydantic v2, Jinja2 + Tailwind CSS v4, Docker Compose.
-**LLM**: OpenRouter (Claude/GPT-4/Gemini). Клиент через OpenAI SDK с `base_url`.
+**Стек**: Python 3.12+, FastAPI, ARQ (Redis), SQLite/SQLAlchemy 2.0, Pydantic v2, Jinja2 + Tailwind CSS v4, Docker Compose, pyarrow.
+**Версия**: 0.9.4. **Тесты**: 1302.
+**LLM**: OpenRouter (Claude/GPT-4/Gemini). Клиент через OpenAI SDK с `base_url`. max_tokens unlimited. Metaculus отключён (403).
 **Auth**: JWT (PyJWT) + bcrypt. API-ключи пользователей: Fernet-шифрование (cryptography).
 **Архитектура**: модульный монолит. Деплой: 4 контейнера (app + worker + redis + nginx).
 **Сервер**: `deploy@213.165.220.144` (static IP), Debian 12, Yandex Cloud (4 vCPU 20%, 8GB RAM). Захарденен, Docker 29.3.1, TLS via Let's Encrypt.

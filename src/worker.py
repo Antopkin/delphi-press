@@ -29,6 +29,153 @@ logger = logging.getLogger("worker")
 _WIRE_AGENCY_NAMES = {"тасс", "риа новости", "интерфакс", "reuters", "ap", "associated press"}
 
 
+# ── Headline builders for incremental save ────────────────────────────
+
+
+def _build_draft_headlines(context: Any) -> list[dict[str, Any]]:
+    """Собрать draft headlines из generated_headlines + ranked_predictions.
+
+    Join по event_thread_id: текст из generated, анализ из ranked.
+    """
+    if not context.generated_headlines:
+        return []
+
+    # Index ranked predictions by event_thread_id
+    ranked_by_thread: dict[str, dict] = {}
+    for rp in context.ranked_predictions:
+        tid = (
+            rp.get("event_thread_id")
+            if isinstance(rp, dict)
+            else getattr(rp, "event_thread_id", None)
+        )
+        if tid:
+            ranked_by_thread[tid] = rp
+
+    headlines: list[dict[str, Any]] = []
+    for gh in context.generated_headlines:
+        tid = (
+            gh.get("event_thread_id")
+            if isinstance(gh, dict)
+            else getattr(gh, "event_thread_id", None)
+        )
+        rp = ranked_by_thread.get(tid, {}) if tid else {}
+
+        def _get(obj: Any, key: str, default: Any = "") -> Any:
+            return obj.get(key, default) if isinstance(obj, dict) else getattr(obj, key, default)
+
+        headlines.append(
+            {
+                "rank": _get(rp, "rank", len(headlines) + 1),
+                "headline_text": _get(gh, "headline", ""),
+                "first_paragraph": _get(gh, "first_paragraph", ""),
+                "confidence": _get(rp, "confidence", 0.0),
+                "confidence_label": _get(rp, "confidence_label", ""),
+                "category": _get(rp, "category", ""),
+                "reasoning": _get(rp, "reasoning", ""),
+                "evidence_chain": _get(rp, "evidence_chain", []),
+                "dissenting_views": _get(rp, "dissenting_views", []),
+                "agent_agreement": _get(rp, "agent_agreement", ""),
+            }
+        )
+
+    return headlines
+
+
+def _build_final_headlines(context: Any) -> list[dict[str, Any]]:
+    """Конвертировать final_predictions (Stage 9) в DB-формат."""
+    if not context.final_predictions:
+        return []
+
+    headlines: list[dict[str, Any]] = []
+    for i, fp in enumerate(context.final_predictions, start=1):
+
+        def _get(obj: Any, key: str, default: Any = "") -> Any:
+            return obj.get(key, default) if isinstance(obj, dict) else getattr(obj, key, default)
+
+        headlines.append(
+            {
+                "rank": _get(fp, "rank", i),
+                "headline_text": _get(fp, "headline", ""),
+                "first_paragraph": _get(fp, "first_paragraph", ""),
+                "confidence": _get(fp, "confidence", 0.0),
+                "confidence_label": str(_get(fp, "confidence_label", "")),
+                "category": _get(fp, "category", ""),
+                "reasoning": _get(fp, "reasoning", ""),
+                "evidence_chain": _get(fp, "evidence_chain", []),
+                "dissenting_views": [
+                    dv.model_dump() if hasattr(dv, "model_dump") else dv
+                    for dv in _get(fp, "dissenting_views", [])
+                ],
+                "agent_agreement": str(_get(fp, "agent_agreement", "")),
+            }
+        )
+
+    return headlines
+
+
+def _make_stage_callback(
+    prediction_id: str,
+    session_factory: Any,
+) -> Any:
+    """Создать stage_callback closure для инкрементального сохранения.
+
+    Сохраняет PipelineStep после каждой стадии.
+    После generation — draft headlines. После quality_gate success — финальные.
+    """
+    from src.schemas.agent import StageResult
+    from src.schemas.pipeline import PipelineContext
+
+    step_order_counter = [0]
+
+    async def stage_callback(stage_result: StageResult, context: PipelineContext) -> None:
+        from src.db.engine import get_session
+        from src.db.repositories import PredictionRepository
+
+        step_order_counter[0] += 1
+
+        try:
+            async with get_session(session_factory) as session:
+                repo = PredictionRepository(session)
+
+                # Always: save pipeline step
+                await repo.save_pipeline_step(
+                    prediction_id,
+                    {
+                        "agent_name": stage_result.stage_name,
+                        "step_order": step_order_counter[0],
+                        "status": "completed" if stage_result.success else "failed",
+                        "duration_ms": stage_result.duration_ms,
+                        "llm_tokens_in": stage_result.total_tokens_in,
+                        "llm_tokens_out": stage_result.total_tokens_out,
+                        "llm_cost_usd": stage_result.total_cost_usd,
+                        "error_message": stage_result.error,
+                    },
+                )
+
+                # After generation: save draft headlines
+                if stage_result.stage_name == "generation" and stage_result.success:
+                    draft = _build_draft_headlines(context)
+                    if draft:
+                        await repo.save_headlines(prediction_id, draft)
+
+                # After quality_gate success: replace with final headlines
+                if stage_result.stage_name == "quality_gate" and stage_result.success:
+                    final = _build_final_headlines(context)
+                    if final:
+                        await repo.replace_headlines(prediction_id, final)
+
+                await session.commit()
+        except Exception:
+            logger.warning(
+                "stage_callback failed for stage '%s' (prediction %s)",
+                stage_result.stage_name,
+                prediction_id,
+                exc_info=True,
+            )
+
+    return stage_callback
+
+
 async def run_prediction_task(
     ctx: dict[str, Any],
     prediction_id: str,
@@ -214,9 +361,12 @@ async def run_prediction_task(
     from src.schemas.prediction import PredictionRequest
 
     request = PredictionRequest(outlet=outlet_name, target_date=target_date, preset=preset_name)
+    stage_cb = _make_stage_callback(prediction_id, session_factory)
 
     try:
-        response = await orchestrator.run_prediction(request, progress_callback=progress_callback)
+        response = await orchestrator.run_prediction(
+            request, progress_callback=progress_callback, stage_callback=stage_cb
+        )
     except Exception as exc:
         duration_ms = (time.monotonic_ns() // 1_000_000) - start_ms
         error_msg = f"Pipeline crashed: {type(exc).__name__}: {exc}"
@@ -238,46 +388,13 @@ async def run_prediction_task(
         )
         return {"status": "failed", "error": error_msg}
 
-    # --- 6. Сохранение результатов ---
+    # --- 6. Финализация (headlines и pipeline_steps уже сохранены через stage_callback) ---
     duration_ms = (time.monotonic_ns() // 1_000_000) - start_ms
 
     async with get_session(session_factory) as session:
         repo = PredictionRepository(session)
 
         if response.status == "completed":
-            headlines_data = [
-                {
-                    "rank": h.rank,
-                    "headline_text": h.headline,
-                    "first_paragraph": h.first_paragraph,
-                    "confidence": h.confidence,
-                    "confidence_label": h.confidence_label,
-                    "category": h.category,
-                    "reasoning": h.reasoning,
-                    "evidence_chain": [d for d in h.evidence_chain],
-                    "dissenting_views": [d for d in h.dissenting_views],
-                    "agent_agreement": h.agent_agreement,
-                }
-                for h in response.headlines
-            ]
-            await repo.save_headlines(prediction_id, headlines_data)
-
-            step_order = 0
-            for stage_info in response.stage_results:
-                step_order += 1
-                await repo.save_pipeline_step(
-                    prediction_id,
-                    {
-                        "agent_name": stage_info.get("stage", "unknown"),
-                        "step_order": step_order,
-                        "status": "completed" if stage_info.get("success") else "failed",
-                        "duration_ms": stage_info.get("duration_ms"),
-                        "llm_cost_usd": stage_info.get("cost_usd", 0.0),
-                        "llm_tokens_in": 0,
-                        "llm_tokens_out": 0,
-                    },
-                )
-
             await repo.update_status(
                 prediction_id,
                 PredictionStatus.COMPLETED,

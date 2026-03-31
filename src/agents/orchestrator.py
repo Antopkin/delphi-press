@@ -121,12 +121,16 @@ class Orchestrator:
         self,
         request: PredictionRequest,
         progress_callback: Callable[[str, str, float], Awaitable[None]] | None = None,
+        stage_callback: (
+            Callable[["StageResult", "PipelineContext"], Awaitable[None]] | None
+        ) = None,
     ) -> PredictionResponse:
         """Запустить полный пайплайн прогнозирования.
 
         Args:
             request: Запрос с outlet и target_date.
             progress_callback: SSE callback (stage_name, message, progress_pct).
+            stage_callback: Incremental save callback (stage_result, context).
 
         Returns:
             PredictionResponse с результатами или ошибкой.
@@ -149,6 +153,8 @@ class Orchestrator:
         )
         if progress_callback is not None:
             context.set_progress_callback(progress_callback)
+        if stage_callback is not None:
+            context.set_stage_callback(stage_callback)
 
         pipeline_start_ns = time.monotonic_ns()
 
@@ -163,17 +169,18 @@ class Orchestrator:
             if stage_def.name == ProgressStage.DELPHI_R2:
                 rounds = context.pipeline_config.get("delphi_rounds", 2)
                 if rounds < 2:
-                    context.stage_results.append(
-                        StageResult(
-                            stage_name=str(ProgressStage.DELPHI_R2),
-                            success=True,
-                            duration_ms=0,
-                        )
+                    skipped = StageResult(
+                        stage_name=str(ProgressStage.DELPHI_R2),
+                        success=True,
+                        duration_ms=0,
                     )
+                    context.stage_results.append(skipped)
+                    await context.emit_stage_complete(skipped)
                     continue
 
             stage_result = await self._run_stage(stage_def, context)
             context.stage_results.append(stage_result)
+            await context.emit_stage_complete(stage_result)
 
             if not stage_result.success and stage_def.required:
                 logger.error(

@@ -176,6 +176,64 @@ class TestPredictionSaveHeadlines:
         assert headlines[0].prediction_id == data["id"]
 
 
+class TestPredictionReplaceHeadlines:
+    async def test_replace_headlines_deletes_old_and_inserts_new(
+        self, test_session, make_prediction_data, make_headline_data
+    ):
+        from src.db.repositories import PredictionRepository
+
+        repo = PredictionRepository(test_session)
+        data = make_prediction_data()
+        await repo.create(**data)
+        await test_session.commit()
+
+        # Save initial headlines
+        await repo.save_headlines(
+            data["id"],
+            [make_headline_data(rank=1, headline_text="Draft 1")],
+        )
+        await test_session.commit()
+
+        # Replace with new headlines
+        new_headlines = await repo.replace_headlines(
+            data["id"],
+            [
+                make_headline_data(rank=1, headline_text="Final 1"),
+                make_headline_data(rank=2, headline_text="Final 2"),
+            ],
+        )
+        await test_session.commit()
+
+        assert len(new_headlines) == 2
+        # Verify old headline is gone
+        pred = await repo.get_by_id(data["id"])
+        assert len(pred.headlines) == 2
+        texts = {h.headline_text for h in pred.headlines}
+        assert "Draft 1" not in texts
+        assert "Final 1" in texts
+        assert "Final 2" in texts
+
+    async def test_replace_headlines_empty_list_deletes_all(
+        self, test_session, make_prediction_data, make_headline_data
+    ):
+        from src.db.repositories import PredictionRepository
+
+        repo = PredictionRepository(test_session)
+        data = make_prediction_data()
+        await repo.create(**data)
+        await test_session.commit()
+
+        await repo.save_headlines(data["id"], [make_headline_data(rank=1)])
+        await test_session.commit()
+
+        result = await repo.replace_headlines(data["id"], [])
+        await test_session.commit()
+
+        assert result == []
+        pred = await repo.get_by_id(data["id"])
+        assert len(pred.headlines) == 0
+
+
 class TestPredictionSavePipelineStep:
     async def test_save_pipeline_step(self, test_session, make_prediction_data, make_step_data):
         from src.db.repositories import PredictionRepository

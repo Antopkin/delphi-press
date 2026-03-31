@@ -29,7 +29,7 @@ from src.data_sources.foresight import GdeltDocClient, MetaculusClient, Polymark
 from src.data_sources.outlet_resolver import OutletResolver
 from src.data_sources.outlets_catalog import OutletsCatalog
 from src.data_sources.rss import RSSFetcher
-from src.data_sources.scraper import NoopScraper
+from src.data_sources.scraper import NoopScraper, TrafilaturaScraper
 from src.data_sources.web_search import WebSearchService
 from src.llm.providers import OpenRouterClient
 from src.llm.router import DEFAULT_ASSIGNMENTS, ModelRouter
@@ -138,6 +138,11 @@ async def main() -> None:
     )
     parser.add_argument("--verbose", action="store_true", help="Debug logging")
     parser.add_argument(
+        "--scrape",
+        action="store_true",
+        help="Use real TrafilaturaScraper instead of NoopScraper (slower, but builds outlet profile)",
+    )
+    parser.add_argument(
         "--profiles",
         default="",
         help="Path to bettor_profiles.parquet or .json (enables inverse problem enrichment)",
@@ -235,7 +240,12 @@ async def main() -> None:
     else:
         logger.warning("Outlet not resolved: %r — using global fallbacks", args.outlet)
 
-    scraper = NoopScraper()  # NoopScraper instead of TrafilaturaScraper for speed
+    if args.scrape:
+        scraper = TrafilaturaScraper()
+        logger.info("Using TrafilaturaScraper (real scraping enabled)")
+    else:
+        scraper = NoopScraper()
+        logger.info("Using NoopScraper (pass --scrape for real scraping)")
     profile_cache = InMemoryProfileCache()
     # Metaculus disabled: API returns 403 without BENCHMARKING tier
     metaculus = None

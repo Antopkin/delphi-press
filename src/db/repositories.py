@@ -178,6 +178,16 @@ class PredictionRepository:
         logger.info("Saved %d headlines for prediction %s", len(headlines), prediction_id)
         return headlines
 
+    async def replace_headlines(
+        self,
+        prediction_id: str,
+        headlines_data: list[dict[str, Any]],
+    ) -> list[Headline]:
+        """Атомарная замена заголовков: удалить старые, вставить новые."""
+        await self.session.execute(delete(Headline).where(Headline.prediction_id == prediction_id))
+        await self.session.flush()
+        return await self.save_headlines(prediction_id, headlines_data)
+
     async def save_pipeline_step(
         self,
         prediction_id: str,

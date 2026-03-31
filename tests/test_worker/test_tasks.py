@@ -77,7 +77,8 @@ async def test_task_updates_status_and_runs_pipeline(worker_ctx, seeded_predicti
         pred = await repo.get_by_id(seeded_prediction_id)
         assert pred.status == PredictionStatus.COMPLETED
         assert pred.total_duration_ms is not None
-        assert len(pred.headlines) == 1
+        # Headlines are saved by stage_callback (tested in test_incremental_save.py),
+        # not in the final block. Mocked orchestrator doesn't invoke callbacks.
 
 
 async def test_task_marks_failed_on_pipeline_error(worker_ctx, seeded_prediction_id):
