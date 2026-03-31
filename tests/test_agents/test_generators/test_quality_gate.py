@@ -481,3 +481,34 @@ class TestQualityGateConcurrency:
 
         assert max_concurrent <= 5, f"Expected max 5 concurrent, but saw {max_concurrent}"
         assert max_concurrent >= 2, f"Expected at least 2 concurrent, but saw {max_concurrent}"
+
+    @pytest.mark.asyncio
+    async def test_score_one_timeout_returns_neutral(self, mock_router):
+        """If LLM call hangs, _score_one should return neutral score after timeout."""
+        import asyncio
+        from unittest.mock import patch
+
+        import src.agents.generators.quality_gate as qg_module
+        from src.agents.generators.quality_gate import QualityGate
+
+        gate = QualityGate(llm_client=mock_router)
+        headline = make_generated_headline()
+        prediction = make_ranked_prediction()
+        profile = make_outlet_profile()
+
+        async def hanging_factual(*args, **kwargs):
+            await asyncio.sleep(999)
+
+        async def ok_style(*args, **kwargs):
+            return CheckResult(score=4, feedback="ok")
+
+        with (
+            patch.object(gate, "_check_factual", side_effect=hanging_factual),
+            patch.object(gate, "_check_style", side_effect=ok_style),
+            patch.object(qg_module, "SCORING_TIMEOUT_SECONDS", 0.5),
+        ):
+            score = await gate._score_one(headline, prediction, profile)
+
+        # Timeout → all neutral scores
+        assert score.factual_score == 3  # FACTUAL_MIN_SCORE default
+        assert score.style_score == 3  # both neutral on timeout

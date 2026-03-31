@@ -35,6 +35,8 @@ FACTUAL_MIN_SCORE = 3
 STYLE_MIN_SCORE = 3
 INTERNAL_DEDUP_THRESHOLD = 0.85
 EXTERNAL_DEDUP_THRESHOLD = 0.80
+SCORING_TIMEOUT_SECONDS = 180
+SCORING_CONCURRENCY = 5
 
 
 class QualityGate(BaseAgent):
@@ -120,17 +122,30 @@ class QualityGate(BaseAgent):
         *,
         min_score: int = FACTUAL_MIN_SCORE,
     ) -> QualityScore:
-        """Score a single headline: factual + style checks (concurrent)."""
+        """Score a single headline: factual + style checks (concurrent, timeout-protected)."""
         neutral_factual = CheckResult(
             score=min_score, feedback="factual check error — neutral score"
         )
         neutral_style = CheckResult(score=min_score, feedback="style check error — neutral score")
 
-        results = await asyncio.gather(
-            self._check_factual(headline, prediction, min_score=min_score),
-            self._check_style(headline, profile, min_score=min_score),
-            return_exceptions=True,
-        )
+        try:
+            async with asyncio.timeout(SCORING_TIMEOUT_SECONDS):
+                results = await asyncio.gather(
+                    self._check_factual(headline, prediction, min_score=min_score),
+                    self._check_style(headline, profile, min_score=min_score),
+                    return_exceptions=True,
+                )
+        except TimeoutError:
+            self.logger.warning(
+                "Scoring timeout for headline %s — assigning neutral scores", headline.id
+            )
+            return QualityScore(
+                headline_id=headline.id,
+                factual_score=min_score,
+                factual_feedback="scoring timeout — neutral score",
+                style_score=min_score,
+                style_feedback="scoring timeout — neutral score",
+            )
 
         factual = results[0] if isinstance(results[0], CheckResult) else neutral_factual
         style = results[1] if isinstance(results[1], CheckResult) else neutral_style
