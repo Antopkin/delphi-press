@@ -156,7 +156,11 @@ flowchart TD
 
 Ключевая идея: не все участники рынка одинаково полезны. Среди 1.7 миллионов трейдеров Polymarket есть те, кто систематически делает точные прогнозы, и те, кто ставит случайно или следует за толпой. Мы разделяем их по исторической точности (Brier Score на разрешённых рынках) и строим **informed consensus** — взвешенное мнение только проверенных прогнозистов.
 
-Результат: из 1.7M участников 348K классифицированы как «информированные» (top 20% по Brier Score). Их консенсус снижает ошибку прогноза на 20% по сравнению с сырой рыночной ценой (BSS +0.196, проверено на 22 фолдах walk-forward валидации).
+Результат: из 1.7M участников 348K классифицированы как «информированные» (top 20% по Brier Score). Их консенсус снижает ошибку прогноза на 19.6% по сравнению с сырой рыночной ценой (BSS +0.196, проверено на 22 фолдах walk-forward валидации, p = 2.38×10⁻⁷).
+
+**Data engineering:** 470 миллионов исторических ставок (33 ГБ) обработаны через DuckDB → 2.4 ГБ bucketed parquet (30-дневные временные бакеты) → 62 МБ production-профили (ZSTD, GitHub Releases). Temporal leak обнаружен и исправлен: clean BSS (+0.117) оказался *выше* leaked (+0.092) — утечка добавляла шум, не сигнал.
+
+**Ablation study:** простейшая модель (accuracy-weighted consensus + Bayesian shrinkage) оптимальна. Volume gate (−64% BSS), extremizing (−76%), timing score (0%) — все дополнения вредят. Extremizing Satopää et al. (2014) не работает на Polymarket, где информированные трейдеры коррелированы.
 
 ```mermaid
 flowchart TD
@@ -220,6 +224,40 @@ $$P_{\text{final}} = \text{coverage} \times \text{informed\_raw} + (1 - \text{co
 - **Surowiecki (2004):** «Мудрость толпы» работает только при независимости и разнообразии. На рынках нарушается — есть стадное поведение.
 - **Satopää et al. (2014):** Accuracy-weighting даёт точнее, чем volume-weighting или equal-weight.
 - **Manski (2006):** Рынок систематически недооценивает экстремальные исходы — informed consensus помогает это исправить.
+
+</details>
+
+## Walk-Forward валидация
+
+Любой метод требует доказательства. Мы провели строгую ретроспективную валидацию informed consensus на полном архиве Polymarket — 435 тысяч разрешённых рынков.
+
+Протокол walk-forward evaluation моделирует реальную эксплуатацию: система строит профили только на данных из прошлого, затем прогнозирует на новых рынках, сдвигает окно вперёд и повторяет. 22 неперекрывающихся 60-дневных фолда, burn-in 180 дней.
+
+| Метрика | Значение |
+|---------|----------|
+| Фолдов BSS > 0 | **22/22 (100%)** |
+| Средний BSS | **+0.196** |
+| Bootstrap 95% CI | [+0.135, +0.260] |
+| Sign test p-value | 2.38×10⁻⁷ |
+| Робастный BSS (фолды 0–16) | +0.127 |
+| Пик BSS | +0.273 (fold 9) |
+
+<details>
+<summary>Temporal leak и ablation study</summary>
+
+**Temporal leak:** обнаружен look-ahead bias — pre-aggregated позиции включали ставки после temporal cutoff. Исправлено через bucketed partial aggregates (30-day time buckets). Clean BSS (+0.117) *выше* leaked (+0.092) — утечка добавляла шум, не помогала.
+
+**Ablation study (5 вариантов, bootstrap CI):**
+
+| Вариант | BSS mean | BSS > 0 | 95% CI |
+|---------|----------|---------|--------|
+| **Baseline** | **+0.196** | **100%** | **[+0.135, +0.260]** |
+| Volume gate | +0.071 | 95.5% | [+0.040, +0.102] |
+| Gate + extremize | +0.047 | 68.2% | [+0.022, +0.075] |
+| Gate + timing | +0.071 | 95.5% | [+0.040, +0.102] |
+| Все три | +0.047 | 68.2% | [+0.022, +0.075] |
+
+Baseline оптимален. Extremizing (Satopää 2014) не работает на Polymarket — информированные трейдеры коррелированы. Volume gate убирает информативные рынки. Простейшая модель — лучшая.
 
 </details>
 
@@ -312,11 +350,13 @@ docker compose up -d
 
 ## Статус
 
-v0.9.2 (март 2026). Python 3.12+, FastAPI, Claude/GPT-4/Gemini через OpenRouter.
+v0.9.5 (март 2026). Python 3.12+, FastAPI, Claude/GPT-4/Gemini через OpenRouter.
 
-- 1276 unit + integration тестов, все green
-- 9/9 стадий pipeline verified
-- Inverse Problem: walk-forward eval, 22/22 фолда BSS > 0
+- 1318 unit + integration тестов, все green
+- 9/9 стадий pipeline verified, 18 агентов, 28 LLM-задач
+- Inverse Problem: walk-forward eval, **22/22 фолда BSS > 0**, mean +0.196, p = 2.38×10⁻⁷
+- Data: 470M trades обработаны, 348K informed из 1.7M трейдеров Polymarket
+- Ablation: baseline оптимален, extremizing/volume gate/timing вредят
 - Deployed: [delphi.antopkin.ru](https://delphi.antopkin.ru) (live)
 - Подробная спецификация: `docs/` (12 файлов)
 
@@ -349,6 +389,17 @@ v0.9.2 (март 2026). Python 3.12+, FastAPI, Claude/GPT-4/Gemini через Op
 **LLM как судья:**
 - Zhong et al. (2023). «LLMs as Factual Reasoners: Evaluating their Free-text Justifications.» ICLR 2023 Oral.
 - Liu et al. (2023). «G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment.» EMNLP 2023.
+
+**Статистика и model selection:**
+- Ferro & Fricker (2012). «Sampling Uncertainty and Confidence Intervals for the Brier Score.» Weather and Forecasting.
+- Burnham & Anderson (2002). «Model Selection and Multimodel Inference.» Springer.
+- Campello et al. (2013). «Density-Based Clustering Based on Hierarchical Density Estimates.» PAKDD.
+
+**Эмпирика prediction markets:**
+- Akey, Grégoire, Harvie & Martineau (2025). «Who Wins and Who Loses in Prediction Markets? Evidence from Polymarket.» SSRN 6443103.
+- Mitts & Ofir (2026). «From Iran to Taylor Swift: Informed Trading in Prediction Markets.» Harvard Law Corporate Governance Forum.
+- Bürgi, Deng & Whelan (2025). «Makers and Takers: The Economics of the Kalshi Prediction Market.» CEPR.
+- Clinton & Huang (2024). «Polymarket Accuracy Study.» Vanderbilt University.
 
 ## Документация
 

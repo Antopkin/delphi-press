@@ -484,6 +484,474 @@ flowchart TD
             </div>
         </div>
     </details>
+
+    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1 mt-4">
+        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
+            Данные: 470 миллионов ставок
+        </summary>
+        <div class="space-y-4 pt-2">
+            <p class="text-sm leading-relaxed">
+                Для профилирования участников мы обработали полный архив ставок Polymarket —
+                470 миллионов записей (33 ГБ raw data). Обработка выполнена офлайн с помощью
+                DuckDB (out-of-core аналитика, predicate pushdown, memory limit 2 ГБ).
+            </p>
+            <table class="w-full text-xs">
+                <thead>
+                    <tr>
+                        <th class="text-left border-b border-border p-2">Этап</th>
+                        <th class="text-left border-b border-border p-2">Формат</th>
+                        <th class="text-right border-b border-border p-2">Размер</th>
+                        <th class="text-left border-b border-border p-2">Описание</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="border-b border-border">
+                        <td class="p-2">Raw trades</td>
+                        <td class="p-2 font-mono">trades.parquet</td>
+                        <td class="p-2 text-right">33 ГБ</td>
+                        <td class="p-2">470M записей: user, market, price, size, timestamp</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-2">Bucketed aggregates</td>
+                        <td class="p-2 font-mono">_merged_bucketed.parquet</td>
+                        <td class="p-2 text-right">2.4 ГБ</td>
+                        <td class="p-2">82.6M строк, 30-дневные временные бакеты</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-2">Markets metadata</td>
+                        <td class="p-2 font-mono">markets.parquet</td>
+                        <td class="p-2 text-right">150 МБ</td>
+                        <td class="p-2">572K рынков с метаданными и resolution</td>
+                    </tr>
+                    <tr>
+                        <td class="p-2">Profiles (production)</td>
+                        <td class="p-2 font-mono">bettor_profiles.parquet</td>
+                        <td class="p-2 text-right">62 МБ</td>
+                        <td class="p-2">1.7M профилей, 348K INFORMED (ZSTD-сжатие)</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="text-xs text-text-muted">
+                Временные бакеты (30 дней) обеспечивают composable aggregation: суммы из бакетов
+                можно складывать для любого временного среза, что критично для walk-forward валидации.
+                Профили распространяются через GitHub Releases — production-серверу нужно только 62 МБ.
+            </p>
+        </div>
+    </details>
+
+    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1 mt-4">
+        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
+            Bayesian shrinkage и архетипы трейдеров
+        </summary>
+        <div class="space-y-4 pt-2">
+            <div>
+                <p class="text-sm font-semibold mb-2">Проблема lucky streaks</p>
+                <p class="text-sm text-text-muted mb-2">
+                    Участник с 3 удачными ставками получает BS ≈ 0 и попадает в INFORMED тир.
+                    Но при n=3 дисперсия BS огромна — это может быть просто удача.
+                    Решение: Bayesian shrinkage (Ferro & Fricker, 2012).
+                </p>
+                <div class="bg-surface-0 p-3 rounded border border-border text-sm font-mono">
+                    \[\text{adjusted\_BS} = \frac{n \times \text{observed\_BS} + k \times \text{median}}{n + k}, \quad k = 15\]
+                </div>
+                <p class="text-xs text-text-muted mt-2">
+                    При n=3: сильный shrinkage к медиане популяции (0.295).
+                    При n=100: почти чистый observed_BS.
+                    Результат: INFORMED тир становится чище — меньше случайных удач, выше качество сигнала.
+                </p>
+            </div>
+
+            <div>
+                <p class="text-sm font-semibold mb-2">6 архетипов трейдеров (HDBSCAN)</p>
+                <p class="text-sm text-text-muted mb-2">
+                    Помимо фиксированных тиров, HDBSCAN-кластеризация по 6 поведенческим признакам
+                    (brier_score, win_rate, объём, число рынков, recency) обнаруживает естественные архетипы:
+                </p>
+                <table class="w-full text-xs">
+                    <thead>
+                        <tr>
+                            <th class="text-left border-b border-border p-1">Архетип</th>
+                            <th class="text-left border-b border-border p-1">Характеристика</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b border-border">
+                            <td class="p-1 font-mono">sharp_informed</td>
+                            <td class="p-1">BS &lt; 0.10, высокий объём — профессиональные арбитражёры</td>
+                        </tr>
+                        <tr class="border-b border-border">
+                            <td class="p-1 font-mono">skilled_retail</td>
+                            <td class="p-1">BS &lt; 0.15, низкий объём — точные розничные трейдеры</td>
+                        </tr>
+                        <tr class="border-b border-border">
+                            <td class="p-1 font-mono">volume_bettor</td>
+                            <td class="p-1">Высокий объём, средний BS — маркет-мейкеры</td>
+                        </tr>
+                        <tr class="border-b border-border">
+                            <td class="p-1 font-mono">contrarian</td>
+                            <td class="p-1">win_rate &lt; 0.30 — систематически ошибаются</td>
+                        </tr>
+                        <tr class="border-b border-border">
+                            <td class="p-1 font-mono">stale</td>
+                            <td class="p-1">Низкий recency — неактивные аккаунты</td>
+                        </tr>
+                        <tr>
+                            <td class="p-1 font-mono">noise_trader</td>
+                            <td class="p-1">Всё остальное — случайные участники</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="text-xs text-text-muted mt-2">
+                    Стабильность тиров между фолдами: Jaccard = 0.613 (Campello et al., 2013).
+                </p>
+            </div>
+        </div>
+    </details>
+
+    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1 mt-4">
+        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
+            Параметрические модели: научная новизна
+        </summary>
+        <div class="space-y-4 pt-2">
+            <p class="text-sm leading-relaxed">
+                Помимо эмпирического профилирования по Brier Score, мы исследуем
+                <strong>параметрическое восстановление субъективных распределений</strong>
+                из наблюдаемых ставок — обратную задачу prediction markets.
+            </p>
+
+            <div>
+                <p class="text-sm font-semibold mb-2">Предпосылка</p>
+                <p class="text-sm text-text-muted mb-2">
+                    Каждый участник верит, что время до события \(T \sim \text{Exp}(\lambda)\).
+                    Его субъективная вероятность на горизонте \(H\):
+                </p>
+                <div class="bg-surface-0 p-3 rounded border border-border text-sm font-mono">
+                    \[P(T \leq H) = 1 - e^{-\lambda H}\]
+                </div>
+                <p class="text-xs text-text-muted mt-1">
+                    По наблюдаемой позиции (volume-weighted price) и горизонту рынка \(H\) восстанавливаем \(\lambda\).
+                </p>
+            </div>
+
+            <div>
+                <p class="text-sm font-semibold mb-2">Два подхода</p>
+                <ul class="list-disc pl-5 text-xs space-y-2 text-text-muted">
+                    <li>
+                        <strong>Exp(\(\lambda\)):</strong> closed-form MLE:
+                        \(\hat{\lambda} = \text{mean}(-\log(1-p) / H)\).
+                        Bayesian prior при n &lt; 30.
+                    </li>
+                    <li>
+                        <strong>Weibull(\(\lambda\), k):</strong> scipy L-BFGS-B оптимизация.
+                        \(k > 1\) означает ускоряющийся hazard rate.
+                        Model selection по AICc (Burnham & Anderson, 2002): Exp для n &lt; 20, Weibull для n ≥ 20.
+                    </li>
+                </ul>
+            </div>
+
+            <div>
+                <p class="text-sm font-semibold mb-2">Clone validation (транзитивность)</p>
+                <p class="text-xs text-text-muted">
+                    Обучаем \(\lambda\) на 80% рынков → предсказываем позиции на 20% → MAE → skill_score.
+                    Если skill_score > 0, параметрическая модель предсказывает ставки лучше наивного среднего.
+                    А поскольку ставки отражают исходы рынков, клоны транзитивно предсказывают реальность.
+                </p>
+            </div>
+
+            <div class="bg-surface-1 p-3 rounded border-2 border-primary">
+                <p class="text-sm font-semibold mb-1">Научная новизна</p>
+                <p class="text-xs text-text-muted">
+                    На момент реализации (март 2026) <strong>нет опубликованных работ</strong> по восстановлению
+                    Exp/Weibull распределений из ставок prediction markets. Это потенциально publishable
+                    methodological contribution (подтверждено анализом: Manski 2006, Satopää 2014, Wolfers & Zitzewitz 2004).
+                </p>
+            </div>
+        </div>
+    </details>
+</section>
+
+{# ===== SECTION 6.5: WALK-FORWARD EVALUATION ===== #}
+<section class="mb-12">
+    <h2 class="text-2xl mb-4">Walk-Forward валидация</h2>
+
+    <p class="text-text-muted mb-6">
+        Любой метод требует доказательства. Мы провели строгую ретроспективную валидацию
+        informed consensus на полном архиве Polymarket — 435 тысяч разрешённых рынков.
+    </p>
+
+    <div class="space-y-4 text-text leading-relaxed max-w-prose mb-6">
+        <p>
+            Протокол walk-forward evaluation моделирует реальную эксплуатацию: система строит профили
+            только на данных из прошлого, затем прогнозирует на новых рынках, сдвигает окно вперёд и повторяет.
+            Никакой утечки будущего в прошлое.
+        </p>
+        <p>
+            Результат: <strong>22 из 22 фолдов показали положительный BSS</strong> — informed consensus
+            стабильно точнее сырой рыночной цены. Средний BSS = +0.196 означает снижение ошибки прогноза
+            на 19.6% по сравнению с тем, что показывает рынок «как есть».
+        </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="border-l-4 border-green-600 pl-4 py-2">
+            <span class="block text-2xl font-semibold">22/22</span>
+            <span class="text-text-muted text-sm">фолдов BSS &gt; 0</span>
+        </div>
+        <div class="border-l-4 border-blue-600 pl-4 py-2">
+            <span class="block text-2xl font-semibold">+0.196</span>
+            <span class="text-text-muted text-sm">средний BSS (все фолды)</span>
+        </div>
+        <div class="border-l-4 border-purple-600 pl-4 py-2">
+            <span class="block text-2xl font-semibold">p = 2.4×10⁻⁷</span>
+            <span class="text-text-muted text-sm">sign test (статистически значимо)</span>
+        </div>
+    </div>
+
+    <div class="space-y-3 mb-6">
+        <div class="border-l-4 border-primary pl-4">
+            <strong class="block mb-1">Bootstrap 95% CI: [+0.135, +0.260]</strong>
+            <p class="text-text-muted text-sm">
+                Доверительный интервал не пересекает ноль — результат устойчив. 1000 bootstrap-ресемплов по фолдам.
+            </p>
+        </div>
+        <div class="border-l-4 border-primary pl-4">
+            <strong class="block mb-1">Робастное подмножество (фолды 0–16): BSS +0.127</strong>
+            <p class="text-text-muted text-sm">
+                Фолды 17–21 содержат &lt;2000 тестовых рынков и высокую дисперсию.
+                Даже при исключении — результат уверенно положительный.
+            </p>
+        </div>
+    </div>
+
+    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1">
+        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
+            Протокол и ключевые фолды
+        </summary>
+        <div class="space-y-4 pt-2">
+            <div>
+                <p class="text-sm font-semibold mb-2">Параметры протокола</p>
+                <table class="w-full text-xs">
+                    <tr class="border-b border-border">
+                        <td class="p-1 font-semibold">Burn-in</td>
+                        <td class="p-1">180 дней (построение начальных профилей)</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-1 font-semibold">Шаг</td>
+                        <td class="p-1">60 дней (сдвиг окна)</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-1 font-semibold">Тестовое окно</td>
+                        <td class="p-1">60 дней (неперекрывающиеся)</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-1 font-semibold">Мин. ставок</td>
+                        <td class="p-1">5 (порог для профилирования)</td>
+                    </tr>
+                    <tr>
+                        <td class="p-1 font-semibold">Shrinkage strength</td>
+                        <td class="p-1">k = 15 (Bayesian prior)</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div>
+                <p class="text-sm font-semibold mb-2">Ключевые фолды</p>
+                <table class="w-full text-xs">
+                    <thead>
+                        <tr>
+                            <th class="text-left border-b border-border p-1">Fold</th>
+                            <th class="text-right border-b border-border p-1">Train</th>
+                            <th class="text-right border-b border-border p-1">Test</th>
+                            <th class="text-right border-b border-border p-1">Informed</th>
+                            <th class="text-right border-b border-border p-1">BSS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b border-border">
+                            <td class="p-1">0</td>
+                            <td class="p-1 text-right">1,110</td>
+                            <td class="p-1 text-right">183</td>
+                            <td class="p-1 text-right">101</td>
+                            <td class="p-1 text-right">+0.014</td>
+                        </tr>
+                        <tr class="border-b border-border">
+                            <td class="p-1">5</td>
+                            <td class="p-1 text-right">3,165</td>
+                            <td class="p-1 text-right">944</td>
+                            <td class="p-1 text-right">625</td>
+                            <td class="p-1 text-right">+0.075</td>
+                        </tr>
+                        <tr class="border-b border-border">
+                            <td class="p-1">9 (пик)</td>
+                            <td class="p-1 text-right">14,004</td>
+                            <td class="p-1 text-right">4,354</td>
+                            <td class="p-1 text-right">34,156</td>
+                            <td class="p-1 text-right font-semibold">+0.273</td>
+                        </tr>
+                        <tr class="border-b border-border">
+                            <td class="p-1">12</td>
+                            <td class="p-1 text-right">33,747</td>
+                            <td class="p-1 text-right">15,791</td>
+                            <td class="p-1 text-right">119,241</td>
+                            <td class="p-1 text-right">+0.223</td>
+                        </tr>
+                        <tr>
+                            <td class="p-1">16</td>
+                            <td class="p-1 text-right">270,724</td>
+                            <td class="p-1 text-right">161,693</td>
+                            <td class="p-1 text-right">248,909</td>
+                            <td class="p-1 text-right">+0.125</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="text-xs text-text-muted mt-2">
+                    <strong>Inverted-U pattern:</strong> BSS растёт с накоплением данных (фолды 0→9),
+                    достигает пика на фолдах 9–11, затем снижается. По мере роста ликвидности
+                    рынок становится эффективнее, и информированный сигнал теряет ценность.
+                    Это соответствует гипотезе рыночной эффективности (Fama, 1970).
+                </p>
+            </div>
+        </div>
+    </details>
+
+    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1 mt-4">
+        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
+            Обнаружение и исправление temporal leak
+        </summary>
+        <div class="space-y-4 pt-2">
+            <p class="text-sm leading-relaxed">
+                В ходе валидации мы обнаружили <strong>temporal leak</strong>: pre-aggregated позиции
+                участников включали ставки, сделанные <em>после</em> временного среза T.
+                Это классический look-ahead bias — система «подглядывала» в будущее.
+            </p>
+            <div>
+                <p class="text-sm font-semibold mb-2">Решение: bucketed partial aggregates</p>
+                <p class="text-sm text-text-muted mb-2">
+                    Один скан 33 ГБ raw trades → 2.4 ГБ файл с 30-дневными бакетами.
+                    Для любого среза T позиция восстанавливается из бакетов до T.
+                    Суммы composable — средние нет, поэтому храним
+                    <code class="bg-surface-0 px-1 rounded">weighted_price_sum</code> и
+                    <code class="bg-surface-0 px-1 rounded">total_usd</code> отдельно.
+                </p>
+            </div>
+            <div>
+                <p class="text-sm font-semibold mb-2">Результат: clean &gt; leaked</p>
+                <table class="w-full text-xs">
+                    <thead>
+                        <tr>
+                            <th class="text-left border-b border-border p-1">Метрика</th>
+                            <th class="text-right border-b border-border p-1">С утечкой</th>
+                            <th class="text-right border-b border-border p-1">Без утечки</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b border-border">
+                            <td class="p-1">Mean BSS (фолды 0–14)</td>
+                            <td class="p-1 text-right">+0.092</td>
+                            <td class="p-1 text-right font-semibold">+0.117</td>
+                        </tr>
+                        <tr class="border-b border-border">
+                            <td class="p-1">Median BSS</td>
+                            <td class="p-1 text-right">+0.054</td>
+                            <td class="p-1 text-right font-semibold">+0.095</td>
+                        </tr>
+                        <tr class="border-b border-border">
+                            <td class="p-1">Время (per fold)</td>
+                            <td class="p-1 text-right">~15 мин</td>
+                            <td class="p-1 text-right font-semibold">~4 сек</td>
+                        </tr>
+                        <tr class="border-b border-border">
+                            <td class="p-1">Всего</td>
+                            <td class="p-1 text-right">5+ часов</td>
+                            <td class="p-1 text-right font-semibold">82 мин</td>
+                        </tr>
+                        <tr>
+                            <td class="p-1">Память (пик)</td>
+                            <td class="p-1 text-right">OOM (7.4 ГБ)</td>
+                            <td class="p-1 text-right font-semibold">4.6 ГБ</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="text-xs text-text-muted mt-2">
+                    <strong>Ключевой вывод:</strong> clean BSS <em>выше</em>, чем leaked.
+                    Утечка будущих данных не помогала — она добавляла шум в профили,
+                    разбавляя информированный сигнал. Это подтверждает, что наш метод
+                    работает на честных данных, а не эксплуатирует артефакты.
+                </p>
+            </div>
+        </div>
+    </details>
+
+    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1 mt-4">
+        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
+            Ablation study: простота побеждает
+        </summary>
+        <div class="space-y-4 pt-2">
+            <p class="text-sm leading-relaxed">
+                Мы проверили, улучшают ли литературные методы наш базовый подход.
+                Single-pass evaluation: 5 конфигураций в одном прогоне, 22 фолда,
+                bootstrap CI (1000 ресемплов).
+            </p>
+            <table class="w-full text-xs">
+                <thead>
+                    <tr>
+                        <th class="text-left border-b border-border p-1">Вариант</th>
+                        <th class="text-right border-b border-border p-1">BSS mean</th>
+                        <th class="text-right border-b border-border p-1">BSS median</th>
+                        <th class="text-right border-b border-border p-1">BSS &gt; 0</th>
+                        <th class="text-right border-b border-border p-1">95% CI</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="border-b border-border bg-green-50 dark:bg-green-950/30">
+                        <td class="p-1 font-semibold">Baseline</td>
+                        <td class="p-1 text-right font-semibold">+0.196</td>
+                        <td class="p-1 text-right">+0.159</td>
+                        <td class="p-1 text-right">100%</td>
+                        <td class="p-1 text-right">[+0.135, +0.260]</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-1">Volume gate ($10K–$100K)</td>
+                        <td class="p-1 text-right">+0.071</td>
+                        <td class="p-1 text-right">+0.054</td>
+                        <td class="p-1 text-right">95.5%</td>
+                        <td class="p-1 text-right">[+0.040, +0.102]</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-1">Gate + extremize (d=1.5)</td>
+                        <td class="p-1 text-right">+0.047</td>
+                        <td class="p-1 text-right">+0.028</td>
+                        <td class="p-1 text-right">68.2%</td>
+                        <td class="p-1 text-right">[+0.022, +0.075]</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-1">Gate + timing score</td>
+                        <td class="p-1 text-right">+0.071</td>
+                        <td class="p-1 text-right">+0.054</td>
+                        <td class="p-1 text-right">95.5%</td>
+                        <td class="p-1 text-right">[+0.040, +0.102]</td>
+                    </tr>
+                    <tr>
+                        <td class="p-1">Все три вместе</td>
+                        <td class="p-1 text-right">+0.047</td>
+                        <td class="p-1 text-right">+0.028</td>
+                        <td class="p-1 text-right">68.2%</td>
+                        <td class="p-1 text-right">[+0.022, +0.075]</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="bg-surface-1 p-3 rounded border border-border mt-2">
+                <p class="text-sm font-semibold mb-1">Интерпретация</p>
+                <ul class="list-disc pl-5 text-xs space-y-1 text-text-muted">
+                    <li><strong>Baseline оптимален.</strong> Простое accuracy-weighted усреднение с Bayesian shrinkage — лучший вариант.</li>
+                    <li><strong>Volume gate вредит (−64%).</strong> Фильтрация по ликвидности убирает информативные рынки — большинство рынков Polymarket ниже $100K.</li>
+                    <li><strong>Extremizing вредит (−76%).</strong> Метод Satopää et al. (2014) предполагает независимых экспертов. На Polymarket информированные трейдеры коррелированы (видят одни сигналы), и экстремизация усиливает шум.</li>
+                    <li><strong>Timing score — нулевой эффект.</strong> Внутри INFORMED тира timing не различает качество прогнозистов.</li>
+                    <li><strong>Отрицательный результат ценен:</strong> система не требует тюнинга гиперпараметров — простейшая модель работает лучше всех.</li>
+                </ul>
+            </div>
+        </div>
+    </details>
 </section>
 
 {# ===== SECTION 7: EVALUATION & METRICS ===== #}
@@ -492,9 +960,17 @@ flowchart TD
 
     <p class="text-text-muted mb-6">
         Система оценивается по трём компонентам: калибровка вероятностей, семантическое сходство заголовков и стилевая аутентичность.
+        Это первая опубликованная walk-forward оценка профилей трейдеров Polymarket.
     </p>
 
     <div class="space-y-4 mb-6">
+        <div class="border-l-4 border-green-600 pl-4">
+            <strong class="block mb-1">Informed consensus: BSS +0.196 (22/22 фолда)</strong>
+            <p class="text-text-muted text-sm">
+                Взвешенное мнение исторически точных трейдеров снижает ошибку на 19.6%
+                по сравнению с сырой рыночной ценой. Подробности — в секции Walk-Forward выше.
+            </p>
+        </div>
         <div class="border-l-4 border-primary pl-4">
             <strong class="block mb-1">Brier Score (BS) — калибровка вероятностей</strong>
             <p class="text-text-muted text-sm">
@@ -605,6 +1081,53 @@ flowchart TD
             </div>
         </div>
     </details>
+
+    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1 mt-4">
+        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
+            Сравнение с литературой
+        </summary>
+        <div class="space-y-4 pt-2">
+            <p class="text-sm leading-relaxed">
+                Наши результаты контекстуализируются относительно ключевых исследований prediction markets.
+            </p>
+            <table class="w-full text-xs">
+                <thead>
+                    <tr>
+                        <th class="text-left border-b border-border p-2">Исследование</th>
+                        <th class="text-left border-b border-border p-2">Находка</th>
+                        <th class="text-left border-b border-border p-2">Наш результат</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="border-b border-border">
+                        <td class="p-2">Satopää et al. (2014)</td>
+                        <td class="p-2">Extremizing +10–20% в турнирах прогнозистов</td>
+                        <td class="p-2">Extremizing <strong>вредит</strong> (−76% BSS) — на Polymarket трейдеры коррелированы</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-2">Akey et al. (2025)</td>
+                        <td class="p-2">Top 1% участников Polymarket захватывает 84% прибыли</td>
+                        <td class="p-2">Подтверждает tier-based profiling: малая доля трейдеров информативна</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-2">Mitts & Ofir (2026)</td>
+                        <td class="p-2">Flagged traders: 69.9% win rate, $143M аномальной прибыли</td>
+                        <td class="p-2">Независимое подтверждение: информированные трейдеры существуют и систематически точнее</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-2">Clinton & Huang (2024)</td>
+                        <td class="p-2">Polymarket 67% accuracy vs PredictIt 93%</td>
+                        <td class="p-2">Volume gate не универсален — фильтрация по ликвидности может удалять информативные рынки</td>
+                    </tr>
+                    <tr>
+                        <td class="p-2">Bürgi et al. (2025)</td>
+                        <td class="p-2">Цены точнее ближе к разрешению рынка</td>
+                        <td class="p-2">Обосновывает recency weighting (half-life 90 дней) и timing score</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </details>
 </section>
 
 {# ===== SECTION 8: TECH STACK ===== #}
@@ -701,6 +1224,14 @@ graph TB
                         <td class="p-2 font-mono">Newsreader/Source Sans 3</td>
                         <td class="p-2">Typography (headings / body text)</td>
                     </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-2 font-mono">DuckDB</td>
+                        <td class="p-2">Out-of-core аналитика, walk-forward eval (470M trades)</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-2 font-mono">pyarrow + ZSTD</td>
+                        <td class="p-2">Parquet storage, сжатие профилей (33 ГБ → 62 МБ)</td>
+                    </tr>
                     <tr>
                         <td class="p-2 font-mono">Docker Compose</td>
                         <td class="p-2">Production: app + worker + redis + nginx</td>
@@ -774,6 +1305,25 @@ graph TB
             <ul class="list-disc pl-6 text-text-muted space-y-1 mt-1">
                 <li>Zhong et al. (2023). &laquo;LLMs as Factual Reasoners: Evaluating their Free-text Justifications.&raquo; ICLR 2023 Oral.</li>
                 <li>Liu et al. (2023). &laquo;G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment.&raquo; EMNLP 2023.</li>
+            </ul>
+        </div>
+
+        <div>
+            <strong>Статистика и model selection:</strong>
+            <ul class="list-disc pl-6 text-text-muted space-y-1 mt-1">
+                <li>Ferro & Fricker (2012). &laquo;Sampling Uncertainty and Confidence Intervals for the Brier Score.&raquo; Weather and Forecasting.</li>
+                <li>Burnham & Anderson (2002). &laquo;Model Selection and Multimodel Inference.&raquo; Springer.</li>
+                <li>Campello et al. (2013). &laquo;Density-Based Clustering Based on Hierarchical Density Estimates.&raquo; PAKDD.</li>
+            </ul>
+        </div>
+
+        <div>
+            <strong>Эмпирика prediction markets:</strong>
+            <ul class="list-disc pl-6 text-text-muted space-y-1 mt-1">
+                <li>Akey, Grégoire, Harvie & Martineau (2025). &laquo;Who Wins and Who Loses in Prediction Markets? Evidence from Polymarket.&raquo; SSRN 6443103.</li>
+                <li>Mitts & Ofir (2026). &laquo;From Iran to Taylor Swift: Informed Trading in Prediction Markets.&raquo; Harvard Law Corporate Governance Forum.</li>
+                <li>Bürgi, Deng & Whelan (2025). &laquo;Makers and Takers: The Economics of the Kalshi Prediction Market.&raquo; CEPR.</li>
+                <li>Clinton & Huang (2024). &laquo;Polymarket Accuracy Study.&raquo; Vanderbilt University.</li>
             </ul>
         </div>
     </div>
