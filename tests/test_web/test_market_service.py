@@ -186,8 +186,8 @@ async def test_api_failure_returns_empty(profiles, summary):
 
 
 @pytest.mark.asyncio
-async def test_no_informed_bettors_filtered_out(summary):
-    """Markets where no trade matches an informed profile are excluded."""
+async def test_fallback_cards_when_no_informed(summary):
+    """Markets with 0 informed bettors are returned as fallback (has_informed=False)."""
     # Empty profiles dict — no bettors will match
     service = MarketSignalService({}, summary)
 
@@ -206,7 +206,11 @@ async def test_no_informed_bettors_filtered_out(summary):
 
         result = await service.get_top_markets(limit=10)
 
-    assert result == []
+    assert len(result) == 1
+    card = result[0]
+    assert card.has_informed is False
+    assert card.n_informed_bettors == 0
+    assert card.raw_probability == 0.6
 
 
 def test_market_card_schema():
