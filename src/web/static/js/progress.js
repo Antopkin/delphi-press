@@ -108,13 +108,14 @@
   function handleProgressEvent(data) {
     var stage = data.stage;
     var message = data.message || "";
-    var progress = data.progress || 0;
     var elapsedMs = data.elapsed_ms || 0;
 
-    // --- Update progress bar ---
-    var pct = Math.round(progress * 100);
-    progressBar.value = pct;
-    progressPercent.textContent = pct + "%";
+    // --- Update progress bar (only when progress field is present) ---
+    if (data.progress !== undefined && data.progress !== null) {
+      var pct = Math.round(data.progress * 100);
+      progressBar.value = pct;
+      progressPercent.textContent = pct + "%";
+    }
 
     // --- Update elapsed time ---
     if (elapsedMs > 0) {
