@@ -171,6 +171,11 @@ class MarketSignalService:
                 matched_trader_ids |= market_matched
 
                 yes_prob = market.get("yes_probability", 0.5)
+
+                # Skip essentially-resolved markets (no meaningful signal)
+                if yes_prob < 0.05 or yes_prob > 0.95:
+                    continue
+
                 signal = compute_informed_signal(
                     trade_records,
                     self.profiles,

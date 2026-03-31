@@ -236,7 +236,8 @@ class PolymarketClient:
             logger.warning("Polymarket response parse error: %s", exc)
             return []
 
-        cutoff = datetime.now(UTC) + timedelta(days=end_date_days_ahead)
+        now = datetime.now(UTC)
+        cutoff = now + timedelta(days=end_date_days_ahead)
         results: list[dict] = []
 
         for market in markets_raw:
@@ -248,12 +249,12 @@ class PolymarketClient:
             if liquidity < min_liquidity:
                 continue
 
-            # Parse end date, filter beyond cutoff
+            # Parse end date, filter expired and beyond cutoff
             end_date_str = market.get("endDate")
             if end_date_str:
                 try:
                     end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
-                    if end_date > cutoff:
+                    if end_date < now or end_date > cutoff:
                         continue
                 except (ValueError, TypeError):
                     pass
