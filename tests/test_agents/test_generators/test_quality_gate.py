@@ -512,3 +512,66 @@ class TestQualityGateConcurrency:
         # Timeout → all neutral scores
         assert score.factual_score == 3  # FACTUAL_MIN_SCORE default
         assert score.style_score == 3  # both neutral on timeout
+
+    @pytest.mark.asyncio
+    async def test_execute_survives_single_headline_timeout(self, mock_router, make_context):
+        """One hanging headline should not kill the entire pipeline."""
+        import asyncio
+        import json
+        from unittest.mock import patch
+
+        import src.agents.generators.quality_gate as qg_module
+        from src.agents.generators.quality_gate import QualityGate
+
+        gate = QualityGate(llm_client=mock_router)
+        ctx = make_context()
+
+        headline_texts = [
+            "ЦБ повысил ставку до 23%",
+            "Путин подписал указ о бюджете",
+            "Минфин опубликовал прогноз на 2027 год",
+            "Нефть превысила отметку $90 за баррель",
+            "Рубль укрепился к доллару после заседания ЦБ",
+        ]
+        headlines = []
+        predictions = []
+        framings = []
+        for i in range(5):
+            tid = f"thread_{i:04d}"
+            headlines.append(
+                make_generated_headline(event_thread_id=tid, headline=headline_texts[i])
+            )
+            predictions.append(make_ranked_prediction(event_thread_id=tid, rank=i + 1))
+            framings.append(make_framing_brief(event_thread_id=tid))
+
+        ctx.generated_headlines = headlines
+        ctx.ranked_predictions = predictions
+        ctx.framing_briefs = framings
+        ctx.outlet_profile = make_outlet_profile()
+
+        hanging_thread_id = "thread_0002"
+        call_count = 0
+
+        original_check_factual = gate._check_factual
+
+        async def selective_hanging_factual(headline, prediction, *, min_score=3):
+            nonlocal call_count
+            call_count += 1
+            if headline.event_thread_id == hanging_thread_id:
+                await asyncio.sleep(999)  # Hang
+            return CheckResult(score=4, feedback="ok")
+
+        check_ok = json.dumps({"score": 4, "feedback": "Good."})
+        mock_router.complete.return_value = make_llm_response(check_ok)
+
+        with (
+            patch.object(gate, "_check_factual", side_effect=selective_hanging_factual),
+            patch.object(qg_module, "SCORING_TIMEOUT_SECONDS", 0.5),
+        ):
+            result = await gate.execute(ctx)
+
+        # 4 normal headlines should produce final predictions
+        # The hanging one gets neutral scores → still passes (neutral = min_score)
+        assert len(result["final_predictions"]) >= 4
+        # Pipeline completed, didn't hang
+        assert "final_predictions" in result
