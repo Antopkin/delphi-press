@@ -164,7 +164,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["470M ставок<br/>1.7M участников"] --> B["Brier Score<br/>разрешённые рынки"]
+    A["470M ставок"] --> B["Brier Score"]
     B --> C{"Классификация"}
     C -->|"BS < p20"| D["348K INFORMED<br/>точные прогнозисты"]
     C -->|"p20–p70"| E["MODERATE<br/>средняя точность"]

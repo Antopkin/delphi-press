@@ -250,39 +250,43 @@ flowchart TD
             Алгоритмы каждой стадии
         </summary>
         <div class="space-y-4 pt-2 text-sm">
-            <div>
+            {# — Фаза 1: Сбор данных (зелёный) — #}
+            <div class="border-l-4 border-green-600 pl-3">
                 <p class="font-semibold mb-1">Стадия 1: Сбор данных</p>
                 <p class="text-text-muted">Четыре коллектора работают параллельно: NewsScout (RSS-фиды + web search), EventCalendar (запланированные политические и экономические события), OutletHistorian (архив целевого издания за последние дни), ForesightCollector (активные контракты Polymarket и Metaculus). Результат: ~200 новостных сигналов.</p>
             </div>
-            <div>
+            {# — Фаза 2: Анализ (синий) — #}
+            <div class="border-l-4 border-blue-600 pl-3">
                 <p class="font-semibold mb-1">Стадия 2: Кластеризация событий</p>
                 <p class="text-text-muted">TF-IDF векторизация с tri-gram tokenization, cosine similarity matrix, HDBSCAN (min_cluster_size=3). Выбор HDBSCAN вместо K-means: число кластеров заранее неизвестно, шумовые статьи автоматически отсеиваются (Campello et al., 2013). Результат: 15-30 событийных нитей из ~200 статей.</p>
             </div>
-            <div>
+            <div class="border-l-4 border-blue-600 pl-3">
                 <p class="font-semibold mb-1">Стадия 3: Анализ траекторий</p>
                 <p class="text-text-muted">Три аналитика (геополитический, экономический, медийный) параллельно строят сценарии. Перекрёстная матрица определяет каузальные связи: как событие A влияет на вероятность события B. Это позволяет учитывать цепочки последствий.</p>
             </div>
-            <div>
+            {# — Фаза 3: Дельфи-консенсус (фиолетовый) — #}
+            <div class="border-l-4 border-purple-600 pl-3">
                 <p class="font-semibold mb-1">Стадия 4: Дельфи — раунд 1</p>
                 <p class="text-text-muted">Пять экспертных персон независимо оценивают вероятность каждого события: Реалист (base rates), Геостратег (баланс сил), Экономист (денежные потоки), Медиа-эксперт (новостная ценность), Адвокат дьявола (чёрные лебеди). Анонимность: персоны не видят оценки друг друга.</p>
             </div>
-            <div>
+            <div class="border-l-4 border-purple-600 pl-3">
                 <p class="font-semibold mb-1">Стадия 5: Дельфи — раунд 2</p>
                 <p class="text-text-muted">Медиатор не просто показывает чужие оценки — он синтезирует аргументы, выделяет точки разногласий и формулирует контраргументы. Это заставляет персон переосмыслить позиции, а не просто сдвинуться к среднему (Zhao et al., 2024).</p>
             </div>
-            <div>
+            <div class="border-l-4 border-purple-600 pl-3">
                 <p class="font-semibold mb-1">Стадия 6: Консенсус и таймлайн</p>
                 <p class="text-text-muted">Judge агрегирует оценки в предсказанный таймлайн на трёх горизонтах: 1-2 дня (оперативный режим, высокий вес), 3-4 дня (смешанный режим), 5-7 дней (структурный режим, низкий вес). Калибрует вероятности, интегрирует сигналы prediction markets.</p>
             </div>
-            <div>
+            {# — Фаза 4: Генерация (янтарный) — #}
+            <div class="border-l-4 border-amber-600 pl-3">
                 <p class="font-semibold mb-1">Стадия 7: Фрейминг</p>
                 <p class="text-text-muted">Анализ редакционного стиля целевого издания: жанр, типичная длина заголовков, лексика, тональность, характерные углы подачи. Для каждого события определяется фрейм: угроза, возможность, кризис, рутина или сенсация.</p>
             </div>
-            <div>
+            <div class="border-l-4 border-amber-600 pl-3">
                 <p class="font-semibold mb-1">Стадия 8: Генерация заголовков</p>
                 <p class="text-text-muted">StyleReplicator генерирует заголовки и первые абзацы в стиле целевого издания. Каждый заголовок стилизуется под конкретный формат: длина, лексика, тональность соответствуют профилю СМИ.</p>
             </div>
-            <div>
+            <div class="border-l-4 border-amber-600 pl-3">
                 <p class="font-semibold mb-1">Стадия 9: Quality Gate</p>
                 <p class="text-text-muted">Алгоритмическая проверка (без LLM): факт-чек заголовка по source data, стилевая consistency (длина, лексика, тональность vs. профиль издания). Заголовки ниже порога отбраковываются.</p>
             </div>
@@ -381,15 +385,15 @@ flowchart TD
 
     <pre class="mermaid mb-6">
 flowchart TD
-    A["470M ставок<br/>1.7M участников"] --> B["Brier Score<br/>разрешённые рынки"]
-    B --> C{"Классификация"}
-    C -->|"BS < p20"| D["348K INFORMED<br/>точные прогнозисты"]
-    C -->|"p20–p70"| E["MODERATE<br/>средняя точность"]
-    C -->|"BS > p70"| F["LOW ACCURACY<br/>низкая точность"]
-    D --> G["Recency weighting<br/>half-life 90 дней"]
-    G --> H["Accuracy-weighted<br/>consensus"]
-    H --> I["Bayesian shrinkage<br/>к рыночной цене"]
-    I --> J["Informed Consensus<br/>BSS +0.196 vs raw market"]
+    A["470M ставок"] --> B["Brier Score"]
+    B --> C{"Тиры"}
+    C -->|"top 20%"| D["348K INFORMED"]
+    C -->|"20–70%"| E["MODERATE"]
+    C -->|"70%+"| F["LOW ACCURACY"]
+    D --> G["Recency<br/>90 дней"]
+    G --> H["Weighted<br/>consensus"]
+    H --> I["Shrinkage"]
+    I --> J["BSS +0.196"]
     </pre>
 
     <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1">
