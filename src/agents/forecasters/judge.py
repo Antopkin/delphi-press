@@ -147,8 +147,8 @@ class Judge(BaseAgent):
         ranked = self._select_headlines(timeline, assessments, context)
 
         return {
-            "ranked_predictions": [rp.model_dump() for rp in ranked],
-            "predicted_timeline": timeline.model_dump(),
+            "ranked_predictions": [rp.model_dump(mode="json") for rp in ranked],
+            "predicted_timeline": timeline.model_dump(mode="json"),
         }
 
     # === Step 6a: Event-level aggregation ===

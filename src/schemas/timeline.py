@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 from src.schemas.headline import AgreementLevel, ConfidenceLabel, DissentingView
 
@@ -76,6 +76,11 @@ class TimelineEntry(BaseModel):
     is_wild_card: bool = Field(default=False, description="Wild card от Адвоката дьявола")
     persona_count: int = Field(ge=1, description="Количество персон, предсказавших событие")
 
+    @field_serializer("predicted_date")
+    @classmethod
+    def _serialize_date(cls, v: date) -> str:
+        return v.isoformat()
+
 
 class PredictedTimeline(BaseModel):
     """Полный предсказанный timeline — выход Judge step 6a.
@@ -97,3 +102,13 @@ class PredictedTimeline(BaseModel):
     total_events: int = Field(
         default=0, ge=0, description="Общее количество обработанных event threads"
     )
+
+    @field_serializer("target_date")
+    @classmethod
+    def _serialize_target_date(cls, v: date) -> str:
+        return v.isoformat()
+
+    @field_serializer("generated_at")
+    @classmethod
+    def _serialize_generated_at(cls, v: datetime) -> str:
+        return v.isoformat()

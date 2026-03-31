@@ -176,3 +176,33 @@ def test_predicted_timeline_empty_entries():
         horizon_days=3,
     )
     assert len(tl.entries) == 0
+
+
+# ── JSON serialization for DB (date → ISO string) ─────────────────
+
+
+def test_predicted_timeline_model_dump_json_serializes_dates():
+    """model_dump(mode='json') must convert date/datetime to ISO strings
+    so that json.dumps() succeeds for SQLite JSON columns."""
+    import json
+
+    entry = TimelineEntry(**_timeline_entry_kwargs())
+    tl = PredictedTimeline(
+        entries=[entry],
+        target_date=date(2026, 4, 1),
+        horizon_band=HorizonBand.MEDIUM,
+        horizon_days=7,
+        total_events=15,
+    )
+    data = tl.model_dump(mode="json")
+
+    # Must not raise TypeError
+    serialized = json.dumps(data)
+    assert isinstance(serialized, str)
+
+    # date fields must be ISO strings, not date objects
+    assert isinstance(data["target_date"], str)
+    assert data["target_date"] == "2026-04-01"
+    assert isinstance(data["entries"][0]["predicted_date"], str)
+    assert data["entries"][0]["predicted_date"] == "2026-04-01"
+    assert isinstance(data["generated_at"], str)

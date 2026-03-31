@@ -693,6 +693,47 @@ class TestHorizonWeightAdjustments:
         assert adj["devils_advocate"] > 0
 
 
+class TestJudgeOutputJsonSerializable:
+    """Judge output must be JSON-serializable for SQLite JSON columns."""
+
+    def test_judge_output_json_serializable(self, make_context):
+        """predicted_timeline dict from Judge must pass json.dumps() without TypeError."""
+        import json
+        from datetime import date, timedelta
+
+        from src.agents.forecasters.judge import Judge
+
+        judge = Judge.__new__(Judge)
+        judge.a = 1.5
+        judge.b = 0.0
+        judge.llm = None
+
+        ctx = make_context()
+        ctx.target_date = date.today() + timedelta(days=2)
+
+        from tests.test_agents.test_forecasters.conftest import make_persona_assessment
+
+        assessments = [
+            make_persona_assessment("realist"),
+            make_persona_assessment("economist"),
+        ]
+        timeline = judge._aggregate_timeline(assessments, ctx)
+        ranked = judge._select_headlines(timeline, assessments, ctx)
+
+        # This is exactly what Judge.execute() returns
+        output = {
+            "ranked_predictions": [rp.model_dump() for rp in ranked],
+            "predicted_timeline": timeline.model_dump(),
+        }
+
+        # Must not raise TypeError: Object of type date is not JSON serializable
+        serialized = json.dumps(output, default=str)
+        assert isinstance(serialized, str)
+
+        # Stricter: must work WITHOUT default=str (like SQLAlchemy does)
+        json.dumps(output)
+
+
 class TestJudgeInitNoLLM:
     """Judge(None) should still have base attributes from BaseAgent."""
 
