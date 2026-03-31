@@ -261,9 +261,6 @@ class DelphiPersonaAgent(BaseAgent):
         self.name = persona.agent_name  # must set before super().__init__
         super().__init__(llm_client)
 
-    def get_timeout_seconds(self) -> int:
-        return 600
-
     def validate_context(self, context: PipelineContext) -> str | None:
         if not context.trajectories:
             return "No trajectories for Delphi assessment"

@@ -63,8 +63,8 @@ class BaseAgent(abc.ABC):
         return None
 
     def get_timeout_seconds(self) -> int:
-        """Таймаут выполнения агента в секундах. По умолчанию 300."""
-        return 300
+        """Таймаут выполнения агента в секундах. По умолчанию 600."""
+        return 600
 
     async def run(self, context: PipelineContext) -> AgentResult:
         """Выполнить агента с обработкой ошибок и таймаутом.

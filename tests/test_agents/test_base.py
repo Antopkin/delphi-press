@@ -43,7 +43,7 @@ def test_agent_logger_name(DummyAgent, mock_router):
 
 def test_agent_default_timeout(DummyAgent, mock_router):
     agent = DummyAgent(mock_router)
-    assert agent.get_timeout_seconds() == 300
+    assert agent.get_timeout_seconds() == 600
 
 
 # ── run() happy path ────────────────────────────────────────────────
