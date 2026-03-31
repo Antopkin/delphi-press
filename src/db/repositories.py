@@ -150,19 +150,16 @@ class PredictionRepository:
         )
         return result.scalars().all()
 
-    async def get_public(
+    async def get_showcase(
         self,
         *,
-        limit: int = 20,
+        limit: int = 10,
     ) -> Sequence[Prediction]:
-        """Публичные прогнозы (user_id IS NULL, status = COMPLETED)."""
-        limit = min(limit, 100)
+        """Публичные витринные прогнозы (is_public = True)."""
+        limit = min(limit, 50)
         result = await self.session.execute(
             select(Prediction)
-            .where(
-                Prediction.user_id.is_(None),
-                Prediction.status.in_((PredictionStatus.COMPLETED, "COMPLETED")),
-            )
+            .where(Prediction.is_public.is_(True))
             .order_by(Prediction.created_at.desc())
             .limit(limit)
         )

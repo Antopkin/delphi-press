@@ -145,10 +145,50 @@
 
 </section>
 
-{# ===== MY / RECENT PREDICTIONS ===== #}
-{% if recent_predictions %}
+{# ===== SHOWCASE: PUBLIC PREDICTIONS ===== #}
+{% if showcase_predictions %}
 <section class="mt-12">
-    <h2 class="text-xl mb-4">{% if current_user %}Мои прогнозы{% else %}Примеры прогнозов{% endif %}</h2>
+    <h2 class="text-xl mb-4">Примеры прогнозов</h2>
+    <div class="overflow-x-auto">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">СМИ</th>
+                    <th scope="col">Дата</th>
+                    <th scope="col">Топ-заголовок</th>
+                    <th scope="col"></th>
+                </tr>
+            </thead>
+            <tbody data-stagger>
+                {% for pred in showcase_predictions %}
+                <tr style="--fn-stagger-i: {{ loop.index0 }}" class="hover:bg-surface-1 transition-colors duration-fast">
+                    <td>{{ pred.outlet_name }}</td>
+                    <td>{{ pred.target_date.strftime('%d.%m.%Y') }}</td>
+                    <td>
+                        {% if pred.headlines %}
+                            {{ pred.headlines[0].headline_text | truncate(80) }}
+                        {% else %}
+                            --
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="/results/{{ pred.id }}"
+                           class="inline-block text-sm border border-border rounded-md px-3 py-1 no-underline text-text hover:bg-surface-1">
+                            Результаты
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+{# ===== MY PREDICTIONS (logged-in only) ===== #}
+{% if current_user and recent_predictions %}
+<section class="mt-12">
+    <h2 class="text-xl mb-4">Мои прогнозы</h2>
     <div class="overflow-x-auto">
         <table>
             <thead>

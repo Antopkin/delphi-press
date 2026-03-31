@@ -116,6 +116,9 @@ class Prediction(Base):
         index=True,
     )
     preset: Mapped[str] = mapped_column(String(20), default="full")
+    is_public: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
+    )
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship("User", back_populates="predictions")
