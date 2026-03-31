@@ -209,11 +209,30 @@ async def create_prediction(
         )
         await session.commit()
 
+    # Resolve API key: manual input > saved user key > server fallback
+    effective_api_key = body.api_key
+    if not effective_api_key and user is not None:
+        try:
+            async with get_session(session_factory) as session:
+                from src.db.repositories import UserRepository
+
+                user_repo = UserRepository(session)
+                keys = await user_repo.get_api_keys(user.id)
+                for key in keys:
+                    if key.provider == "openrouter" and key.is_active:
+                        from src.security.encryption import KeyVault
+
+                        vault = KeyVault(request.app.state.settings.fernet_key)
+                        effective_api_key = vault.decrypt(key.encrypted_key)
+                        break
+        except Exception:
+            logger.warning("Failed to decrypt saved API key for user %s", user.id)
+
     try:
         await arq_pool.enqueue_job(
             "run_prediction_task",
             prediction_id,
-            api_key=body.api_key,
+            api_key=effective_api_key,
             outlet_url=body.outlet_url,
         )
         logger.info("Enqueued prediction %s", prediction_id)
