@@ -109,6 +109,7 @@
       try {
         var resp = await fetch("/api/v1/keys/" + keyId + "/validate", {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
         });
 
