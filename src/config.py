@@ -146,7 +146,7 @@ class Settings(LLMConfig):
     # === ARQ Worker ===
 
     arq_max_jobs: int = Field(default=10, ge=1, le=50)
-    arq_job_timeout: int = Field(default=1800, ge=300, le=3600)
+    arq_job_timeout: int = Field(default=5400, ge=300, le=7200)
     arq_concurrency: int = Field(default=2, ge=1, le=4)
 
     # === Paths ===

@@ -10,10 +10,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Sequence
 
 from arq.connections import RedisSettings
@@ -350,12 +351,17 @@ async def run_prediction_task(
             "generation": PredictionStatus.GENERATING,
             "quality_gate": PredictionStatus.GENERATING,
         }
-        new_status = stage_to_status.get(stage_name)
-        if new_status is not None:
-            async with get_session(session_factory) as session:
-                repo = PredictionRepository(session)
-                await repo.update_status(prediction_id, new_status)
-                await session.commit()
+        try:
+            new_status = stage_to_status.get(stage_name)
+            if new_status is not None:
+                async with get_session(session_factory) as session:
+                    repo = PredictionRepository(session)
+                    await repo.update_status(prediction_id, new_status)
+                    await session.commit()
+        except Exception:
+            logger.warning(
+                "progress_callback DB update failed for %s", prediction_id, exc_info=True
+            )
 
     # --- 5. Запуск пайплайна ---
     from src.schemas.prediction import PredictionRequest
@@ -367,6 +373,25 @@ async def run_prediction_task(
         response = await orchestrator.run_prediction(
             request, progress_callback=progress_callback, stage_callback=stage_cb
         )
+    except asyncio.CancelledError:
+        # ARQ job timeout or worker shutdown — must update DB before re-raising
+        duration_ms = (time.monotonic_ns() // 1_000_000) - start_ms
+        error_msg = "Task cancelled (job timeout or worker shutdown)"
+        logger.warning(error_msg)
+        try:
+            async with get_session(session_factory) as session:
+                repo = PredictionRepository(session)
+                await repo.update_status(
+                    prediction_id,
+                    PredictionStatus.FAILED,
+                    error_message=error_msg,
+                    total_duration_ms=duration_ms,
+                )
+                await session.commit()
+            await redis.publish(channel, json.dumps({"event": "error", "message": error_msg}))
+        except Exception:
+            logger.warning("Failed to update DB on cancellation for %s", prediction_id)
+        raise
     except Exception as exc:
         duration_ms = (time.monotonic_ns() // 1_000_000) - start_ms
         error_msg = f"Pipeline crashed: {type(exc).__name__}: {exc}"
@@ -724,6 +749,37 @@ async def startup(ctx: dict[str, Any]) -> None:
     from src.data_sources.rss import RSSFetcher
 
     ctx["rss_fetcher"] = RSSFetcher()
+
+    # Cleanup stuck predictions from previous worker crashes
+    from sqlalchemy import and_, update
+
+    from src.db.engine import get_session
+    from src.db.models import Prediction, PredictionStatus
+
+    stuck_statuses = [
+        PredictionStatus.COLLECTING,
+        PredictionStatus.ANALYZING,
+        PredictionStatus.FORECASTING,
+        PredictionStatus.GENERATING,
+    ]
+    cutoff = datetime.now(UTC) - timedelta(minutes=30)
+    async with get_session(ctx["session_factory"]) as session:
+        result = await session.execute(
+            update(Prediction)
+            .where(
+                and_(
+                    Prediction.status.in_(stuck_statuses),
+                    Prediction.created_at < cutoff,
+                )
+            )
+            .values(
+                status=PredictionStatus.FAILED,
+                error_message="Worker restarted: task abandoned",
+            )
+        )
+        await session.commit()
+        if result.rowcount:
+            logger.warning("Cleaned up %d stuck predictions on startup", result.rowcount)
 
     logger.info("Worker started with settings: %s", settings.app_name)
 
