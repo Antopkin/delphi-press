@@ -48,6 +48,7 @@
 ### Fixed
 - **Profile key case mismatch** — профили хранились с mixed-case Ethereum-адресами (EIP-55: `0x6FBB...`), а `adapt_data_api_trades()` приводил wallet к lowercase (`0x6fbb...`). Lookup `profiles.get(user_id)` всегда промахивался → 0 активных сигналов на `/markets`. **Почему:** Phase 6 добавила `.lower()` для trades, но не нормализовала ключи dict при загрузке профилей. Фикс: `.lower()` на ключе в `_load_parquet()` и `_load_json()` (store.py)
 - **Пустая страница `/markets`** — добавлен fallback UX: если ни один informed трейдер не матчится, страница показывает топ рынков по объёму с raw market price (без informed bar, с баннером). `MarketCard.has_informed` field для условного рендеринга. Страница больше никогда не бывает пустой при наличии активных рынков
+- **Мусорные рынки на `/markets`** — на топ выходили expired и essentially-resolved рынки (raw 0.1%, dispersion 75%) из-за стейловых позиций informed бетторов. **Почему:** `fetch_markets()` фильтровал только `end_date > cutoff` (слишком далеко), но пропускал expired (`end_date < now`). Также не было фильтра по вероятности. Фикс: два фильтра — skip expired + skip `raw < 5%` / `> 95%`
 
 ### Metrics
 - Тесты: 1302 → 1324 (+22: stage_callback, replace_headlines, date serialization, timeline JSON, profile normalization, fallback cards, template rendering)
