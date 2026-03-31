@@ -180,11 +180,11 @@ async def test_markets_page_200_with_data(client_with_markets):
 
 
 @pytest.mark.asyncio
-async def test_markets_page_contains_nav_link(client_with_markets):
-    """Nav bar includes link to /markets."""
+async def test_markets_page_hidden_from_nav(client_with_markets):
+    """Nav bar does NOT include link to /markets (hidden until data quality improves)."""
     resp = await client_with_markets.get("/markets")
-    assert 'href="/markets"' in resp.text
-    assert "Рынки" in resp.text
+    assert resp.status_code == 200  # page still accessible by URL
+    assert 'href="/markets"' not in resp.text
 
 
 @pytest.mark.asyncio

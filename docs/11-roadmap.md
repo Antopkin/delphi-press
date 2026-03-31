@@ -78,6 +78,52 @@ tests/test_integration/             — 7 E2E integration tests
 
 ## Оставшиеся сессии
 
+### Market Dashboard — Live Data Pipeline (planned)
+
+**Цель:** Сделать `/markets` полезным — достаточно рынков с informed consensus для возврата в навигацию.
+
+**Статус:** PLANNED. Страница скрыта из навигации (v0.9.5), доступна по URL.
+
+**Проблема:** Профили из исторического Kaggle-датасета (2024) стейловые — из 348K informed только единицы матчатся с текущими трейдерами на Polymarket. Результат: 1 рынок вместо 10-20.
+
+**План:**
+
+- [ ] **Cron rebuild профилей** — ARQ periodic task (раз в неделю):
+  1. Fetch resolved markets за последние 6 месяцев из Gamma API (`active=false, closed=true`)
+  2. Fetch all trades по resolved markets из Data API (batch, 200 req/10s rate limit)
+  3. Compute resolutions из `outcomePrices` (YES=1.0 / NO=0.0)
+  4. Rebuild profiles через `build_bettor_profiles()` — Brier Score, tier classification, Bayesian shrinkage
+  5. Save to `data/inverse/bettor_profiles.parquet` (atomic: write tmp → rename)
+  6. Hot-reload в `MarketSignalService` без рестарта app (signal или TTL на profiles dict)
+  - **Estimate:** ~2-3 часа на fetch + compute для 100K resolved markets
+  - **Rate limits:** Data API 200 req/10s, Gamma API ~50 req/s — need throttled batch fetcher
+  - **Memory:** DuckDB для aggregation (2GB limit на 8GB server), не in-memory pandas
+  - **Storage:** ~60 MB parquet, overwrite in-place
+
+- [ ] **Incremental profile update** — вместо полного rebuild, append новые resolved markets к существующему профилю:
+  1. Track `last_resolved_market_date` в sidecar JSON
+  2. Fetch только markets resolved после этой даты
+  3. Merge: weighted average Brier Score (old + new), re-classify tiers
+  - **Benefit:** 10 мин вместо 2-3 часов, можно запускать ежедневно
+
+- [ ] **Расширить временное окно** — `end_date_days_ahead: 30 → 90` для большего охвата рынков
+
+- [ ] **Качественный порог** — показывать рынок только если `n_informed_bettors >= 5` и `coverage >= 25%` (сейчас >= 1)
+
+- [ ] **Возврат в навигацию** — автоматически или вручную, когда стабильно >= 10 рынков с informed consensus
+
+**Критерий успеха:** >= 10 рынков с informed bettors, dispersions 2-15%, свежие профили (< 7 дней).
+
+**Ключевые файлы для реализации:**
+- `src/worker.py` — добавить ARQ cron task `refresh_bettor_profiles`
+- `src/inverse/profiler.py` — `build_bettor_profiles()` (уже есть, нужен batch Data API fetcher)
+- `src/inverse/store.py` — atomic save + hot-reload signal
+- `src/data_sources/foresight.py` — `fetch_resolved_markets()`, `fetch_trades_batch()` (уже есть)
+- `src/main.py` — hot-reload profiles в lifespan или по signal
+- `src/web/templates/base.html` — вернуть nav link когда готово
+
+---
+
 ### Market Dashboard + Pipeline Resilience (v0.9.4)
 
 **Цель:** Вывести данные Inverse Problem на веб-страницы + повысить устойчивость пайплайна.
