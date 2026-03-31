@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from src.schemas.headline import CheckResult
+from src.schemas.headline import CheckResult, QualityScore
 
 from .conftest import (
     make_framing_brief,
@@ -354,3 +354,61 @@ class TestQualityGateConcurrency:
         assert elapsed < 0.15, f"Expected concurrent execution, but took {elapsed:.3f}s"
         assert score.factual_score == 4
         assert score.style_score == 4
+
+    @pytest.mark.asyncio
+    async def test_execute_scores_headlines_concurrently(self, mock_router, make_context):
+        """execute() should score multiple headlines in parallel, not sequentially."""
+        import asyncio
+        import json
+        import time
+        from unittest.mock import AsyncMock, patch
+
+        from src.agents.generators.quality_gate import QualityGate
+
+        gate = QualityGate(llm_client=mock_router)
+        ctx = make_context()
+
+        # 5 headlines, each for a different event thread
+        headline_texts = [
+            "ЦБ повысил ставку до 23%",
+            "Путин подписал указ о бюджете",
+            "Минфин опубликовал прогноз на 2027 год",
+            "Нефть превысила отметку $90 за баррель",
+            "Рубль укрепился к доллару после заседания ЦБ",
+        ]
+        headlines = []
+        predictions = []
+        framings = []
+        for i in range(5):
+            tid = f"thread_{i:04d}"
+            headlines.append(
+                make_generated_headline(event_thread_id=tid, headline=headline_texts[i])
+            )
+            predictions.append(make_ranked_prediction(event_thread_id=tid, rank=i + 1))
+            framings.append(make_framing_brief(event_thread_id=tid))
+
+        ctx.generated_headlines = headlines
+        ctx.ranked_predictions = predictions
+        ctx.framing_briefs = framings
+        ctx.outlet_profile = make_outlet_profile()
+
+        original_score_one = gate._score_one
+
+        async def slow_score_one(*args, **kwargs):
+            await asyncio.sleep(0.1)
+            return QualityScore(
+                headline_id=args[0].id if args else "x",
+                factual_score=4,
+                factual_feedback="ok",
+                style_score=4,
+                style_feedback="ok",
+            )
+
+        with patch.object(gate, "_score_one", side_effect=slow_score_one):
+            start = time.monotonic()
+            result = await gate.execute(ctx)
+            elapsed = time.monotonic() - start
+
+        # If parallel: ~0.1s. If sequential: 5 × 0.1 = 0.5s.
+        assert elapsed < 0.3, f"Expected concurrent scoring, but took {elapsed:.3f}s"
+        assert len(result["final_predictions"]) == 5

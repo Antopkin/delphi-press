@@ -66,12 +66,18 @@ class QualityGate(BaseAgent):
 
         min_score = context.pipeline_config.get("quality_gate_min_score", FACTUAL_MIN_SCORE)
 
-        # 1. Score all headlines (factual + style)
-        scored: list[tuple[GeneratedHeadline, QualityScore]] = []
-        for headline in headlines:
-            prediction = pred_index.get(headline.event_thread_id)
-            score = await self._score_one(headline, prediction, profile, min_score=min_score)
-            scored.append((headline, score))
+        # 1. Score all headlines concurrently (factual + style)
+        _SCORING_CONCURRENCY = 5
+
+        sem = asyncio.Semaphore(_SCORING_CONCURRENCY)
+
+        async def _score_with_limit(headline: GeneratedHeadline) -> QualityScore:
+            async with sem:
+                prediction = pred_index.get(headline.event_thread_id)
+                return await self._score_one(headline, prediction, profile, min_score=min_score)
+
+        scores = await asyncio.gather(*[_score_with_limit(h) for h in headlines])
+        scored: list[tuple[GeneratedHeadline, QualityScore]] = list(zip(headlines, scores))
 
         # 2. Dedup (algorithmic, no embeddings)
         self._check_internal_duplicates(scored)
