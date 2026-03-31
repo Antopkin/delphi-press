@@ -93,7 +93,7 @@
    * Fetch current prediction state from REST API, restore UI, then connect SSE.
    */
   function initFromRest() {
-    fetch("/api/v1/predictions/" + predictionId)
+    fetch("/api/v1/predictions/" + predictionId, { credentials: "same-origin" })
       .then(function (resp) {
         if (!resp.ok) {
           // Prediction not found or access denied — connect SSE anyway
@@ -496,7 +496,7 @@
    * Fallback: poll prediction status via REST if SSE drops.
    */
   function pollStatus() {
-    fetch("/api/v1/predictions/" + predictionId)
+    fetch("/api/v1/predictions/" + predictionId, { credentials: "same-origin" })
       .then(function (resp) {
         if (!resp.ok) throw new Error("Poll failed");
         return resp.json();
