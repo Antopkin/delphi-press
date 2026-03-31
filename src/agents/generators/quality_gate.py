@@ -69,9 +69,7 @@ class QualityGate(BaseAgent):
         min_score = context.pipeline_config.get("quality_gate_min_score", FACTUAL_MIN_SCORE)
 
         # 1. Score all headlines concurrently (factual + style)
-        _SCORING_CONCURRENCY = 5
-
-        sem = asyncio.Semaphore(_SCORING_CONCURRENCY)
+        sem = asyncio.Semaphore(SCORING_CONCURRENCY)
 
         async def _score_with_limit(headline: GeneratedHeadline) -> QualityScore:
             async with sem:
