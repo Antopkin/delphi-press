@@ -89,7 +89,7 @@ class Settings(LLMConfig):
     # === Application ===
 
     app_name: str = "Delphi Press"
-    app_version: str = "0.9.4"
+    app_version: str = "0.9.5"
     debug: bool = False
     secret_key: str = Field(
         default="dev-insecure-key-change-in-production-32ch",

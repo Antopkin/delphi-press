@@ -7,7 +7,7 @@
 - **Claude Code mode** — пользователь клонирует репо, запускает `/predict`. Субагенты Claude Code = 5 персон (Opus 4.6).
 
 **Стек**: Python 3.12+, FastAPI, ARQ (Redis), SQLite/SQLAlchemy 2.0, Pydantic v2, Jinja2 + Tailwind CSS v4, Docker Compose, pyarrow.
-**Версия**: 0.9.4. **Тесты**: 1302.
+**Версия**: 0.9.5. **Тесты**: 1324.
 **LLM**: OpenRouter (Claude/GPT-4/Gemini). Клиент через OpenAI SDK с `base_url`. max_tokens unlimited. Metaculus отключён (403).
 **Auth**: JWT (PyJWT) + bcrypt. API-ключи пользователей: Fernet-шифрование (cryptography).
 **Архитектура**: модульный монолит. Деплой: 4 контейнера (app + worker + redis + nginx).

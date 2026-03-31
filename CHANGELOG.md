@@ -28,8 +28,12 @@
 - **Docker auto-download** — `docker-entrypoint.sh` скачивает профили при первом запуске. Named volume `delphi_inverse` вместо hardcoded host path
 - **GitHub homepage** — `delphi.antopkin.ru` в правой панели "About"
 
+### Fixed
+- **Profile key case mismatch** — профили хранились с mixed-case Ethereum-адресами (EIP-55: `0x6FBB...`), а `adapt_data_api_trades()` приводил wallet к lowercase (`0x6fbb...`). Lookup `profiles.get(user_id)` всегда промахивался → 0 активных сигналов на `/markets`. **Почему:** Phase 6 добавила `.lower()` для trades, но не нормализовала ключи dict при загрузке профилей. Фикс: `.lower()` на ключе в `_load_parquet()` и `_load_json()` (store.py)
+- **Пустая страница `/markets`** — добавлен fallback UX: если ни один informed трейдер не матчится, страница показывает топ рынков по объёму с raw market price (без informed bar, с баннером). `MarketCard.has_informed` field для условного рендеринга. Страница больше никогда не бывает пустой при наличии активных рынков
+
 ### Metrics
-- Тесты: 1302 → 1318 (+16: stage_callback, replace_headlines, date serialization, timeline JSON)
+- Тесты: 1302 → 1324 (+22: stage_callback, replace_headlines, date serialization, timeline JSON, profile normalization, fallback cards, template rendering)
 
 ---
 
