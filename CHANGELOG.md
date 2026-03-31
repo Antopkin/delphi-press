@@ -16,8 +16,20 @@
 - **Web search "no providers" → debug** — понижен уровень логирования с WARNING до DEBUG. **Почему:** 10 warnings в каждом прогоне без API-ключей засоряли логи
 - **CLAUDE.md sync** — пресеты Light/Opus, Metaculus disabled, pyarrow в base deps, версия 0.9.4
 
+### Fixed
+- **`date` serialization crash** — `predicted_timeline` содержал Python `date` объекты → `json.dumps()` при записи в SQLite JSON-колонку падал с `TypeError`. Pipeline проходил все 9 стадий, но результат не сохранялся. **Почему:** `model_dump()` (без `mode="json"`) оставлял `date` нативными. Добавлены `@field_serializer` на `predicted_date`, `target_date`, `generated_at` в timeline схемах
+- **Key validation 403** — кнопка "Проверить" API-ключ возвращала CSRF 403, т.к. `fetch` не отправлял `Content-Type: application/json`. CSRF middleware не распознавал запрос как JSON API
+- **Key validation wrong endpoint** — проверка била по `/api/v1/models` (всегда 200). Заменено на `/api/v1/auth/key` (401 для невалидных)
+- **Outlet "not found" UX** — "Издание не найдено" заменено на "Издание не в каталоге — будет найдено автоматически". URL-поле с пояснением вместо "Необязательно"
+
+### Added
+- **`scripts/download_profiles.py`** — загрузка базы профилей суперпрогнозистов (62 MB parquet, 1.7M профилей) из GitHub Releases. SHA-256 верификация, прогресс-бар, idempotent. **Почему:** пользователи, клонирующие репо, не получали данные — `data/` в `.gitignore`
+- **GitHub Release `data-v1`** — Polymarket bettor profiles (348K informed, 871K moderate, 523K noise)
+- **Docker auto-download** — `docker-entrypoint.sh` скачивает профили при первом запуске. Named volume `delphi_inverse` вместо hardcoded host path
+- **GitHub homepage** — `delphi.antopkin.ru` в правой панели "About"
+
 ### Metrics
-- Тесты: 1302 → 1316 (+14: stage_callback, replace_headlines, draft/final headline builders)
+- Тесты: 1302 → 1318 (+16: stage_callback, replace_headlines, date serialization, timeline JSON)
 
 ---
 
