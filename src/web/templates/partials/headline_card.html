@@ -2,9 +2,9 @@
    Expects: headline (Headline ORM), loop.index (from {% for %}) #}
 
 <article class="fn-headline-card">
-    <header class="mb-3">
+    <header class="mb-4">
         {# Row 1: Category + confidence badge #}
-        <div class="flex items-center gap-2 mb-2">
+        <div class="flex items-center gap-2 mb-3">
             <span class="text-xs text-text-muted uppercase tracking-wide">{{ headline.category }}</span>
 
             {# Confidence badge -- color-coded #}
@@ -33,20 +33,15 @@
 
         {# Row 2: Rank numeral + headline text #}
         <div class="flex items-start gap-3">
-            <span class="font-heading text-2xl text-text-muted/40 font-semibold shrink-0 leading-none tabular-nums select-none">{{ headline.rank }}</span>
-            <h3 class="text-lg font-heading leading-snug">{{ headline.headline_text }}</h3>
+            <span class="font-heading text-2xl text-text-muted/30 font-semibold shrink-0 leading-none tabular-nums select-none">{{ headline.rank }}</span>
+            <h3 class="text-xl md:text-2xl font-heading leading-snug">{{ headline.headline_text }}</h3>
         </div>
     </header>
 
     {# First paragraph preview #}
     <p class="text-text-muted text-[0.95rem] leading-relaxed max-w-prose">{{ headline.first_paragraph }}</p>
 
-    {# Reasoning summary as blockquote #}
-    <p class="text-sm text-text-muted border-l-2 border-border pl-3 mt-3 leading-relaxed">
-        {{ headline.reasoning }}
-    </p>
-
-    {# Expandable detailed reasoning #}
+    {# Expandable reasoning (collapsed by default) #}
     {% include "partials/reasoning_block.html" %}
 
 </article>

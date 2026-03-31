@@ -6,6 +6,13 @@
 
     <div class="fn-reasoning-content">
 
+        {# === Reasoning summary === #}
+        {% if headline.reasoning %}
+        <p class="text-[0.95rem] leading-relaxed text-text-muted mt-3 mb-4 max-w-prose">
+            {{ headline.reasoning }}
+        </p>
+        {% endif %}
+
         {# === Evidence chain === #}
         {% if headline.evidence_chain %}
         <div>
