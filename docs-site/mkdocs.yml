@@ -40,7 +40,8 @@ theme:
     repo: fontawesome/brands/github
 
 extra_css:
-  - overrides/stylesheets/extra.css
+  - https://unpkg.com/katex@0/dist/katex.min.css
+  - stylesheets/extra.css
 
 markdown_extensions:
   - admonition
@@ -66,6 +67,7 @@ markdown_extensions:
 extra_javascript:
   - https://unpkg.com/katex@0/dist/katex.min.js
   - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
+  - js/katex-init.js
 
 extra:
   social:
@@ -81,12 +83,12 @@ nav:
     - "Pipeline: 9 стадий": architecture/pipeline.md
     - LLM-инфраструктура: architecture/llm.md
   - Сбор данных:
-    - Стадии 1–2: data-collection/stages-1-2.md
+    - Стадии 1-2: data-collection/stages-1-2.md
   - Метод Дельфи:
     - Анализ (стадия 3): delphi-method/analysis.md
-    - Раунды Дельфи (стадии 4–5): delphi-method/delphi-rounds.md
+    - Раунды Дельфи (стадии 4-5): delphi-method/delphi-rounds.md
   - Генерация:
-    - Стадии 6–9: generation/stages-6-9.md
+    - Стадии 6-9: generation/stages-6-9.md
   - Polymarket:
     - Обратная задача: polymarket/inverse.md
   - Оценка качества:
@@ -95,7 +97,15 @@ nav:
     - 21 case study: dead-ends/case-studies.md
   - Дорожная карта:
     - Задачи и backlog: roadmap/tasks.md
-    - Дискуссия — архетипы: roadmap/discussion.md
+    - "Дискуссия: архетипы": roadmap/discussion.md
+  - Frontend:
+    - Web UI: frontend/web-ui.md
+  - API:
+    - REST Reference: api/reference.md
+  - Инфраструктура:
+    - База данных: infrastructure/database.md
+    - Безопасность: infrastructure/security.md
+    - Конфигурация: infrastructure/config.md
   - Приложения:
     - Data Flow: appendix/data-flow.md
     - Промпты агентов: appendix/prompts.md

@@ -172,7 +172,10 @@ $$\hat{\lambda}_{\mathrm{MLE}} = \frac{1}{n} \sum_{m} \frac{-\ln(1 - \mathrm{pos
 
 $$P(T \leq H) = 1 - \exp\!\bigl(-(\lambda H)^k\bigr)$$
 
-Enriched signal: adaptive blend $(1-w) \cdot p_{\mathrm{inf}} + w \cdot p_{\mathrm{param}}$, $w = \mathrm{coverage} \times \mathrm{fit\_quality}$, $w \leq 0.40$.
+Enriched signal: adaptive blend $(1-w) \cdot p_{\mathrm{inf}} + w \cdot p_{\mathrm{param}}$, $w = \mathrm{coverage\_ratio} \times \mathrm{fit\_quality}$, $w \leq 0.40$.
+
+!!! note "Coverage Ratio vs Coverage"
+    Здесь $\mathrm{coverage\_ratio} = \frac{\text{число информированных с параметрическими фитами}}{\text{общее число информированных на рынке}}$, что отличается от метрики $\mathrm{coverage}$ в формуле informed consensus. В informed consensus используется $\mathrm{coverage} = \min(1, |\mathcal{I}_m| / 20)$ (доля от глобального порога). Здесь же — доля от текущего размера INFORMED-группы на рынке.
 
 ---
 
@@ -270,7 +273,7 @@ $$\hat{p}(s) = \frac{\sum_i w_i \cdot \pi_i(s)}{\sum_i w_i} = \frac{\sum_i w_i \
 | Loss weight | $(1 - \mathrm{BS}) \cdot V \cdot r$ |
 | Behaviour Cloning | Weighted mean позиций |
 | Regularization | Двойной shrinkage: BS + coverage |
-| Cluster-based gating | HDBSCAN: 6 архетипов |
+| Cluster-based gating | HDBSCAN: 7 категорий (включая outlier для шумовых кластеров) |
 | Extremizing | Satopaa log-odds, adaptive $d$ |
 | Positive trajectory filtering | Tier filtering: NOISE excluded |
 | Clone validation | $\lambda$-клоны: train → predict → MAE |

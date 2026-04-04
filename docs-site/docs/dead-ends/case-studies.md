@@ -94,7 +94,7 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **What was done:** Rewrote aggregation into 30-day bucketed parquet. Walk-forward now computes `avg_position_as_of_T` using only `time_bucket <= T`. DuckDB with predicate pushdown: 225× speedup, memory from 7.4 GB to 4.6 GB.
 
-**Result:** Leaked BSS +0.092 vs clean BSS +0.127 on same folds. Leak added noise, not signal.
+**Result:** Leaked BSS +0.092 vs clean BSS +0.117 on same folds. Leak added noise, not signal.
 
 **Lesson learned:** Temporal cutoff requires time dimension in data, not global aggregation. Never use pre-aggregated data for temporal validation. Bucketed aggregates enable point-in-time queries. Always verify: no trades/signals dated > cutoff $T$.
 
@@ -112,7 +112,7 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ### Case Study 11: Date Serialization Crash (v0.9.5)
 
-**Problem:** Timeline schemas added `predicted_date` and `target_date` fields. Pipeline completed 9 stages (40 min, $5-15 cost), but worker crashed on save with `TypeError: Object of type date is not JSON serializable`. Result lost.
+**Problem:** Timeline schemas added `predicted_date` and `target_date` fields. Pipeline completed 9 stages (40 min, \$5-15 cost), but worker crashed on save with `TypeError: Object of type date is not JSON serializable`. Result lost.
 
 **What was done:** Added `@field_serializer` decorators converting `datetime.date` to ISO format. Alternative: use `model_dump(mode="json")` explicitly.
 
@@ -152,7 +152,7 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ### Case Study 15: max_tokens Evolution (v0.5.1–v0.9.5)
 
-**Problem:** Parameter went through iterations: 4096 (truncated Delphi R1) → 8192 (still insufficient) → 16384 (OpenRouter reserved this from credit balance, blocking parallel calls) → unlimited (current). Setting 16384 reserved $5+ per call despite 2000-token actual output.
+**Problem:** Parameter went through iterations: 4096 (truncated Delphi R1) → 8192 (still insufficient) → 16384 (OpenRouter reserved this from credit balance, blocking parallel calls) → unlimited (current). Setting 16384 reserved \$5+ per call despite 2000-token actual output.
 
 **What was done:** Removed cap entirely. Discovered OpenRouter's credit reservation mechanism: `max_tokens` amount reserved upfront.
 
@@ -162,7 +162,7 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ### Case Study 16: Incremental Checkpoint Saving (v0.9.5)
 
-**Problem:** Pipeline saved results only on completion of all 9 stages. If stage 9 timeout after 40+ minutes, all results ($5-15 cost) lost. User sees blank page despite massive compute.
+**Problem:** Pipeline saved results only on completion of all 9 stages. If stage 9 timeout after 40+ minutes, all results (\$5-15 cost) lost. User sees blank page despite massive compute.
 
 **What was done:** Implemented per-stage incremental save. Each completed stage persists to `PipelineStep.output_data`. Worker can resume from last checkpoint.
 
@@ -216,7 +216,7 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **Idea:** Use BigQuery's 2.65 TB/year GDELT dataset for batch retrospective testing.
 
-**Why deferred:** Cost-prohibitive. Unoptimized query: $1.94/query. Optimized: $0.04/query. 100-query batch: $200-$400. Alternative: free 15-minute CSV polling + local DuckDB. Total cost $0, speed acceptable for monitoring.
+**Why deferred:** Cost-prohibitive. Unoptimized query: \$1.94/query. Optimized: \$0.04/query. 100-query batch: \$200-\$400. Alternative: free 15-minute CSV polling + local DuckDB. Total cost \$0, speed acceptable for monitoring.
 
 **Lesson:** Evaluate cloud costs vs local alternatives. Free polling beats paid queries.
 
@@ -241,12 +241,12 @@ This section documents 21 case studies from 6 months of Delphi Press development
 | 13 | | BudgetTracker race | Fixed | v0.7.1 | Budget bypass |
 | 14 | | Timeout cascade | Fixed | v0.9.4 | Cascading stage failures |
 | 15 | | max_tokens evolution | Fixed | v0.5.1–v0.9.5 | Credit reservation bloat |
-| 16 | | Incremental save | Fixed | v0.9.5 | $5-15 result loss |
+| 16 | | Incremental save | Fixed | v0.9.5 | \$5-15 result loss |
 | 17 | Deferred | Domain-specific BS | Deferred | — | 1–3% gain, high sparsity |
 | 18 | | Bettor-news correlation | Deferred | — | Speculative hypothesis |
 | 19 | | Hierarchical beliefs | Deferred | — | Pure research |
 | 20 | | Kalshi API | Deferred | — | US-only, low ROI |
-| 21 | | BigQuery GDELT | Deferred | — | Cost-prohibitive ($0.04–$1.94/query) |
+| 21 | | BigQuery GDELT | Deferred | — | Cost-prohibitive (\$0.04–\$1.94/query) |
 
 ## Key Takeaways
 

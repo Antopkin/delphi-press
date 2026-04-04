@@ -19,7 +19,7 @@
 !!! note "Что такое min_successful?"
     Минимальное число агентов, которые должны завершиться успешно для продолжения pipeline. Обеспечивает graceful degradation: если одни агенты отказали, другие достаточно.
 
-## 18 агентов, 28 LLM-задач
+## 18 агентов, 27 LLM-задач
 
 | Агент | Стадия | LLM-задачи | Слоты контекста | Файл |
 |---|---|---|---|---|
@@ -76,16 +76,16 @@ $$\xrightarrow{\text{Response}} \text{PredictionResponse} \text{ с 7 загол
 
 | Стадия | LLM-вызовов | Основная модель | Стоимость |
 |---|---|---|---|
-| 1: Collection | ~5 | Gemini + Opus | $1,50 |
-| 2: Event Identification | ~25 | Gemini-flash | $0,50 |
-| 3: Trajectory | ~21 | Opus | $3,00 |
-| 4: Delphi R1 | 5 | Opus (5 моделей) | $8,00 |
-| 5a: Mediator | 1 | Opus | $2,00 |
-| 5b: Delphi R2 | 5 | Opus (5 моделей) | $8,00 |
-| 6: Judge | 1 | Opus | $2,00 |
-| 7: Framing | ~7 | Opus | $2,00 |
-| 8: Generation | ~21 | Opus | $1,50 |
-| 9: Quality Gate | ~14 | Opus | $2,00 |
-| **Итого** | **~105 вызовов** | | **~$30,50** |
+| 1: Collection | ~5 | Gemini + Opus | \$1,50 |
+| 2: Event Identification | ~25 | Gemini-flash | \$0,50 |
+| 3: Trajectory | ~21 | Opus | \$3,00 |
+| 4: Delphi R1 | 5 | Opus (единая модель для 5 персон) | \$8,00 |
+| 5a: Mediator | 1 | Opus | \$2,00 |
+| 5b: Delphi R2 | 5 | Opus (единая модель для 5 персон) | \$8,00 |
+| 6: Judge | — | (детерминированный) | \$0 |
+| 7: Framing | ~7 | Opus | \$2,00 |
+| 8: Generation | ~21 | Opus | \$1,50 |
+| 9: Quality Gate | ~14 | Opus | \$2,00 |
+| **Итого** | **~105 вызовов** | | **~\$30,50** |
 
 Время выполнения: 15–20 минут на одном VPS.

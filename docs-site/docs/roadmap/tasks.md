@@ -24,7 +24,7 @@
 5. **Retrospective Evaluation Pilot**
    - Инфраструктура готова (Brier, Log Score, Composite Score, bootstrap CI, Wayback CDX)
    - Осталось: 50 runs × 3 горизонта → ~150–350 пар
-   - Стоимость < $1
+   - Стоимость < \$1
 
 ---
 

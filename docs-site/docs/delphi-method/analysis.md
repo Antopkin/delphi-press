@@ -1,170 +1,275 @@
-# Stage 3: Trajectory Analysis & Three Scenarios
+# Stage 3: Trajectory Analysis & Assessments
 
 ## Three Parallel Analyst Agents
 
-At Stage 3, events identified by EventTrendAnalyzer flow into three specialized analytical agents working in **parallel**:
+At Stage 3 (Trajectory Analysis), event threads identified by `EventTrendAnalyzer` flow into three specialized analytical agents working in **parallel**:
 
-1. **Geopolitical Analyst** — Analysis of strategic actors, balance of power, alliances, escalation probability
-2. **Economic Analyst** — Analysis of capital flows, market indicators, supply chains, scenario impacts on indices
-3. **Media Analyst** — Assessment of event media value through the six-dimensional Galtung & Ruge (1965) framework
+1. **GeopoliticalAnalyst** — Strategic actors, power dynamics, escalation probability, military and sanction implications
+2. **EconomicAnalyst** — Affected economic indicators, market impacts, supply chains, fiscal implications
+3. **MediaAnalyst** — Event media value assessment through six-dimensional Galtung & Ruge (1965) framework
 
-Minimum successful analysts: $\text{min\_successful} = 2$ out of 3. The architecture tolerates failure of one analyst without canceling the Delphi forecast.
+Each analyst produces an assessment (`GeopoliticalAssessment`, `EconomicAssessment`, `MediaAssessment`) for every event thread. Minimum successful analysts: 2 out of 3; the architecture tolerates failure of one analyst.
 
-### Geopolitical Analysis
+### GeopoliticalAnalyst
 
-For each event, a profile of key strategic actors is constructed:
+**File**: `src/agents/analysts/geopolitical.py`
 
-- **Strategic actors**: States, alliances (NATO, SCO), international organizations (UN, EU)
-- **Balance of power**: Relative strength, directional shifts in positioning (who strengthens, who weakens)
-- **Escalation probability**: For conflicts, diplomatic crises — numeric assessment (0–1)
-- **Second-order effects**: Causal chains showing how one actor's move triggers another's response
+**LLM Model**: `anthropic/claude-opus-4.6` (primary, fallback: claude-sonnet-4.5)
 
-The analytical framework combines neorealism (system structure determines actor behavior) with constructivism (threat perception depends on identity and narrative).
+For each event thread, the agent constructs a profile of strategic actors and power relationships:
 
-### Economic Analysis
+- **Strategic actors** (2–5 per thread): States, alliances (NATO, SCO), international organizations (UN, EU, WTO)
+  - Each actor has: name, role (initiator/target/mediator/ally/observer/spoiler), interests, likely actions, leverage points
+- **Power dynamics**: Description of relative strength and positioning
+- **Alliance shifts**: Possible realignment or coalition changes
+- **Escalation probability** (0–1): Numeric forecast for military/diplomatic escalation
+- **Second-order effects** (3–5): Causal chains showing cascading reactions between actors
+- **Sanctions risk**: Assessment level (none/low/medium/high/imminent)
+- **Military implications**: If applicable to the event
+- **Headline angles**: Geopolitical framing opportunities for news outlets
 
-For each event:
+**Output**: `GeopoliticalAssessment` schema (see below).
 
-- **Affected indicators**: Currency pairs, commodity prices, stock indices, bond spreads
-- **Fiscal consequences**: Relationships to government budget policies
-- **Supply chains**: Geographic breaks, sectors vulnerable to escalation or stabilization
-- **Market signal**: What markets already price in vs. what remains a surprise
+### EconomicAnalyst
 
-Core principle: *Follow the money* — economic incentives reveal actors' true intentions and constraints.
+**File**: `src/agents/analysts/economic.py`
 
-### Media Analysis: Six-Dimensional Newsworthiness Framework
+**LLM Model**: `anthropic/claude-opus-4.6` (primary, fallback: claude-sonnet-4.5)
 
-Event newsworthiness is evaluated by six criteria (Galtung & Ruge, 1965):
+For each event thread, the agent forecasts economic impacts:
 
-1. **Timeliness** (timeliness) — Event occurs now, not archived
-2. **Magnitude** (scale) — Is the event large in affected persons or assets
-3. **Prominence** (notability) — Are top figures, familiar to audience, involved
-4. **Proximity** (closeness) — Geographic, cultural, thematic closeness to outlet audience
-5. **Conflict** (conflict) — Presence of explicit opposition, emotional charge
-6. **Novelty** (novelty) — Event is unexpected, radically differs from precedent
+- **Affected indicators** (list): Currency pairs, commodity prices (oil, metals), stock indices, bond spreads
+  - Each indicator: name, direction (up/down/neutral/volatile), magnitude (low/medium/high), confidence (0–1), timeframe (immediate/days/weeks/months)
+- **Market impact**: Overall market direction (strongly_negative → strongly_positive)
+- **Affected sectors**: Which industries face direct exposure
+- **Supply chain impact**: Geographic breaks, production/logistics disruptions
+- **Fiscal calendar events**: Related government budget/policy events
+- **Central bank signals**: Policy adjustments or forward guidance triggered
+- **Trade flow impact**: Changes to import/export volumes and routes
+- **Commodity prices**: Specific commodity markets affected
+- **Employment impact**: Labor market effects
+- **Headline angles**: Economic framing opportunities
 
-Additionally, the media analyst assesses:
+**Output**: `EconomicAssessment` schema (see below).
 
-- **Editorial fit** (0–1): Event alignment with outlet editorial line
-- **Media saturation** (0–1): How long topic has been in news. If > 14 days straight — newsroom seeks fresh angle or withdraws
-- **Cycle position**: Is topic at peak attention, declining, or in rising trend
+### MediaAnalyst
 
-Output: `MediaAssessment` with overall newsworthiness score and coverage probability forecast for the outlet.
+**File**: `src/agents/analysts/media.py`
+
+**LLM Model**: `anthropic/claude-opus-4.6` (primary, fallback: claude-sonnet-4.5)
+
+Unique to this agent: it receives the target outlet's `OutletProfile` (from Stage 1) to assess coverage likelihood for that **specific outlet**, not just generic newsworthiness.
+
+For each event thread, relative to the outlet, the agent assesses:
+
+- **Newsworthiness** (six dimensions, Galtung & Ruge 1965):
+  - **Timeliness** (0–1): Event occurs now, not archived
+  - **Impact** (0–1): Scale of affected persons/assets/systems
+  - **Prominence** (0–1): Known figures, celebrities, industry leaders involved
+  - **Proximity** (0–1): Geographic, cultural, or thematic closeness to outlet's audience
+  - **Conflict** (0–1): Presence of explicit opposition, tension, or emotional charge
+  - **Novelty** (0–1): Event is unexpected, radically different from precedent
+- **Editorial fit** (0–1): Alignment with outlet's editorial line (from profile)
+- **Editorial fit explanation**: Why the story fits or doesn't fit
+- **News cycle position**: breaking/developing/emerging/declining
+- **Saturation** (0–1): How long topic has been in news (>14 days straight → newsroom seeks fresh angle)
+- **Coverage probability** (0–1): Forecast of publication likelihood for this outlet
+- **Predicted prominence**: Where story would appear if covered (top_headline/major/secondary/brief/ignore)
+- **Likely framing**: Expected angle/tone for this outlet
+- **Competing stories**: Other stories competing for space on target date
+- **Headline angles**: Framing opportunities tailored to outlet voice
+
+**Output**: `MediaAssessment` schema (see below).
 
 ---
 
 ## Trajectory Modeling
 
-After parallel analysis, each event receives a trajectory model describing its development path. The trajectory captures:
+After parallel analysis, each event thread receives an `EventTrajectory` describing its development path.
 
-1. **Current state** — Where the event stands now (2–3 sentences)
-2. **Momentum** — Development vector
-3. **Three scenarios** — BASELINE, OPTIMISTIC/PESSIMISTIC, WILDCARD
-4. **Key drivers** — 3–5 forces determining development
-5. **Uncertainties** — 2–3 major uncertainty points
+### EventTrajectory Schema
 
-### Event Momentum
+| Field | Type | Purpose |
+|---|---|---|
+| `thread_id` | str | Reference to `EventThread.id` |
+| `current_state` | str | Current situation description (2–3 sentences) |
+| `momentum` | str | Development vector: escalating, stable, de_escalating, emerging, culminating, fading |
+| `momentum_explanation` | str | Why the event has this momentum |
+| `scenarios` | list[Scenario] | 2–4 scenario variants; min 2, max 4 |
+| `key_drivers` | list[str] | 3–5 forces determining development |
+| `uncertainties` | list[str] | 2–3 major uncertainty points |
 
-Momentum describes the event thread's short-term development vector:
+**Momentum** describes short-term development:
 
-- **Escalating** — Situation intensifies; crisis likelihood rises
-- **Stable** — Status quo maintained; no major changes expected
-- **De-escalating** — Tension declining; crisis has passed peak
-- **Emerging** — New event just appearing in media space
-- **Culminating** — Event approaching critical point, resolution, climax
-- **Fading** — Event losing topicality; media attention falling
+- **escalating**: Situation intensifies; crisis likelihood rises
+- **stable**: Status quo maintained; no major changes expected
+- **de_escalating**: Tension declining; crisis has passed peak
+- **emerging**: New event just appearing in media space
+- **culminating**: Event approaching critical point, resolution, climax
+- **fading**: Event losing topicality; media attention falling
 
-### Three Scenario Development
+### Scenario Schema
 
-For each event, three scenarios are defined with:
+Each `Scenario` in the `scenarios` list contains:
 
-- Brief description (2–3 sentences)
-- Assigned probability (0.0–1.0); sum across three scenarios = 1.0
-- 2–3 key indicators pointing to scenario realization
-- Potential headline the scenario could generate
+| Field | Type | Purpose |
+|---|---|---|
+| `scenario_type` | ScenarioType | baseline, optimistic, pessimistic, black_swan, wildcard |
+| `description` | str | Scenario summary (2–3 sentences) |
+| `probability` | float | Assigned probability (0.0–1.0); sum across all scenarios = 1.0 |
+| `key_indicators` | list[str] | 2–3 signs pointing to scenario realization |
+| `headline_potential` | str | Possible headline this scenario could generate |
 
-**Scenario types**:
+**Scenario Types** (5 total):
 
-1. **BASELINE** — Most likely development based on current momentum
-2. **OPTIMISTIC** or **PESSIMISTIC** — Situation improvement or deterioration on key parameters
-3. **WILDCARD** — Surprising turn requiring activation of identified risks
+1. **BASELINE** — Most likely development given current trajectory
+2. **OPTIMISTIC** — Situation improves on key parameters
+3. **PESSIMISTIC** — Situation deteriorates
+4. **BLACK_SWAN** — Extreme, previously unthinkable turn
+5. **WILDCARD** — Surprising but plausible development requiring activation of identified risks
 
-### Cross-Impact Matrix
+!!! note
+    Probabilities across all scenarios must sum to 1.0. The framework supports 2–4 scenarios per thread (typically 3).
 
-Events in information space are not independent. One event's development affects others' probability.
+---
 
-The cross-impact matrix is built as sparse representation:
+## Cross-Impact Matrix
 
-$$\text{CrossImpactEntry:} \quad (source\_id, target\_id, impact\_score) \in [-1, 1] \times \mathbb{R}$$
+Events in information space are not independent. One event's development affects others' probability, creating feedback loops.
+
+The cross-impact matrix is built as a **sparse representation** — only meaningful connections included:
+
+$$\text{CrossImpactEntry:} \quad (\text{source\_thread\_id}, \text{target\_thread\_id}, \text{impact\_score}) \in \mathbb{R}$$
 
 where:
 
-- $source\_id$ — causal event
-- $target\_id$ — consequence event
-- $impact\_score \in [-1, 1]$ — influence strength and direction:
+- **source_thread_id** — causal event ID
+- **target_thread_id** — consequence event ID
+- **impact_score** $\in [-1.0, 1.0]$ — influence strength and direction:
   - $> 0$ — reinforcing influence (source accelerates, makes target more likely)
   - $< 0$ — dampening influence (source slows, makes target less likely)
-  - $= 0$ — no influence (not included in matrix)
+  - $= 0$ — no influence (typically omitted from matrix)
 
-For a typical 20-event portfolio, the full matrix would contain $20 \times 19 = 380$ pairs. In practice, 30–50 meaningful connections exist; others are ignored. This sparsity is critical for Delphi scalability with many events.
+For a typical 20-event portfolio, the full matrix has $20 \times 19 = 380$ potential pairs. In practice, 30–50 meaningful connections exist. This sparsity is critical for Delphi scalability.
 
----
-
-## EventTrajectory Schema
-
-The complete trajectory model combines all elements:
+### CrossImpactMatrix Schema
 
 | Field | Type | Purpose |
 |---|---|---|
-| `event_thread_id` | str | Reference to EventThread |
-| `current_state` | str | Current situation (2–3 sentences) |
-| `momentum` | Momentum | escalating, stable, de-escalating, emerging, culminating, fading |
-| `key_drivers` | list[str] | 3–5 development forces |
-| `uncertainties` | list[str] | 2–3 major uncertainty points |
-| `baseline_scenario` | Scenario | Most likely outcome |
-| `optimistic_scenario` | Scenario | Best-case outcome |
-| `pessimistic_scenario` | Scenario | Worst-case outcome |
-| `wildcard_scenario` | Scenario | Surprising development |
-| `geopolitical_analysis` | str | Geopolitical analyst assessment |
-| `economic_analysis` | str | Economic analyst assessment |
-| `media_analysis` | MediaAssessment | Media analyst assessment |
-
-where `Scenario` contains:
-
-| Field | Type | Purpose |
-|---|---|---|
-| `description` | str | Scenario summary (2–3 sentences) |
-| `probability` | float | Assigned probability (0.0–1.0) |
-| `key_indicators` | list[str] | 2–3 realization indicators |
-| `potential_headline` | str | Possible headline from this scenario |
-
----
-
-## CrossImpactMatrix Schema
-
-The cross-impact matrix captures event dependencies:
-
-| Field | Type | Purpose |
-|---|---|---|
-| `entries` | list[CrossImpactEntry] | Sparse impact relationships |
-| `computed_at` | datetime | Timestamp of computation |
+| `entries` | list[CrossImpactEntry] | Sparse impact relationships (empty list if <2 threads) |
+| `generated_at` | datetime | Timestamp of matrix generation (UTC) |
 
 where `CrossImpactEntry` contains:
 
 | Field | Type | Purpose |
 |---|---|---|
-| `source_id` | str | Causal event ID |
-| `target_id` | str | Consequence event ID |
-| `impact_score` | float | Influence magnitude [-1, 1] |
-| `impact_type` | str | reinforcing, dampening, or neutral |
-| `rationale` | str | Explanation of causal link |
+| `source_thread_id` | str | ID of causal event thread |
+| `target_thread_id` | str | ID of consequence event thread |
+| `impact_score` | float | Influence magnitude $\in [-1.0, 1.0]$ |
+| `explanation` | str | Brief explanation of causal mechanism |
+
+---
+
+## Assessment Schemas
+
+### NewsworthinessScore
+
+Six-dimensional assessment used by `MediaAnalyst`:
+
+| Dimension | Field | Range | Meaning |
+|---|---|---|---|
+| 1 | `timeliness` | [0, 1] | Event occurs now vs. archived |
+| 2 | `impact` | [0, 1] | Scale of affected persons/assets |
+| 3 | `prominence` | [0, 1] | Known figures involved |
+| 4 | `proximity` | [0, 1] | Geographic/cultural closeness to audience |
+| 5 | `conflict` | [0, 1] | Presence of opposition/tension |
+| 6 | `novelty` | [0, 1] | Unexpectedness; departure from precedent |
+
+**Composite score** (weighted average):
+
+$$\text{composite} = 0.25 \times \text{impact} + 0.20 \times \text{timeliness} + 0.20 \times \text{prominence} + 0.15 \times \text{conflict} + 0.10 \times \text{proximity} + 0.10 \times \text{novelty}$$
+
+### GeopoliticalAssessment
+
+Output schema of `GeopoliticalAnalyst`:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `thread_id` | str | Reference to `EventThread.id` |
+| `strategic_actors` | list[StrategicActor] | 2–5 key geopolitical players |
+| `power_dynamics` | str | Description of relative strength |
+| `alliance_shifts` | list[str] | Possible coalition realignments |
+| `escalation_probability` | float | [0, 1] probability of escalation |
+| `second_order_effects` | list[str] | 3–5 cascading effects |
+| `sanctions_risk` | str | none/low/medium/high/imminent |
+| `military_implications` | str | Military consequences (if applicable) |
+| `headline_angles` | list[str] | Geopolitical framing opportunities |
+
+where `StrategicActor` contains:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `name` | str | Actor name (country, leader, organization) |
+| `role` | str | initiator/target/mediator/ally/observer/spoiler |
+| `interests` | list[str] | Key interests at stake |
+| `likely_actions` | list[str] | Probable near-term moves |
+| `leverage` | str | Economic/military/diplomatic/information tools |
+
+### EconomicAssessment
+
+Output schema of `EconomicAnalyst`:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `thread_id` | str | Reference to `EventThread.id` |
+| `affected_indicators` | list[EconomicIndicator] | Markets/indices impacted |
+| `market_impact` | str | Overall market direction assessment |
+| `affected_sectors` | list[str] | Industries with exposure |
+| `supply_chain_impact` | str | Logistics/production disruptions |
+| `fiscal_calendar_events` | list[str] | Related government events |
+| `central_bank_signals` | list[str] | Policy/guidance adjustments |
+| `trade_flow_impact` | str | Changes to import/export flows |
+| `commodity_prices` | list[str] | Specific commodities affected |
+| `employment_impact` | str | Labor market effects |
+| `headline_angles` | list[str] | Economic framing opportunities |
+
+where `EconomicIndicator` contains:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `name` | str | Indicator name (e.g., "EUR/USD") |
+| `direction` | str | up/down/neutral/volatile |
+| `magnitude` | str | low/medium/high |
+| `confidence` | float | [0, 1] confidence in direction forecast |
+| `timeframe` | str | immediate/days/weeks/months |
+
+### MediaAssessment
+
+Output schema of `MediaAnalyst`:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `thread_id` | str | Reference to `EventThread.id` |
+| `newsworthiness` | NewsworthinessScore | 6-dimensional assessment |
+| `editorial_fit` | float | [0, 1] alignment with outlet editorial |
+| `editorial_fit_explanation` | str | Why story fits or doesn't fit |
+| `news_cycle_position` | str | breaking/developing/emerging/declining |
+| `saturation` | float | [0, 1] how long in news cycle |
+| `coverage_probability` | float | [0, 1] likelihood of publication |
+| `predicted_prominence` | str | top_headline/major/secondary/brief/ignore |
+| `likely_framing` | str | Expected angle/tone for outlet |
+| `competing_stories` | list[str] | Other stories competing for space |
+| `headline_angles` | list[str] | Framing opportunities for outlet voice |
 
 ---
 
 ## Source Code References
 
-- **Analyst agents**: `src/agents/analysts/geopolitical_analyst.py`, `src/agents/analysts/economic_analyst.py`, `src/agents/analysts/media_analyst.py`
-- **Trajectory models**: `src/schemas/trajectory.py`
-- **Event trend coordinator**: `src/agents/analysts/event_trend_analyzer.py`
+- **GeopoliticalAnalyst**: `src/agents/analysts/geopolitical.py`
+- **EconomicAnalyst**: `src/agents/analysts/economic.py`
+- **MediaAnalyst**: `src/agents/analysts/media.py`
+- **EventTrendAnalyzer** (trajectories + cross-impact): `src/agents/analysts/event_trend.py`
+- **All schemas**: `src/schemas/events.py`
+- **LLM model routing**: `src/llm/router.py` (lines 77–97)
 
-For complete specifications, see `docs/04-analysts.md` (§2: Trajectory Analysis, §3: Cross-Impact).
+For specifications and prompts, see `docs/04-analysts.md` (§3–5: Analyst specifications, §2: Trajectory Analysis).

@@ -1,445 +1,374 @@
-# Stages 4–5: Delphi Rounds & Expert Consensus
+# Раунды Дельфи: R1 и R2
 
-## Five Expert Personas
+В пайплайне Delphi Press используется двухраундовый метод Дельфи (Dalkey & Helmer 1963) с пятью синтетическими экспертными персонами и алгоритмической медиацией между раундами. Каждый раунд порождает независимые вероятностные оценки, которые затем агрегируются в финальный прогноз.
 
-The Delphi system is built on five independent **expert personas** — LLM agents with clearly defined analytical frameworks, cognitive biases, and initial weights. Each operates on the same model (`anthropic/claude-opus-4.6`) but differs through **system prompt**, determining identity, methodology, and deliberate cognitive biases.
+## Экспертные персоны
 
-| ID | Name | Role | Weight | Primary Methodology |
-|---|---|---|---|---|
-| 1 | REALIST | Risk analyst | 0.22 | Base rates, Tetlock *Superforecasting* |
-| 2 | GEOSTRATEG | IR specialist | 0.20 | Neorealism, cui bono, balance of power |
-| 3 | ECONOMIST | Macroeconomist | 0.20 | Follow the money, market indicators |
-| 4 | MEDIA_EXPERT | Editor/analyst | 0.18 | Gatekeeping (White 1950), framing (Entman 1993) |
-| 5 | DEVILS_ADVOCATE | Contrarian/red teamer | 0.20 | Pre-mortem, black swan detection (Taleb) |
+Пять персон сформированы по профилю когнитивных смещений из литературы по прогнозированию (Tetlock 2005, Taleb 2008). Каждая персона имеет уникальный системный промпт, веса и диапазон температур LLM.
 
-Total weight: $0.22 + 0.20 + 0.20 + 0.18 + 0.20 = 1.00$
+| Персона | ID | Вес R1 | Переоценивает | Недооценивает | Якорь | T°R1 | T°R2 |
+|---------|----|----|-------------|------------|----|----|-----|
+| **Реалист** | `realist` | 0.22 | инерция статус-кво, предсказуемость бюрократии | чёрные лебеди, скорость эскалации, роль личных решений лидеров | исторические прецеденты | 0.7 | 0.6 |
+| **Геостратег** | `geostrateg` | 0.20 | рациональность государств, значимость геополитических факторов | внутриполитические случайности, роль технологий | модель великодержавного соперничества | 0.7 | 0.6 |
+| **Экономист** | `economist` | 0.20 | экономическая рациональность, рыночные индикаторы | идеологические и эмоциональные факторы, случайности | экономический календарь и рыночный консенсус | 0.7 | 0.6 |
+| **Медиа-эксперт** | `media_expert` | 0.18 | медиа-циклы, предсказуемость редакционных решений | технические/процедурные события, медленные кризисы | текущий новостной цикл | 0.7 | 0.6 |
+| **Контрариан** | `devils_advocate` | 0.20 | чёрные лебеди, хрупкость систем | устойчивость статус-кво, вероятность скучных исходов | маловероятные высокоимпактные сценарии | **0.9** | 0.6 |
 
-### Persona 1: The Realist
+### Примечания о температурах
 
-**Identity**: Experienced political risk analyst (Eurasia Group, Oxford Analytica profile) with 20 years consulting experience. Thinks in base rates, historical precedent, institutional inertia.
+- **R1 Реалист / Геостратег / Экономист / Медиа-эксперт**: температура **0.7** (сбалансированное исследование)
+- **R1 Контрариан**: температура **0.9** (повышенная стохастичность для поиска альтернативных сценариев)
+- **Медиатор**: температура **0.5** (консервативная, сосредоточена на синтезе)
+- **R2 все персоны**: температура **0.6** (уменьшена для сведения к истинному консенсусу)
+- **max_tokens**: не ограничен (неограниченный выход)
 
-**Analytical Framework**:
-
-1. *Base rates* — First question: "How often has this happened in 10–20 years? What were outcomes?"
-2. *Institutional inertia* — Systems change slower than appearance suggests
-3. *Outside view before inside view* — Start with external viewpoint (Tetlock, Superforecasting)
-4. *Calibration over confidence* — Prefer uncertain accuracy over confident error
-5. *Question separation* — "Will it happen?" and "Will it make headlines?" are different tasks
-
-**Managed Cognitive Bias**:
-
-- **Overestimates**: Status quo inertia, bureaucratic process predictability
-- **Underestimates**: Black swans, escalation speed, role of leader decisions
-- **Anchors on**: Historical precedent
-
-**Initial Weight**: 0.22 (elevated — base rates historically well-calibrated)
-
-### Persona 2: The Geopolitical Strategist
-
-**Identity**: IR specialist (IISS, Chatham House, IMEMO RAN) focused on power balances, alliances, state strategic interests.
-
-**Analytical Framework**:
-
-1. *Cui bono* — Who wins, who loses?
-2. *Decision trees* — Second- and third-order effects
-3. *Neorealism + constructivism* — System structure determines behavior; identities and narratives shape threat perception
-4. *Red lines & thresholds* — Distinguish real red lines from bluffing
-
-**Managed Cognitive Bias**:
-
-- **Overestimates**: Rationality of state actors, geopolitical factor weight
-- **Underestimates**: Domestic political accidents, technology role, non-state actor economic motivation
-- **Anchors on**: Great power competition model
-
-**Initial Weight**: 0.20
-
-### Persona 3: The Economist
-
-**Identity**: Macroeconomist and market analyst (Goldman Sachs Research, The Economist Intelligence Unit) focused on capital flows, fiscal policy, commodity prices, corporate interests.
-
-**Analytical Framework**:
-
-1. *Follow the money* — Base principle
-2. *Rational actor with budget constraints* — Economic incentives reveal true intentions
-3. *Economic calendar* — Predictable news drivers (data releases, central bank meetings)
-4. *Market signals contain information* — Yield curve, CDS spreads, gold price
-
-**Managed Cognitive Bias**:
-
-- **Overestimates**: Economic rationality, predictive power of market indicators
-- **Underestimates**: Ideological factors, culture wars, emotion-driven events
-- **Anchors on**: Economic calendar and market consensus
-
-**Initial Weight**: 0.20
-
-### Persona 4: Media Expert
-
-**Identity**: Former editor at major news agency (Reuters, TASS) + journalism professor. Understands newsroom operations: deadlines, sources, editorial policy, competition for attention.
-
-**Analytical Framework**:
-
-1. *Gatekeeping* (White, 1950) — Not everything important gets published. Editorial filters limit throughput
-2. *Framing* (Entman, 1993) — One event, ten angles. Frame choice determines headline and angle
-3. *Media saturation* — Topic in top news 14+ days straight → newsroom seeks fresh angle or withdraws
-4. *Competition for attention* — Parallel events compete for audience
-
-**Managed Cognitive Bias**:
-
-- **Overestimates**: Media cycle importance, editorial decision predictability
-- **Underestimates**: Technical and procedural events, slow-developing crises
-- **Anchors on**: Current news cycle and topic balance
-
-**Initial Weight**: 0.18 (below average — media expertise important for headline formulation, less for probability)
-
-### Persona 5: Devil's Advocate
-
-**Identity**: Systematic contrarian, risk analyst (red team, intelligence community, Nassim Taleb school). Mission: find what others missed.
-
-**Analytical Framework**:
-
-1. *Pre-mortem* — "Imagine the forecast failed. What exactly went wrong?" (Klein, 1989)
-2. *Steelmanning* — Build strongest version of opposite position, then attack
-3. *Cascading dependencies* — If A is contested and B depends on A, the chain becomes fragile
-4. *Black swans* (Taleb) — Low probability, high impact scenarios
-
-**Managed Cognitive Bias**:
-
-- **Overestimates**: Black swan probability, system fragility, non-obvious causal links
-- **Underestimates**: Status quo resilience, boring outcome probability, institutional stability
-- **Anchors on**: Unlikely, high-impact scenarios
-
-**Initial Weight**: 0.20 (paradoxically high — contrarian forecasts add ensemble value even if rarely right)
+Исходный код: [`src/llm/router.py`](https://github.com/antopkin/delphi_press/blob/main/src/llm/router.py) (строки 98–173).
 
 ---
 
-## Round 1: Independent Assessment
+## Раунд 1: Независимая оценка
 
-All five personas run in **parallel**. Each receives:
+В Раунде 1 каждая персона независимо анализирует траектории событий и порождает список вероятностных прогнозов. Персоны не видят друг друга и оцениваются параллельно. Результат R1 — пять независимых `PersonaAssessment`.
 
-- **Outlet profile** (`OutletProfile`): geography, target audience, editorial policy, topic balance
-- **Event trajectories** (`EventTrajectory[]`): up to 20 events with current state, momentum, scenarios, drivers
-- **Cross-impact matrix** (`CrossImpactMatrix`): sparse event dependencies
-- **Persona system prompt** — identity, methodology, bias specification
+### PersonaAssessment (R1 выход)
 
-**LLM Parameters for R1**:
-
-- **Model**: `anthropic/claude-opus-4.6`
-- **Temperature**: $T = 0.7$ (some stochasticity, managed)
-- **max_tokens**: 4096
-- **json_mode**: true (structured output)
-
-Minimum successful agents: $\text{min\_successful} = 3$ out of 5. One agent failure doesn't cancel the round.
-
-### Output Schema: PersonaAssessment
-
-Each persona returns structured assessment `PersonaAssessment`:
-
-```json
-{
-  "persona_id": str,                    // "realist", "geostrateg", etc.
-  "round_number": int,                  // 1 or 2
-  "predictions": PredictionItem[],      // 5–15 predictions
-  "cross_impacts_noted": str[],         // Observed cross-impacts
-  "blind_spots": str[],                 // What group might miss
-  "confidence_self_assessment": float,  // (0–1) self-confidence
-  
-  // Round 2 only:
-  "revisions_made": str[],              // What changed
-  "revision_rationale": str             // Why
-}
+```python
+PersonaAssessment(
+    persona_id: str,           # "realist", "geostrateg", etc.
+    round_number: int,         # 1
+    predictions: list[PredictionItem],  # 5–15 прогнозов
+    cross_impacts_noted: list[str],
+    blind_spots: list[str],
+    confidence_self_assessment: float,  # 0.0–1.0
+    revisions_made: list[str],          # пусто в R1
+    revision_rationale: str,            # пусто в R1
+)
 ```
 
-### Output Schema: PredictionItem
+### PredictionItem (единичный прогноз)
 
-Each element in `predictions[]` contains one event forecast:
+Каждый `PredictionItem` описывает одно ожидаемое событие:
 
-```json
-{
-  "event_thread_id": str,               // Stage 3 event ID
-  "prediction": str,                    // Concrete statement
-  "probability": float,                 // (0.0–1.0, not rounded to 5%)
-  "newsworthiness": float,              // (0–1) coverage likelihood
-  "scenario_type": str,                 // BASELINE | OPTIMISTIC | PESSIMISTIC | WILDCARD
-  "reasoning": str,                     // Reasoning chain (3–7 sentences)
-  "key_assumptions": str[],             // 2–4 key premises
-  "evidence": str[],                    // References to input data
-  "conditional_on": str[]               // IDs of dependent predictions
-}
-```
+| Поле | Тип | Описание |
+|------|-----|---------|
+| `event_thread_id` | `str` | ID EventThread, к которому относится прогноз |
+| `prediction` | `str` | Конкретное утверждение (не общие слова) |
+| `probability` | `float` | 0.0–1.0: оценка вероятности события |
+| `newsworthiness` | `float` | 0.0–1.0: вероятность попасть в выпуск (фильтр гейткипинга) |
+| `scenario_type` | `ScenarioType` | `BASELINE` / `UPSIDE` / `DOWNSIDE` |
+| `reasoning` | `str` | 3–7 предложений с цепочкой рассуждений |
+| `key_assumptions` | `list[str]` | 2–4 ключевых предпосылки |
+| `evidence` | `list[str]` | Ссылки на конкретные факты из контекста |
+| `conditional_on` | `list[str]` | ID других PredictionItem, от которых зависит этот |
+| **predicted_date** | `date \| None` | Прогнозируемая дата события (YYYY-MM-DD). None = target_date контекста |
+| **uncertainty_days** | `float` | Неопределённость ±N дней (0.5 = высокая точность, 7.0 = тренд) |
+| **causal_dependencies** | `list[str]` | event_thread_id событий, от которых каузально зависит этот прогноз |
+| **confidence_interval_95** | `(float, float) \| None` | 95% доверительный интервал для probability (Barrett et al., RAND 2025) |
 
-**Critical Requirements**:
+Исходный код: [`src/schemas/agent.py:110–151`](https://github.com/antopkin/delphi_press/blob/main/src/schemas/agent.py).
 
-1. **Probability Precision**: Each probability must be unique, not rounded to 5% or 10% (0.63, not 0.60). This requirement (Tetlock) improves calibration.
-
-2. **Range**: $0.03 \leq \text{probability} \leq 0.97$. Probabilities of 0.00 or 1.00 forbidden (indicate overconfidence).
-
-3. **Justification**: Each forecast must have explicit reasoning chain and key premises on which assessment rests.
-
----
-
-## Mediator: Disagreement Synthesis (Stage 5a)
-
-After Round 1, five independent assessments feed into the **Mediator** — a specialized agent whose task is not to forecast but to **structure disagreements** for substantive Round 2.
-
-### Classical Delphi vs. LLM-Delphi
-
-In classical Delphi (Dalkey & Helmer, 1963), Round 2 feedback consists of aggregated statistics: median, quartiles, histogram.
-
-But research on **DeLLMphi** (Zhao et al., 2024) showed a critical problem: if LLM agents receive only median group estimates, they shift slightly toward it without substantive argument revision. This phenomenon is called *Degeneration-of-Thought* (Liang et al., 2024, EMNLP).
-
-**Our Solution**: Instead of bare statistics, the Mediator formulates **substantive specific questions** that reveal actual disagreements and force agents to revise arguments, not just numbers.
-
-### Three Mediation Stages
-
-**Stage 1: Algorithmic Event Classification**
-
-For each event, collect all five personas' assessments and compute:
-
-1. **Spread**: $\text{spread} = \max(\text{probabilities}) - \min(\text{probabilities})$
-2. **Median**: $\text{median}(\text{probabilities})$
-3. **Count**: Number of agents mentioning event: $n \in [0, 5]$
-
-Events classified as:
-
-1. **Consensus Area**: $\text{spread} < 0.15$ **AND** $n \geq 3$
-   - *Interpretation*: Experts agree; no revision needed. High confidence for final forecast.
-
-2. **Dispute Area**: $\text{spread} \geq 0.15$
-   - *Interpretation*: Experts disagree. Mediator formulates specific factual question whose answer might reconcile positions.
-
-3. **Gap Area**: $n < 3$
-   - *Interpretation*: Events mentioned by <3 experts. Potentially important gaps the group missed.
-
-**Stage 2: Cascade Dependency Check**
-
-*CrossImpactFlag*: If prediction A depends on event B (via `conditional_on`), and B is disputed, this creates chain uncertainty worth highlighting.
-
-**Stage 3: LLM-Enriched Synthesis**
-
-Mediator receives:
-
-- Anonymized assessments (Expert A–E labels, see below)
-- Event trajectories (context)
-- Stages 1–2 results (algorithmic classification)
-
-Mediator enriches via LLM call:
-
-- For each dispute: formulate one-liner key question whose answer reconciles positions
-- For each gap: explain why missing coverage might matter
-- Generate overall summary (2–3 sentences): consensus count, dispute count, gap count
-
-**LLM Parameters for Mediator**:
-
-- **Model**: `anthropic/claude-opus-4.6`
-- **Temperature**: 0.7 (neutral)
-- **json_mode**: true
-
-### Anonymity as Groupthink Defense
-
-**Critical mechanism** (Zhang et al., 2024, ACL): **Expert labels are randomly reassigned each run**.
-
-Algorithm:
-
-1. Generate deterministic random tree from persona ID hashes
-2. Shuffle labels {Expert A, B, C, D, E}
-3. Same persona gets different label each run
-
-**Effect**: Agent cannot recognize itself by label and conform. Preserves minority position independence.
-
-### Output: MediatorSynthesis
+### Пример вывода R1
 
 ```json
 {
-  "consensus_areas": ConsensusArea[],       // spread < 0.15, n >= 3
-  "disputes": DisputeArea[],                // spread >= 0.15 + key question
-  "gaps": GapArea[],                        // n < 3
-  "cross_impact_flags": CrossImpactFlag[],  // Dependency chains
-  "overall_summary": str,                   // 2–3 sentence overview
-  "supplementary_facts": str[]              // For supervisor search if needed
-}
-```
-
-**ConsensusArea**:
-```json
-{
-  "event_thread_id": str,
-  "median_probability": float,   // (0–1)
-  "spread": float,               // < 0.15
-  "num_agents": int              // >= 3
-}
-```
-
-**DisputeArea**:
-```json
-{
-  "event_thread_id": str,
-  "median_probability": float,
-  "spread": float,               // >= 0.15
-  "positions": AnonymizedPosition[],  // Each expert's view
-  "key_question": str            // Factual question for R2
-}
-
-AnonymizedPosition: {
-  "agent_label": str,            // "Expert A", "Expert B", etc.
-  "probability": float,
-  "reasoning_summary": str,      // First 200 chars of reasoning
-  "key_assumptions": str[]
-}
-```
-
-**GapArea**:
-```json
-{
-  "event_thread_id": str,
-  "mentioned_by": str[],         // Expert labels mentioning event
-  "note": str                    // Why this gap might matter
-}
-```
-
-**CrossImpactFlag**:
-```json
-{
-  "prediction_event_id": str,    // Event A
-  "depends_on_event_id": str,    // Event B (disputed)
-  "note": str                    // A→B dependency description
+  "persona_id": "realist",
+  "round_number": 1,
+  "predictions": [
+    {
+      "event_thread_id": "evt_001",
+      "prediction": "ЦБ РФ повысит ключевую ставку выше 10% в марте",
+      "probability": 0.73,
+      "newsworthiness": 0.92,
+      "scenario_type": "BASELINE",
+      "reasoning": "История показывает, что ЦБ реагирует на инфляцию через 6–8 недель. Текущие индикаторы ИПЦ указывают на необходимость ужесточения.",
+      "key_assumptions": [
+        "ИПЦ остаётся выше 6%",
+        "Никакого шока по валютному курсу"
+      ],
+      "evidence": ["ЦБ повышал ставку в марте 2021, 2022, 2023"],
+      "predicted_date": "2024-03-15",
+      "uncertainty_days": 5.0,
+      "confidence_interval_95": [0.65, 0.81]
+    }
+  ],
+  "cross_impacts_noted": [
+    "Если будет резкая девальвация (evt_002), то вероятность повышения ставки растёт до 0.9"
+  ],
+  "blind_spots": [
+    "Политическое давление на независимость ЦБ"
+  ],
+  "confidence_self_assessment": 0.78
 }
 ```
 
 ---
 
-## Round 2: Revision with Feedback
+## Медиатор: Синтез расхождений
 
-All five personas run **again in parallel**. Each receives:
+После R1 **медиатор** не агрегирует вероятности (это делает Judge). Вместо этого медиатор:
 
-- **Their own R1 assessments**
-- **MediatorSynthesis** — anonymized other experts' positions and key questions
-- **Independence Guard** — explicit instruction: *"Don't shift numbers just because others disagree. Answer the mediator's key question substantively"*
+1. Классифицирует события на три категории
+2. Анонимизирует позиции экспертов
+3. Порождает ключевые вопросы для разрешения спорных ситуаций
+4. Передаёт синтез в R2
 
-**LLM Parameters for R2**:
+### Алгоритм анонимизации
 
-- **Model**: `anthropic/claude-opus-4.6`
-- **Temperature**: $T = 0.6$ (reduced from 0.7 to lower noise)
-- **max_tokens**: 4096
-- **json_mode**: true
+Анонимизация детерминистична: все методы используют общую таблицу映射 `persona_id` → `Expert A, B, C...`
 
-Minimum successful agents: $\text{min\_successful} = 3$ out of 5.
-
-### Output: RevisedAssessment
-
-Structure identical to `PersonaAssessment`, plus revision fields:
-
-```json
-{
-  // All R1 fields...
-  "predictions": PredictionItem[],
-  "confidence_self_assessment": float,
-  
-  // R2-specific:
-  "revisions_made": str[],         // List of changes
-  "revision_rationale": str        // Why these revisions
-}
+```python
+def _build_label_map(assessments: list[PersonaAssessment]) -> dict[str, str]:
+    """Create stable persona_id → 'Expert A/B/C...' mapping."""
+    labels = [f"Expert {c}" for c in string.ascii_uppercase[: len(assessments)]]
+    seed = hash(tuple(sorted(a.persona_id for a in assessments)))  # ← ДЕТЕРМИНИСТИЧНЫЙ
+    rng = random.Random(seed)
+    rng.shuffle(labels)
+    return {a.persona_id: label for label, a in zip(labels, assessments)}
 ```
 
-Example revisions:
+Ключевая особенность: **отображение стабильно во всех методах медиатора, потому что используется один и тот же seed на основе отсортированных persona_id**. Если одна персона не участвует, меняется seed и переперемешивается вся таблица. Это скрывает порядок персон, но сохраняет воспроизводимость.
 
-- "Raised probability from 0.42 to 0.58 — mediator's question about Hungarian veto crucial; rethought reasoning"
-- "Kept 0.25 — minority position, but factual question didn't dispel uncertainty"
-- "Added new prediction on minority-mentioned event — now see importance of this gap"
+Исходный код: [`src/agents/forecasters/mediator.py:181–206`](https://github.com/antopkin/delphi_press/blob/main/src/agents/forecasters/mediator.py).
 
----
+### Классификация событий
 
-## Theoretical Justification for LLM Delphi
+Для каждого события медиатор вычисляет:
 
-### Classical Delphi & Its Advantages
+```python
+spread = max(probabilities) - min(probabilities)
+median_prob = median(probabilities)
+```
 
-*Delphi Method* (Dalkey & Helmer, RAND Corporation, 1963) — structured group forecasting technique based on four principles:
+Затем классифицирует:
 
-1. **Anonymity**: Experts don't know who gave which estimate
-2. **Iteration**: Multiple rounds with feedback
-3. **Controlled feedback**: Participants receive aggregated group statistics (median, quartiles, histogram)
-4. **Statistical aggregation**: Final result is averaged group estimate
+| Категория | Условие | Действие |
+|-----------|---------|---------|
+| **Консенсус** (ConsensusArea) | spread < 0.15 и ≥3 персон упомянули | Переносится в R2 без изменений |
+| **Спор** (DisputeArea) | spread ≥ 0.15 и ≥3 персон упомянули | Генерируется ключевой вопрос для R2 |
+| **Пробел** (GapArea) | < 3 персон упомянули событие | Помечается как упущение |
 
-**Proven advantages** (Rowe & Wright, 2001, 2005):
+### MediatorSynthesis (выход медиатора)
 
-- Suppresses anchoring effect — experts shift based on data, not authority
-- Reduces authority pressure — anonymity protects minority views
-- More calibrated probabilities — group often beats individual experts
+```python
+MediatorSynthesis(
+    consensus_areas: list[ConsensusArea],
+    disputes: list[DisputeArea],
+    gaps: list[GapArea],
+    cross_impact_flags: list[CrossImpactFlag],
+    overall_summary: str,
+    supplementary_facts: list[str],
+)
+```
 
-### Adaptation for LLM Agents
+#### ConsensusArea
 
-Our implementation replaces human experts with LLM agents with defined cognitive profiles. Key differences:
+```python
+ConsensusArea(
+    event_thread_id: str,
+    median_probability: float,
+    spread: float,        # < 0.15
+    num_agents: int,      # ≥ 3
+)
+```
 
-1. **Determinism** — Each agent receives identical inputs (trajectories, cross-impacts) and system prompt defining framework
-2. **No classical authority pressure** — Agents don't know others' views until mediation. Group pressure introduced controlledvia mediator, not majority expression
-3. **Reproducibility** — Results reproducible with fixed random seeds
+#### DisputeArea
 
-### Key Research
+```python
+DisputeArea(
+    event_thread_id: str,
+    median_probability: float,
+    spread: float,        # ≥ 0.15
+    positions: list[AnonymizedPosition],
+    key_question: str,    # LLM-generated
+)
+```
 
-**AIA Forecaster** (Schoenegger et al., 2024): If all ensemble agents use one model, their errors **correlate**. Correlated errors don't offset in aggregation.
+#### AnonymizedPosition
 
-*Finding*: Five copies of one model barely outperform single call.
+```python
+AnonymizedPosition(
+    agent_label: str,             # "Expert A", "Expert B", etc.
+    probability: float,
+    reasoning_summary: str,       # усечено до 200 символов
+    key_assumptions: list[str],
+)
+```
 
-*Our Solution*: All five personas use `claude-opus-4.6`, but **diversity comes from system prompts, cognitive profiles, analytical frameworks** — not model variety. This enables:
+#### CrossImpactFlag
 
-- Cost control (single provider)
-- Quality assurance (Opus 4.6 is strongest in category)
-- Intentional error diversity through cognitive design
+```python
+CrossImpactFlag(
+    prediction_event_id: str,
+    depends_on_event_id: str,
+    note: str,
+)
+```
 
-**DeLLMphi** (Zhao et al., 2024): Classical LLM Delphi shows critical failure:
+Флаги обнаруживают, когда прогноз зависит (через `conditional_on` или `causal_dependencies`) от спорного события.
 
-1. R1: agents give independent estimates
-2. R2: shown median group estimates
-3. Result: slight shift toward median **without substantive argument revision**
+### Параметры медиации
 
-*Finding*: *Degeneration-of-Thought* — LLM settled in position, unable to *genuine revision* from statistics alone
+| Параметр | Значение | Описание |
+|----------|---------|----------|
+| `CONSENSUS_THRESHOLD` | 0.15 | Граница между консенсусом и спором (spread < 0.15) |
+| `GAP_MIN_AGENTS` | 3 | Минимум персон, которые должны упомянуть событие |
 
-*Our Solution*: Mediator formulates **substantive factual questions**:
-
-$$\text{Key Question:} \quad Q = \text{"What exactly must be checked to resolve this disagreement?"}$$
-
-Lorenz & Fritz (2025, arXiv:2602.08889) showed: **substantive questions** correlate forecasts with ground truth at $r = 0.87$–$0.95$. Bare statistics: $r \approx 0.60$–$0.70$.
-
-**Minority Position Defense** (Zhang et al., 2024, ACL): LLM agents reproduce human conformity with *bandwagon score* 0.524 in GPT-3.5. Majority shifts agent even if initially disagreed.
-
-*Our Solution*: Label rotation prevents self-recognition; agent can't conform to its own past.
-
-**Two Rounds Suffice** (Rowe & Wright, 2005):
-
-- R1 → R2: substantial improvement (80% convergence)
-- R2 → R3: marginal (additional 5–10%)
-- R3+: diminishing returns
-
-With LLM cost linear in rounds, **two rounds** balance quality and expense.
-
----
-
-## Complete Two-Round Delphi Architecture
-
-Full cycle:
-
-$$\begin{aligned}
-\text{R1:} \quad &\text{5 personas} \xrightarrow{\parallel} \text{PersonaAssessment}[] \\
-\text{Mediation:} \quad &\text{PersonaAssessment}[] \xrightarrow{\text{Mediator}} \text{MediatorSynthesis} \\
-\text{R2:} \quad &\{\text{Self R1} + \text{MediatorSynthesis}\} \xrightarrow{\parallel} \text{RevisedAssessment}[] \\
-\text{Judge:} \quad &\text{RevisedAssessment}[] \xrightarrow{\text{aggregation}} \text{RankedPrediction}[]
-\end{aligned}$$
-
-Each stage:
-
-- Data-independent (agents don't see each other until mediation)
-- Parses to typed Pydantic objects (validation)
-- Logs full LLM cost (tokens, USD)
-- Preserves reasoning chains, not just probabilities
-
-For complete Delphi specification, see `docs/05-delphi-pipeline.md`.
+Исходный код: [`src/agents/forecasters/mediator.py:33–34, 125–269`](https://github.com/antopkin/delphi_press/blob/main/src/agents/forecasters/mediator.py).
 
 ---
 
-## Source Code References
+## Раунд 2: Пересмотр после медиации
 
-- **Persona definitions**: `src/agents/forecasters/personas.py`
-- **Mediator logic**: `src/agents/forecasters/mediator.py`
-- **Data schemas**: `src/schemas/forecaster.py`
-- **Prompts**: `docs/prompts/personas.md`, `docs/prompts/mediator.md`
+В Раунде 2 **медиатор запускается первым** (последовательно), синтез сохраняется в контекст, затем **все 5 персон запускаются параллельно** с `MediatorSynthesis` в контексте.
 
-For complete Delphi orchestration, see `docs/05-delphi-pipeline.md` and `src/agents/orchestrator.py`.
+### Поток R2 в оркестраторе
+
+```python
+async def _run_delphi_r2(stage_def, context, start_ns):
+    # Фаза 1: Медиатор (последовательно)
+    mediator_result = await mediator.run(context)
+    context.merge_agent_result(mediator_result)  # ← MediatorSynthesis попадает в context
+
+    # Фаза 2: 5 персон параллельно (видят context.mediator_synthesis)
+    r2_results = await asyncio.gather(
+        realist.run(context),
+        geostrateg.run(context),
+        economist.run(context),
+        media_expert.run(context),
+        devils_advocate.run(context),
+    )
+```
+
+Исходный код: [`src/agents/orchestrator.py:286–366`](https://github.com/antopkin/delphi_press/blob/main/src/agents/orchestrator.py).
+
+### Какие данные видят персоны в R2?
+
+Каждая персона в R2 получает:
+
+1. **Исходные данные** (как в R1):
+   - Траектории событий
+   - Матрица перекрёстных влияний
+   - Дата целевого события
+   - Условия горизонта (дней до события, категория спешности)
+
+2. **MediatorSynthesis** (новое):
+   - Области консенсуса (события, на которые все согласны)
+   - Области споров (события с расхождениями; **без раскрытия persona_id**, только "Expert A, B, C...")
+   - Пробелы (события, упущенные большинством)
+   - Ключевые вопросы (сгенерированные медиатором)
+   - Перекрёстные флаги (зависимости от спорных событий)
+
+### PersonaAssessment (R2 выход)
+
+R2 выходы структурированы почти как R1, но с дополнительными полями:
+
+```python
+PersonaAssessment(
+    persona_id: str,           # "realist", "geostrateg", etc.
+    round_number: int,         # 2
+    predictions: list[PredictionItem],  # может отличаться от R1
+    cross_impacts_noted: list[str],
+    blind_spots: list[str],
+    confidence_self_assessment: float,
+    revisions_made: list[str],          # ← НОВОЕ: что изменилось от R1?
+    revision_rationale: str,            # ← НОВОЕ: почему изменилось?
+)
+```
+
+### Стратегия пересмотра
+
+Персоны следуют одной из трёх стратегий:
+
+1. **Конвергенция** (convergence): персона видит консенсус и адаптирует свою оценку ближе к медиане
+2. **Дивергенция** (divergence): персона видит спор, но упорствует в своём анализе с обоснованием ("я несогласен, потому что...")
+3. **Поиск дополнительных доказательств** (epistemic move): персона пересмотрит прогноз только если медиатор поднял ранее упущенный фактор
+
+Температуры R2 снижены до 0.6 для **всех персон** (включая контрариана), чтобы поощрить схождение к истинному консенсусу, не потеряв разнообразия аргументов.
+
+---
+
+## Теоретическое обоснование
+
+### Дельфи-метод (Dalkey & Helmer 1963)
+
+Исходный Дельфи-метод был разработан в RAND для прогнозирования будущих технологических событий. Ключевые компоненты:
+
+1. **Анонимность** — участники не видят друг друга, избегая эффекта авторитета
+2. **Итеративное уточнение** — несколько раундов позволяют пересмотреть позиции
+3. **Медиатор** (в классическом варианте — модератор) — синтезирует расхождения
+4. **Аргументированная позиция** — каждый участник записывает обоснование
+
+Наше применение сохраняет все четыре принципа:
+
+- **Анонимность**: посредством deterministic shuffling personas → Expert A, B, C
+- **Итеративность**: R1 → медиация → R2
+- **Медиатор**: algorithmic + LLM-enhanced synthesis
+- **Обоснование**: каждый PredictionItem содержит reasoning, key_assumptions, evidence
+
+### DeLLMphi (Liu et al. 2024)
+
+В недавних работах по LLM-Дельфи (Ling Liu et al., "DeLLMphi", 2024) показано, что синтетические эксперты с явными когнитивными смещениями превосходят простую агрегацию вероятностей. Наша конфигурация персон основана на этом.
+
+Когнитивные смещения в таблице выше ("Переоценивает", "Недооценивает") **намеренны**: они отражают типичные систематические ошибки в аналитике, и их наличие *повышает* качество прогноза, если смещения декоррелированы.
+
+### Substantive Questions (Tetlock 2005)
+
+Метод "substantive questions" требует, чтобы каждый прогноз был привязан к фактическим событиям, а не к мнениям. Это реализуется через:
+
+- `PredictionItem.prediction` — конкретное утверждение, не абстракция
+- `PredictionItem.evidence` — ссылки на конкретные факты
+- `PredictionItem.key_assumptions` — явные предпосылки для проверки
+
+После разрешения события (вне пайплайна) Brier score вычисляется как:
+
+$$\text{Brier} = \frac{1}{N} \sum_{i=1}^{N} (p_i - o_i)^2$$
+
+где $p_i$ — прогнозируемая вероятность, $o_i$ — исход (0 или 1), $N$ — число событий. Идеальный прогноз имеет Brier = 0.0, случайный угадывающий — Brier = 0.25.
+
+---
+
+## Ссылки на исходный код
+
+| Компонент | Файл | Строки |
+|-----------|------|--------|
+| Пять персон (система промптов, веса, смещения) | `src/agents/forecasters/personas.py` | 24–242 |
+| DelphiPersonaAgent (R1 и R2 логика) | `src/agents/forecasters/personas.py` | 250–333 |
+| Медиатор (алгоритм анонимизации, классификация) | `src/agents/forecasters/mediator.py` | 37–269 |
+| Orch. R1 | `src/agents/orchestrator.py` | 269–285 |
+| Orch. R2 (фаза 1 медиатор + фаза 2 персоны) | `src/agents/orchestrator.py` | 286–366 |
+| Температуры LLM | `src/llm/router.py` | 98–173 |
+| Схемы Pydantic | `src/schemas/agent.py` | 1–254 |
+
+---
+
+## Часто задаваемые вопросы
+
+### Почему Контрариан имеет T°=0.9 в R1?
+
+Повышенная температура поощряет более творческий поиск альтернативных сценариев и чёрных лебедей. В R2 температура снижается до 0.6 для сведения к обоснованному единству.
+
+### Почему медиатор имеет T°=0.5?
+
+Консервативная температура обеспечивает воспроизводимую, детерминистичную синтез. Медиатор — это *синтезирующий*, а не генерирующий агент.
+
+### Что происходит, если события упомянуты менее чем 3 персонами?
+
+Такие события помечаются как `GapArea` ("пробел"). Они переносятся в R2, но медиатор не вычисляет spread и не классифицирует их как "спор" или "консенсус". Персоны в R2 знают о пробелах и могут переоценить вероятность.
+
+### Как вычисляется spread?
+
+$$\text{spread} = \max(\text{probabilities}) - \min(\text{probabilities})$$
+
+Для 5 персон spread находится в диапазоне [0.0, 1.0]. Пример: если 4 персоны оценивают вероятность в 0.7, а 1 в 0.2, то spread = 0.5.
+
+### Будет ли личность персоны раскрыта в R2?
+
+Нет. Синтез содержит только анонимизированные позиции: "Expert A считает X, потому что Y". Истинный persona_id не видны в `MediatorSynthesis`, переданном персонам.
+
+### Как быть, если нет разногласий?
+
+Если все события имеют spread < 0.15, `MediatorSynthesis.disputes` будет пусто, и R2 будет фокусироваться на `consensus_areas` и `gaps`. Это нормально и указывает на высокую согласованность.
+
+### Может ли персона в R2 полностью изменить свою позицию?
+
+Да. `revisions_made` может содержать перечисление значительных изменений, а `revision_rationale` объясняет причину. Система не навязывает никакого ограничения на величину пересмотра.

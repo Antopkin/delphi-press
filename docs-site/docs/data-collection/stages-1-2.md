@@ -1,456 +1,547 @@
-# Stages 1-2: Data Collection & Event Identification
+# Стадии 1–2: Сбор данных и идентификация событий
 
-## Stage 1: NewsScout & Structured Data Collection
+## Обзор
 
-The first stage of the Delphi Press pipeline aggregates multi-channel signals from diverse sources into a unified dataset for downstream processing.
+**Стадия 1 (Collection)** занимается параллельным сбором 100–200 новостных сигналов и планировщиком событий. **Стадия 2 (Event Identification)** кластеризует сигналы в событийные нити и оценивает их значимость.
 
-### Dual-Source Collection Strategy
-
-**NewsScout** implements a two-pronged approach:
-
-**1. RSS Feed Aggregation**
-- Parallel loading of 20–30 RSS feeds from global, regional, and thematic sources
-- Global sources (Reuters, AP, BBC, Al Jazeera, etc.) — 10–15 feeds
-- Regional sources (TASS, RIA for Russian; CNN, NYT for English) — 5–10 feeds  
-- Thematic feeds (finance, politics, science) — 5–10 feeds
-
-**2. Web Search**
-- Parallel execution of 3–5 search queries via Exa/Jina MCP API
-- General query: *major news events {target_date} world*
-- Regional query: *news {region_of_outlet} {target_date}*
-- Thematic query: *scheduled events politics economy {target_date}*
-- Outlet-specific query: *topics covered by {outlet} this week*
-- Trending query: *breaking news today {current_date}* (for context)
-
-Both sources are processed in parallel using `asyncio.gather()`. If one source is unavailable (e.g., RSS feed timeout after 30 seconds), the pipeline continues with the other source while logging the error. Critical condition: if both sources are completely unavailable, an exception is raised.
-
-!!! warning "RSS Feed Timeout"
-    Timeouts are set conservatively at 30 seconds per feed to avoid blocking the entire collection stage.
-
-### Deduplication & Relevance Scoring
-
-After merging results from both sources, deduplication is performed on URL:
-
-- Each signal's URL is normalized (lowercase, remove trailing slashes)
-- On duplicate detection, the signal with higher `relevance_score` is retained
-
-Relevance is calculated based on:
-
-| Source Type | Scoring Basis |
-|---|---|
-| RSS signals | Publication freshness (date) + source credibility |
-| Web search | API `score` field, normalized to [0.0, 1.0] |
-
-**Optional LLM Classification**: Signals without categories trigger LLM classification using `openai/gpt-4o-mini` with batch processing (batches of 20). The prompt requires classification by domain (politics, economy, science, etc.) and extraction of named entities (people, organizations, locations).
-
-### SignalRecord Schema
-
-The output of **NewsScout** is a list of `SignalRecord` objects (100–200 records) defined in `src/schemas/events.py`:
-
-| Field | Type | Purpose |
-|---|---|---|
-| `id` | str | Unique ID: `sig_{hash8}` |
-| `title` | str | Headline (max 500 chars) |
-| `summary` | str | Brief summary (max 1000 chars) |
-| `url` | str | Source URL |
-| `source_name` | str | Source name (Reuters, TASS, BBC, etc.) |
-| `source_type` | Enum | RSS, WEB_SEARCH, SOCIAL, WIRE |
-| `published_at` | datetime \| None | Publication date/time (UTC) |
-| `language` | str | ISO 639-1 code (ru, en, zh, etc.) |
-| `categories` | list[str] | Tags/categories (politics, economy, science, etc.) |
-| `entities` | list[str] | Named entities (Trump, ECB, NATO, etc.) |
-| `relevance_score` | float | Relevance score (0.0–1.0) |
-
-Signal IDs are generated as SHA-256 hashes of the concatenated URL and title, truncated to the first 8 characters. This ensures determinism: the same signal encountered twice receives identical IDs.
-
-Final processing: signals are sorted by `relevance_score` (descending) and capped at 200 records.
+Результат Стадии 1 передаётся в Стадию 2, которая отсеивает шум и группирует связанные новости в **20 событийных нитей**, готовых для анализа.
 
 ---
 
-## Event Calendar: Structured Event Discovery
+## Стадия 1: Сбор данных
 
-The second data source in Stage 1, **EventCalendar**, identifies scheduled events for the target date using web search and LLM-driven structuring.
+### Архитектура: четыре параллельных агента
 
-### Event Search Logic
+| Агент | Входная роль | Выходная схема | LLM |
+|-------|----------|---|---|
+| **NewsScout** | RSS + поиск | `list[SignalRecord]` | Только классификация |
+| **EventCalendar** | Поиск событий на target_date | `list[ScheduledEvent]` | ExtractEventsPrompt, AssessEventsPrompt |
+| **OutletHistorian** | Профилирование издания | `OutletProfile` | HeadlineStyle, WritingStyle, EditorialPosition |
+| **ForesightCollector** | Метакулус + Polymarket + GDELT | foresight_events, foresight_signals | Нет |
 
-The process unfolds across five stages:
+Все четыре агента запускаются **параллельно** через `asyncio.gather()`. Таймаут каждого: 600 сек (NewsScout, OutletHistorian), 120 сек (ForesightCollector).
 
-**1. Search Query Generation (5–8 queries)**
+### NewsScout: Сбор новостных сигналов
 
-- **Politics**: *political events scheduled {date}*, *parliamentary sessions votes {date}*
-- **Economics**: *economic data releases {date}*, *central bank meetings {date}*, *earnings reports {date}*
-- **Diplomacy**: *international summits meetings {date}*, *UN sessions {date}*
-- **Judicial**: *major court hearings verdicts {date}*
-- **Culture/Sports**: *major events conferences {date}*
+**Входные данные:**
+- Целевое издание (`context.outlet`)
+- Целевая дата (`context.target_date`)
 
-For Russian-language outlets, some queries are duplicated in Russian.
+**Процесс:**
 
-**2. Parallel Web Search** — All queries executed asynchronously via Exa/Jina API
+1. **RSS-сбор**: 8 глобальных фидов + фиды из каталога издания
+   ```python
+   GLOBAL_RSS_FEEDS = [
+       "https://feeds.bbci.co.uk/news/world/rss.xml",
+       "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+       "https://www.aljazeera.com/xml/rss/all.xml",
+       "https://feeds.washingtonpost.com/rss/world",
+       "https://www.theguardian.com/world/rss",
+       "https://tass.com/rss/v2.xml",
+       "https://ria.ru/export/rss2/archive/index.xml",
+       "https://rssexport.rbc.ru/rbcnews/news/30/full.rss",
+   ]
+   ```
+   
+   Параметры: `days_back=7`, таймаут на фид **15 сек**, параллелизм 20 фидов, кеш 5 минут.
 
-**3. LLM Structuring** — Using `openai/gpt-4o-mini`, extract structured events from raw results with fields: title, description, event_type, certainty, location, participants, potential_impact
+2. **Web Search**: 3 поисковых запроса
+   ```python
+   [
+       f"latest news {date_str}",
+       f"{outlet} headlines {date_str}",
+       f"breaking news world events {date_str}",
+   ]
+   ```
+   
+   Каждый запрос: `num_results=15`, выполняются параллельно.
 
-**4. Deduplication** — Fuzzy matching by headlines (Levenshtein ratio > 0.8), with matching event type and date
+3. **Дедупликация**: По URL (case-insensitive), сохраняется версия с наивысшей `relevance_score`.
 
-**5. Newsworthiness Ranking** — Using `anthropic/claude-sonnet-4`, rank by `newsworthiness` considering coverage probability in the selected outlet and event exceptionality
+4. **LLM-классификация** (опциональная): Если сигнал не имеет categories или entities, отправляется в `news_scout_search` (Gemini 3.1 Flash Lite).
+   - Батчи по 20 сигналов
+   - JSON-режим
 
-### Event Typology & Certainty Levels
+5. **Ранжирование и отсев**: Сортировка по `relevance_score` (убывание), топ-200 (`MAX_SIGNALS = 200`).
 
-Event types span the major domains of public life:
+!!! warning "RSS-таймаут"
+    Таймаут на один фид составляет **15 секунд**, не 30.
 
-$$\text{EventType} \in \{\text{POLITICAL, ECONOMIC, DIPLOMATIC, JUDICIAL, MILITARY, CULTURAL, SCIENTIFIC, SPORTS, OTHER}\}$$
+**Схема SignalRecord:**
 
-Each event includes a confidence assessment reflecting information reliability:
+| Поле | Тип | Обязательное |
+|------|-----|---|
+| `id` | str | ✓ (формат: `rss_{sha256[:8]}` или `ws_{hash}`) |
+| `title` | str | ✓ |
+| `summary` | str | max 1000 символов |
+| `url` | str | ✓ |
+| `source_name` | str | ✓ (e.g., "BBC News", "Reuters") |
+| `source_type` | SignalSource | ✓ (RSS, WEB_SEARCH, SOCIAL, WIRE) |
+| `published_at` | datetime | None |
+| `language` | str | ISO 639-1 ("ru", "en", etc.) |
+| `categories` | list[str] | [] |
+| `entities` | list[str] | [] |
+| `relevance_score` | float | 0.0–1.0 (RSS: 0.5, Web Search: 0.4) |
 
-| Level | Interpretation |
-|---|---|
-| **CONFIRMED** | Officially announced (website schedule, press release) |
-| **LIKELY** | High probability (on schedule, announced) |
-| **POSSIBLE** | Possible (rumors, preliminary announcements) |
-| **SPECULATIVE** | Speculative (inferred from patterns: monthly reports) |
+!!! note
+    SignalSource — это `StrEnum` со значениями в **нижнем регистре**: `rss`, `web_search`, `social`, `wire`.
 
-### ScheduledEvent Schema
+### EventCalendar: Поиск запланированных событий
 
-The output of **EventCalendar** is a list of `ScheduledEvent` objects (typically 3–10 per day, up to 50 on high-activity days):
+**Входные данные:**
+- Целевая дата (`context.target_date`)
+- Целевое издание (`context.outlet`)
 
-| Field | Type | Purpose |
-|---|---|---|
-| `id` | str | Unique ID: `evt_{hash}` |
-| `title` | str | Event title (max 300 chars) |
-| `description` | str | Detailed description (max 500 chars) |
-| `event_date` | date | Event date (matches target_date) |
-| `event_type` | EventType | Event category (political, economic, etc.) |
-| `certainty` | EventCertainty | Confidence level (confirmed/likely/possible/speculative) |
-| `location` | str | Location |
-| `participants` | list[str] | Key participants/organizations |
-| `potential_impact` | str | Potential impact on news agenda |
-| `source_url` | str | Source URL |
-| `newsworthiness` | float | Newsworthiness score (0.0–1.0) |
+**Процесс:**
 
-A `newsworthiness` value of 1.0 indicates guaranteed top-news placement in the selected outlet.
+1. **Web Search**: 7 специализированных запросов по доменам
+   ```python
+   [
+       f"scheduled political events {date}",
+       f"economic calendar events {date}",
+       f"diplomatic meetings summits {date}",
+       f"court hearings legal proceedings {date}",
+       f"cultural sports events {date}",
+       f"parliamentary sessions votes {date}",
+       f"central bank meetings decisions {date}",
+   ]
+   ```
+   
+   Каждый: `num_results=10`, параллельно.
+
+2. **LLM-структурирование** (ExtractEventsPrompt): Парсинг результатов поиска → ScheduledEvent-объекты.
+   - Модель: claude-opus-4.6 (task `event_calendar`)
+   - JSON-режим
+
+3. **Дедупликация**: Levenshtein-расстояние (ratio > 80) + совпадение типа события + дата.
+   - Пороговое значение: `LEVENSHTEIN_THRESHOLD = 80`
+   - При дубликате сохраняется версия с более длинным описанием
+
+4. **LLM-оценка newsworthiness** (AssessEventsPrompt):
+   - Модель: claude-opus-4.6 (task `event_assessment`)
+   - Для каждого события оценивается `newsworthiness` и `potential_impact`
+
+5. **Ранжирование и отсев**: Сортировка по `newsworthiness` (убывание), топ-30 (`MAX_EVENTS = 30`).
+
+**Схема ScheduledEvent:**
+
+| Поле | Тип | Обязательное |
+|------|-----|---|
+| `id` | str | ✓ (формат: `evt_{sha256[:8]}`) |
+| `title` | str | ✓ |
+| `description` | str | |
+| `event_date` | date | ✓ |
+| `event_type` | EventType | ✓ |
+| `certainty` | EventCertainty | confirmed/likely/possible/speculative |
+| `location` | str | |
+| `participants` | list[str] | |
+| `source_url` | str | |
+| `newsworthiness` | float | 0.0–1.0 |
+| `potential_impact` | str | |
+
+### OutletHistorian: Профилирование издания
+
+**Входные данные:**
+- Целевое издание (`context.outlet`)
+
+**Процесс:**
+
+1. **Скрейпинг статей**: До 20 статей с последних 14 дней (`max_articles=20`, `days_back=14`).
+
+2. **Параллельный LLM-анализ** (три задачи одновременно):
+
+   a) **HeadlineStylePrompt** (outlet_historian, claude-opus-4.6)
+      - Вход: топ-50 заголовков
+      - Выход: `HeadlineStyle`
+        - avg_length_chars, avg_length_words
+        - uses_colons, uses_quotes, uses_questions, uses_numbers
+        - capitalization, vocabulary_register, emotional_tone
+        - common_patterns
+
+   b) **WritingStylePrompt** (outlet_historian, claude-opus-4.6)
+      - Вход: топ-20 первых абзацев
+      - Выход: `WritingStyle`
+        - first_paragraph_style
+        - avg_first_paragraph_sentences, avg_first_paragraph_words
+        - attribution_style, uses_dateline
+        - paragraph_length
+
+   c) **EditorialPositionPrompt** (outlet_historian, claude-opus-4.6)
+      - Вход: топ-30 статей (заголовок + первый абзац)
+      - Выход: `EditorialPosition`
+        - tone (neutral/conservative/liberal/sensationalist/analytical/official/oppositional)
+        - focus_topics, avoided_topics
+        - framing_tendencies, source_preferences
+        - stance_on_current_topics (dict), omissions
+
+3. **Кеширование**: Результат кешируется на 7 дней.
+
+4. **Fallback**: Если LLM-анализ не удаётся, возвращаются значения по умолчанию.
+
+**Схема OutletProfile:**
+
+| Поле | Тип | Обязательное |
+|------|-----|---|
+| `outlet_name` | str | ✓ |
+| `outlet_url` | str | |
+| `language` | str | ISO 639-1 (по умолчанию "ru") |
+| `headline_style` | HeadlineStyle | ✓ |
+| `writing_style` | WritingStyle | ✓ |
+| `editorial_position` | EditorialPosition | ✓ |
+| `sample_headlines` | list[str] | max 50, обычно 30 |
+| `sample_first_paragraphs` | list[str] | max ~10 |
+| `analysis_period_days` | int | 30 |
+| `articles_analyzed` | int | обычно 20 |
+| `analyzed_at` | datetime | timestamp анализа |
+
+### ForesightCollector: Форсайт-данные
+
+**Входные данные:**
+- Целевое издание (`context.outlet`)
+- Целевая дата (`context.target_date`)
+
+**API-источники:**
+
+1. **Metaculus**: Endpoint `GET https://www.metaculus.com/api/posts/`
+   - Auth: optional Token (бесплатный)
+   - Таймаут: 30 сек
+   - Выход: `list[dict]` → маппируется в foresight_events
+
+2. **Polymarket**: 3 отдельных API
+   - **Gamma API** (markets list): `https://gamma-api.polymarket.com/markets`
+   - **CLOB API** (price history): `https://clob.polymarket.com`
+   - **Data API** (live trades): `https://data-api.polymarket.com`
+   - Таймаут: 30 сек за API
+   - Выход: `list[dict]` (markets + price_history + metrics) → foresight_signals
+
+3. **GDELT**: Global Event Data Monitoring
+   - Endpoint: `https://api.gdeltproject.org/api/v2/`
+   - Параметр: `language` (russian/english/etc.)
+   - Параметр: `query` (только ASCII, Cyrillic отклоняется)
+   - Таймаут: 30 сек
+   - Выход: `list[dict]` → foresight_signals
+
+**Грейсфул деградация:**
+- Каждый API вызывается в `asyncio.gather(..., return_exceptions=True)`
+- Если один API падает, агент продолжает с остальными
+- Лог: какие источники дали данные (`sources_used: list[str]`)
+
+**Маппинг Polymarket:**
+- condition_id (CTF hash) → используется как market_id (совпадает с inverse profiles)
+- Если условие доступно: price_history → compute_market_metrics
+- Если inverse profiles загружены: live trades (Data API) → compute_informed_signal
+
+**Ограничения выхода:**
+- `MAX_FORESIGHT_EVENTS = 30`
+- `MAX_FORESIGHT_SIGNALS = 100`
 
 ---
 
-## Outlet Historian: Editorial Profile Analysis
+## Стадия 2: Идентификация событий (Event Identification)
 
-The third Stage 1 data source, **OutletHistorian**, analyzes stylistic characteristics and editorial positioning of the target media outlet based on historical publications.
+### Архитектура: единственный агент
 
-### Analysis Methodology
+| Агент | Входные схемы | Выходные схемы | Процесс |
+|-------|---|---|---|
+| **EventTrendAnalyzer** | signals[], scheduled_events[] | event_threads[], trajectories[], cross_impact_matrix | TF-IDF → HDBSCAN → LLM-лейблинг → scoring |
 
-Analysis unfolds in three parallel LLM calls:
+EventTrendAnalyzer запускается **последовательно** после Collection. Это единственный агент Stage 2.
 
-1. **Headline Style Analysis** — 30 most recent headlines
-2. **Writing Style Analysis** — First paragraphs of 10 articles
-3. **Editorial Position Analysis** — Full context of 50–100 articles over 30 days
+### Процесс кластеризации
 
-All three calls run simultaneously via `asyncio.gather()`, minimizing total execution time. Model used: `anthropic/claude-sonnet-4` (for linguistic precision).
+#### 1. Подготовка сигналов
 
-**Caching**: If a profile was created less than 7 days ago, it's returned from cache without reanalysis. This is justified because media outlets' stylistic characteristics change slowly.
+```python
+if len(signals) < 10:  # _MIN_SIGNALS_FOR_CLUSTERING
+    # Каждый сигнал = отдельная нить (без кластеризации)
+    raw_clusters = [{"signals": [s], ...} for s in signals]
+else:
+    # Полная кластеризация
+```
 
-### HeadlineStyle: Form & Content Metrics
+#### 2. TF-IDF векторизация
 
-Headline style characteristics evaluated for form and content:
+```python
+from sklearn.feature_extraction.text import TfidfVectorizer
 
-| Metric | Type | Description |
-|---|---|---|
-| `avg_length_chars` | int | Average headline length (characters) |
-| `avg_length_words` | int | Average headline length (words) |
-| `uses_colons` | bool | Colons for topic/detail separation |
-| `uses_quotes` | bool | Quotations in headlines |
-| `uses_questions` | bool | Interrogative headlines |
-| `uses_numbers` | bool | Frequent numbers (5 reasons...) |
-| `capitalization` | str | Style: sentence_case, title_case, all_caps_first_word, lowercase |
-| `vocabulary_register` | str | Register: formal, neutral, colloquial, technical, mixed |
-| `emotional_tone` | str | Tone: neutral, alarming, optimistic, dramatic, ironic, dry |
-| `common_patterns` | list[str] | 3+ recurring patterns (e.g., {Name}: statement...) |
+vectorizer = TfidfVectorizer(max_features=1536)
+texts = [f"{signal.title}. {signal.summary}" for signal in signals]
+embeddings = vectorizer.fit_transform(texts).toarray()
+```
 
-### WritingStyle: Content Characteristics
+!!! warning
+    Используется **TF-IDF** (scikit-learn), а **НЕ** API-эмбеддинги! Stop-words не отключаются.
 
-Stylistic features of article bodies:
+#### 3. Кластеризация: HDBSCAN с fallback на KMeans
 
-| Field | Type | Description |
-|---|---|---|
-| `first_paragraph_style` | str | inverted_pyramid, narrative, analytical, quote_lead |
-| `avg_first_paragraph_sentences` | int | Average sentences in first paragraph |
-| `avg_first_paragraph_words` | int | Average words in first paragraph |
-| `attribution_style` | str | source_first, source_last, inline |
-| `uses_dateline` | bool | Dateline presence (MOSCOW, April 2 —) |
-| `paragraph_length` | str | short, medium, long |
+```python
+import hdbscan
 
-*Inverted pyramid* — the classic journalistic style where the most critical information (who-what-where-when) is placed in the first paragraph.
+clusterer = hdbscan.HDBSCAN(
+    min_cluster_size=3,        # HDBSCAN_MIN_CLUSTER_SIZE
+    min_samples=2,             # HDBSCAN_MIN_SAMPLES
+    metric="euclidean",        # Евклидова метрика, НЕ cosine!
+)
+labels = clusterer.fit_predict(embeddings)
+```
 
-### EditorialPosition: Newsroom Values & Framing
+**Fallback (если hdbscan не установлен):**
+```python
+from sklearn.cluster import KMeans
 
-Editorial positioning and preferences determine which topics receive priority and how they're presented:
+n_clusters = min(20, max(3, len(signals) // 3))
+kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+labels = kmeans.fit_predict(embeddings)
+```
 
-| Field | Type | Content |
-|---|---|---|
-| `tone` | ToneProfile | neutral, conservative, liberal, sensationalist, analytical, official, oppositional |
-| `focus_topics` | list[str] | Priority topics (domestic politics, Russian economy, etc.) |
-| `avoided_topics` | list[str] | Systematically sidelined topics |
-| `framing_tendencies` | list[str] | Typical frames: pro_government, market_oriented, human_interest, conflict_frame |
-| `source_preferences` | list[str] | Preferred sources (officials, Foreign Ministry, anonymous) |
-| `stance_on_current_topics` | dict | Position on key topics (topic: position) |
-| `omissions` | list[str] | Systematically omitted topics |
+**Обработка noise-кластера (-1):**
+- Если в noise-кластере < 5 сигналов → отбросить
+- Если >= 5 → создать pseudo-кластер
 
-### OutletProfile: Complete Structure
+#### 4. LLM-лейблинг кластеров
 
-The complete outlet profile combines all three analyses:
+Модель: **google/gemini-3.1-flash-lite-preview** (task `event_clustering`), JSON-режим.
 
-| Field | Type | Purpose |
-|---|---|---|
-| `outlet_name` | str | Canonical outlet name |
-| `outlet_url` | str | Primary outlet URL |
-| `language` | str | ISO 639-1 code (ru, en, etc.) |
-| `headline_style` | HeadlineStyle | Headline metrics object |
-| `writing_style` | WritingStyle | Text metrics object |
-| `editorial_position` | EditorialPosition | Editorial positioning object |
-| `sample_headlines` | list[str] | 10–30 recent headlines |
-| `sample_first_paragraphs` | list[str] | 5–10 opening paragraph examples |
-| `analysis_period_days` | int | 30 (analysis period) |
-| `articles_analyzed` | int | Number of analyzed articles |
-| `analyzed_at` | datetime | Analysis timestamp |
+**Вход**: top-10 заголовков из каждого кластера.
 
-The profile is cached in the SQLite `outlet_profiles` table with key `outlet_name` (normalized) and 7-day TTL.
+**Выход**: ClusterLabel
+```python
+{
+    "title": "Краткое название события",
+    "summary": "2-3 предложения о смысле события",
+    "category": "politics | economy | etc.",
+    "importance": 0.0–1.0,
+    "entity_prominence": 0.0–1.0,
+}
+```
 
----
+**Graceful fallback**: Если LLM падает, используются заголовки первых 3 сигналов как title/summary.
 
-## Foresight Collector: Prediction Markets Integration
+#### 5. Расчёт significance_score
 
-A supplementary Stage 1.5 data source, **ForesightCollector**, enriches the forecast context with prediction market data.
+```python
+sig_score = (
+    0.30 * importance +
+    0.25 * (cluster_size / max_cluster_size) +
+    0.20 * recency_score +
+    0.15 * source_diversity +
+    0.10 * entity_prominence
+)
+```
 
-### Polymarket CLOB API
+**source_diversity**: `len(unique_sources) / len(signals_in_cluster)`
 
-The primary source is *Polymarket* — a decentralized prediction market platform built on blockchain. Access is via HTTP REST API without authentication requirements.
+**recency_score**: Экспоненциальное затухание с half-life 12 часов
+```python
+hours_ago = (now - latest_signal).total_seconds() / 3600
+recency_score = 2.0 ** (-hours_ago / 12.0)
+```
 
-**Key API Parameters**:
-- **URL**: `https://clob.polymarket.com`
-- **Endpoints**: `/markets`, `/prices`, `/trades`
-- **Rate limit**: ~200 requests per 10 seconds
-- **Timeout**: 10 seconds
+#### 6. Ранжирование и отсев
 
-Market matching uses `conditionId` — a unique blockchain event condition identifier. For example, "Will Trump win 2024?" might have `conditionId = 0x1234...`. This ID serves as the primary join key for data aggregation.
+Сортировка по significance_score (убывание), топ-20 (по умолчанию).
 
-### Collected Market Metrics
+### Схема EventThread
 
-For each relevant market, the following metrics are collected:
+| Поле | Тип | Обязательное |
+|------|-----|---|
+| `id` | str | ✓ (формат: `thread_{md5[:8]}`) |
+| `title` | str | ✓ |
+| `summary` | str | ✓ |
+| `signal_ids` | list[str] | ID сигналов в кластере |
+| `scheduled_event_ids` | list[str] | Связанные запланированные события |
+| `cluster_size` | int | Количество сигналов в кластере |
+| `category` | str | politics/economy/etc. |
+| `entities` | list[str] | Топ-10 сущностей по частоте |
+| `source_diversity` | float | 0.0–1.0 |
+| `earliest_signal` | datetime | Самый старый сигнал |
+| `latest_signal` | datetime | Самый свежий сигнал |
+| `recency_score` | float | 0.0–1.0 |
+| `significance_score` | float | 0.0–1.0 (итоговый балл) |
+| `importance` | float | 0.0–1.0 (от LLM) |
+| `entity_prominence` | float | 0.0–1.0 (от LLM) |
 
-| Metric | Source | Purpose |
-|---|---|---|
-| `conditionId` | markets endpoint | Unique identifier |
-| `question` | markets | Prediction statement |
-| `volume` | prices | Total trading volume |
-| `open_interest` | prices | Active positions |
-| `bid_price` | prices | Best buy price (YES) |
-| `ask_price` | prices | Best sell price (YES) |
-| `mid_price` | computed | (bid + ask) / 2 |
-| `spread` | computed | ask - bid (liquidity indicator) |
-| `resolution_date` | markets | Market closing date |
-| `last_updated` | prices | Last update timestamp |
+### Траектории и cross-impact (параллельные LLM-задачи)
 
-**Spread** (the difference between bid and ask prices) serves as a liquidity indicator: a tight spread signals active trading and participant confidence.
+После лейблинга, для каждого EventThread вычисляются:
 
-### Graceful Degradation
+1. **EventTrajectory** (task `trajectory_analysis`, claude-opus-4.6)
+   - current_state, momentum (escalating/stable/de_escalating)
+   - 3 сценария (baseline, optimistic, pessimistic) с вероятностями
+   - key_drivers, uncertainties
 
-*Metaculus API* (alternative source) is currently unavailable due to BENCHMARKING-tier access requirements (requested 2026-03-29). The pipeline code is ready for integration but returns an empty list on access attempts.
+2. **CrossImpactMatrix** (task `cross_impact_analysis`, claude-opus-4.6)
+   - Матрица влияний между всеми парами event_threads
+   - impact_score: -1.0 до +1.0
+   - Sparse representation (только ненулевые ячейки)
 
-If Polymarket API is unavailable (HTTP 5xx, timeout, rate limit):
-
-1. Retry with exponential backoff (3 attempts, max 30 sec)
-2. On continued errors: log warning and return empty list `[]`
-3. Pipeline continues without market data (quality degradation, not critical)
-
-A successful API call returns markets with metrics. Market relevance is determined by matching question/description against EventCalendar events (cosine similarity of embeddings or simple keyword matching).
-
----
-
-## Stage 2: Event Identification via HDBSCAN Clustering
-
-Stage 2 consolidates 100–200 signals and 3–10 scheduled events into 20 structured event threads via density-based clustering.
-
-### Process Logic
-
-The clustering process unfolds in the following stages:
-
-1. **Text Preparation** — Concatenate title + summary for each SignalRecord
-2. **Embedding** — Batch embedding via LLM API (OpenAI embeddings or Voyage AI); result: matrix of shape (N, 1536) where N = signal count
-3. **HDBSCAN Clustering** — Density clustering of embeddings in cosine similarity space
-4. **LLM Labeling** — For each cluster, generate title and summary via LLM
-5. **ScheduledEvent Integration** — Bind scheduled events to clusters via semantic similarity
-6. **Scoring** — Compute `significance_score` using multi-factor formula
-7. **Ranking** — Select top-20 by significance_score
-8. **Trajectory Analysis** — For each thread, analyze current state, momentum, three scenarios
-9. **Cross-Impact Matrix** — Assess cross-impacts between event threads
-
-### HDBSCAN Hyperparameters
-
-| Parameter | Value | Interpretation |
-|---|---|---|
-| `min_cluster_size` | 3 | Minimum cluster size (events mentioned in 3+ signals) |
-| `min_samples` | 2 | Minimum neighborhood size for density |
-| `metric` | cosine | Distance metric in embedding space |
-
-`min_cluster_size = 3` means a cluster forms only if it contains at least 3 signals with similar embeddings (cosine similarity). This filters noise (random one-or-two-headline matches) and isolates events with sufficient multi-source coverage.
-
-### Significance Score Formula
-
-Event significance is computed as a weighted sum of five components:
-
-$$\text{significance\_score} = 0.30 \times \text{importance} + 0.25 \times \text{cluster\_size\_norm} + 0.20 \times \text{recency} + 0.15 \times \text{source\_diversity} + 0.10 \times \text{entity\_prominence}$$
-
-Components are defined as:
-
-1. **importance** (weight 0.30) — LLM assessment of media importance in the outlet context (0.0–1.0). High value for events guaranteed top-news placement.
-
-2. **cluster_size_norm** (weight 0.25) — Normalized cluster size. If cluster contains $k$ signals and max cluster size is $k_{\max}$, then this component = $k / k_{\max}$ (0.0–1.0). Larger clusters indicate high news activity.
-
-3. **recency** (weight 0.20) — Signal freshness in the cluster. Signals published in the last 24 hours score 1.0. Older signals are penalized exponentially: $\exp(-t / \tau)$ where $t$ = age (days), $\tau = 3$ (time constant).
-
-4. **source_diversity** (weight 0.15) — Number of unique sources in cluster, normalized: $\min(1.0, |\text{sources}| / 5)$. Events covered by 5+ different sources score maximum.
-
-5. **entity_prominence** (weight 0.10) — Count of high-profile entity mentions (heads of state, ECB, UN, etc.) in cluster signals, normalized to [0, 1]. For typical clusters this component is modest but can be decisive for major political events.
-
-### Output: EventThread[]
-
-The clustering result is a list of `EventThread` objects (up to 20 records), ordered by `significance_score`:
-
-| Field | Type | Content |
-|---|---|---|
-| `id` | str | Unique thread ID |
-| `title` | str | Event title (LLM-generated from cluster) |
-| `summary` | str | Event thread summary |
-| `signal_ids` | list[str] | IDs of constituent signals |
-| `scheduled_events` | list[str] | IDs of bound scheduled events |
-| `cluster_size` | int | Number of signals in cluster |
-| `significance_score` | float | Final significance (0.0–1.0) |
-| `sources` | list[str] | Unique signal sources |
-| `entities` | list[str] | Aggregated named entities |
-| `published_at` | datetime | Oldest signal publication time |
-| `last_updated` | datetime | Newest signal publication time |
-| `trajectory` | EventTrajectory \| None | Trajectory analysis (Stage 3) |
-
-Each EventThread represents a cohesive set of news items about a single event or process, ready for downstream analysis (Stage 3: trajectory analysis, Stages 4–5: Delphi forecasting).
-
-### Error Handling & Edge Cases
-
-| Situation | Action |
-|---|---|
-| <10 signals on input | Return as-is + warning; HDBSCAN may not form clusters |
-| Embedding API unavailable | Fallback: use simple text distance (Jaccard) |
-| 0 clusters found | Treat each signal as separate EventThread |
-| LLM JSON parsing fails on labeling | Retry once; use generic title on failure |
-
-!!! note "HDBSCAN Resilience"
-    The pipeline continues gracefully if clustering fails or produces fewer clusters than expected. Signal-level granularity is preserved as a fallback.
+Обе задачи выполняются параллельно через `asyncio.gather()`. Graceful fallback: если одна падает, результаты других сохраняются.
 
 ---
 
-## Pipeline Context Slots
+## PipelineContext: слоты Stage 1–2
 
-The `PipelineContext` object carries mutable shared state throughout the pipeline. Understanding each slot is critical for integration.
-
-### Stage 1 Slots
-
-**`signals`** (List[SignalRecord])
-- **Type**: list of dicts / SignalRecord Pydantic models
-- **Cardinality**: 100–200 per prediction
-- **Filled by**: NewsScout agent
-- **Read by**: EventTrendAnalyzer (Stage 2)
-- **Purpose**: Raw signal aggregation from RSS + web search
-- **Validation**: Each signal must have url, title, source_name, published_at (UTC), relevance_score in [0, 1]
-
-**`scheduled_events`** (List[ScheduledEvent])
-- **Type**: list of dicts / ScheduledEvent models
-- **Cardinality**: 3–50 per day
-- **Filled by**: EventCalendar agent
-- **Read by**: EventTrendAnalyzer (Stage 2) for event thread binding
-- **Purpose**: Scheduled events (press conferences, economic data releases, etc.)
-- **Validation**: Each must have event_date (matches target_date), event_type, certainty level
-
-**`outlet_profile`** (OutletProfile)
-- **Type**: single object (dict or Pydantic model)
-- **Cardinality**: 1 per prediction
-- **Filled by**: OutletHistorian agent
-- **Read by**: All analyst agents (Stage 3), Delphi personas (Stages 4–5), Judge (Stage 6)
-- **Purpose**: Editorial positioning, headline/writing style, tone
-- **Validation**: Must include headline_style, writing_style, editorial_position; analyzed_at should be recent (< 7 days)
-
-**`foresight_events`** (List[MetaculusQuestion])
-- **Type**: list of dicts / Metaculus prediction questions
-- **Cardinality**: 0–30 (often empty due to API restrictions)
-- **Filled by**: ForesightCollector agent
-- **Read by**: Judge (Stage 6) for context enrichment
-- **Purpose**: Prediction market data (Metaculus, Polymarket)
-- **Validation**: Each must have question, probability, resolution_date
-
-**`foresight_signals`** (List[PolymarketMetric])
-- **Type**: list of dicts / market metric objects
-- **Cardinality**: 0–50 (depends on market availability)
-- **Filled by**: ForesightCollector agent
-- **Read by**: Judge (Stage 6)
-- **Purpose**: Polymarket CLOB API metrics (bid, ask, volume)
-- **Validation**: Each must have conditionId, question, mid_price in [0, 1]
-
-### Stage 2 Slots
-
-**`event_threads`** (List[EventThread])
-- **Type**: list of dicts / EventThread models
-- **Cardinality**: up to 20
-- **Filled by**: EventTrendAnalyzer (Stage 2, via clustering)
-- **Read by**: All analyst agents (Stage 3), Delphi personas (Stages 4–5), Judge (Stage 6)
-- **Purpose**: Clustered and ranked event threads
-- **Validation**: Each must have id, title, significance_score, cluster_size; signal_ids must reference existing signals
-
-### Stage 3 Slots
-
-**`trajectories`** (List[EventTrajectory])
-- **Type**: list of dicts / EventTrajectory models
-- **Cardinality**: up to 20 (one per event_thread)
-- **Filled by**: Analyst agents (GeopoliticalAnalyst, EconomicAnalyst, MediaAnalyst) enrich event_threads with trajectory data
-- **Read by**: Judge (Stage 6), Delphi personas (Stages 4–5)
-- **Purpose**: Scenarios, momentum, key drivers for each event
-- **Validation**: Each must include current_state, momentum, three scenarios (baseline, optimistic/pessimistic, wildcard) with probabilities summing to 1.0
-
-**`cross_impact_matrix`** (CrossImpactMatrix)
-- **Type**: single object
-- **Cardinality**: 1 per prediction
-- **Filled by**: EventTrendAnalyzer (computed during Stage 2)
-- **Read by**: Delphi personas (Stages 4–5)
-- **Purpose**: Sparse adjacency matrix of event dependencies
-- **Validation**: Each impact_score must be in [-1, 1]; source_id and target_id must reference event_threads
-
-### Stages 4–5 Slots
-
-**`round1_assessments`** (List[PersonaAssessment])
-- **Type**: list of dicts / PersonaAssessment models
-- **Cardinality**: 3–5 (one per successful persona)
-- **Filled by**: Five Delphi personas (Realist, Geostrateg, Economist, MediaExpert, DevilsAdvocate) in parallel
-- **Read by**: Mediator (Stage 5a)
-- **Purpose**: Independent expert judgments from each persona
-- **Validation**: Each must have persona_id, predictions[], confidence_self_assessment in [0, 1]
-
-**`mediator_synthesis`** (MediatorSynthesis)
-- **Type**: single object
-- **Cardinality**: 1 per prediction
-- **Filled by**: Mediator agent (Stage 5a)
-- **Read by**: All Delphi personas during Round 2
-- **Purpose**: Structured synthesis of disagreements, gaps, consensus areas with key questions
-- **Validation**: consensus_areas, disputes, gaps must all reference event_thread_ids; key_question must be present for each DisputeArea
-
-**`round2_assessments`** (List[PersonaAssessment])
-- **Type**: list of dicts / PersonaAssessment models (with revisions_made, revision_rationale fields)
-- **Cardinality**: 3–5 (one per persona that completed Round 2)
-- **Filled by**: Five Delphi personas again, informed by mediator_synthesis
-- **Read by**: Judge (Stage 6)
-- **Purpose**: Revised expert judgments after mediation
-- **Validation**: Same as round1_assessments, plus revisions_made[] and revision_rationale must be present
+| Слот | Тип | Кто заполняет | Кто читает |
+|------|-----|---|---|
+| `signals` | list[dict] | NewsScout | EventTrendAnalyzer, Framing, QualityGate |
+| `scheduled_events` | list[dict] | EventCalendar | EventTrendAnalyzer, Framing |
+| `outlet_profile` | dict | OutletHistorian | Framing, Generation |
+| `foresight_events` | list[dict] | ForesightCollector | Delphi R1 (опционально) |
+| `foresight_signals` | list[dict] | ForesightCollector | Delphi R1 (опционально) |
+| `event_threads` | list[dict] | EventTrendAnalyzer | Delphi R1, Trajectory, Framing, QualityGate |
+| `trajectories` | list[dict] | EventTrendAnalyzer | Delphi R1 (опционально) |
+| `cross_impact_matrix` | dict | EventTrendAnalyzer | Delphi R1, Consensus |
 
 ---
 
-## Source Code References
+## Обработка ошибок и graceful degradation
 
-- **Collection stage**: `src/agents/collectors/news_scout.py`, `src/agents/collectors/event_calendar.py`, `src/agents/collectors/outlet_historian.py`, `src/agents/collectors/foresight_collector.py`
-- **Event identification**: `src/agents/analysts/event_trend_analyzer.py`
-- **Data schemas**: `src/schemas/events.py`, `src/schemas/pipeline.py`
-- **API clients**: `src/data_sources/` (RSS, web search, Polymarket)
+### Stage 1
 
-For complete specifications, see `docs/03-collectors.md` and `docs/04-analysts.md`.
+| Сценарий | Поведение |
+|----------|---|
+| RSS fetch все упали | Логирование, продолжение с web search |
+| Web search упал | Логирование, продолжение с RSS |
+| Оба упали | RuntimeError: "Both RSS and web search returned no results" |
+| LLM-классификация упала | Пропуск batch, сигналы возвращаются без categories/entities |
+| EventCalendar LLM упал | Запланированные события возвращаются без newsworthiness |
+| OutletHistorian LLM упал | Возвращаются значения по умолчанию |
+| Polymarket/GDELT/Metaculus упал | Продолжение с остальными источниками, лог sources_used |
+
+### Stage 2
+
+| Сценарий | Поведение |
+|----------|---|
+| < 10 сигналов | Каждый сигнал становится отдельной нитью (skip clustering) |
+| LLM-лейблинг упал | Использование заголовков первых 3 сигналов как title/summary |
+| Trajectory LLM упал | Пропуск trajectories, event_threads всё равно возвращаются |
+| Cross-impact LLM упал | Пропуск cross_impact_matrix, event_threads всё равно возвращаются |
+
+---
+
+## Производительность и параметры
+
+| Параметр | Значение | Назначение |
+|----------|----------|---|
+| NewsScout таймаут | 600 сек | Параллелизм 20 фидов + web search |
+| RSS timeout | 15 сек | На один фид |
+| RSS cache TTL | 300 сек (5 мин) | Conditional GET (ETag, Last-Modified) |
+| MAX_SIGNALS | 200 | Топ по relevance_score |
+| MAX_EVENTS | 30 | Топ по newsworthiness |
+| EventCalendar таймаут | Включен в 600 сек NewsScout | Параллельно с ним |
+| OutletHistorian таймаут | 600 сек | Параллельно с NewsScout |
+| ForesightCollector таймаут | 120 сек | 3 API параллельно |
+| EventTrendAnalyzer таймаут | 600 сек | Последовательно после Collection |
+| MAX_THREADS | 20 | Топ event_threads по significance_score |
+| HDBSCAN min_cluster_size | 3 | Минимум сигналов в кластере |
+| HDBSCAN min_samples | 2 | Параметр плотности |
+| HDBSCAN metric | euclidean | Расстояние в TF-IDF пространстве |
+| TfidfVectorizer max_features | 1536 | Размер вокабуляра |
+| Levenshtein threshold | 80 | Для дедупликации ScheduledEvent |
+| Half-life recency | 12 часов | Экспоненциальное затухание |
+
+---
+
+## Примеры работы
+
+### Пример 1: NewsScout на ТАСС за 2026-04-05
+
+**Входные данные:**
+```python
+context.outlet = "ТАСС"
+context.target_date = date(2026, 4, 5)
+```
+
+**Выход (sample):**
+```python
+{
+    "signals": [
+        {
+            "id": "rss_a1b2c3d4",
+            "title": "Правительство России одобрило новый налоговый пакет",
+            "summary": "На заседании кабинета...",
+            "url": "https://tass.com/...",
+            "source_name": "ТАСС",
+            "source_type": "rss",
+            "published_at": datetime(2026, 4, 5, 14, 30, tzinfo=UTC),
+            "language": "ru",
+            "categories": ["politics", "economy"],
+            "entities": ["Россия", "Правительство"],
+            "relevance_score": 0.8,
+        },
+        # ... ещё 199 сигналов
+    ]
+}
+```
+
+### Пример 2: EventTrendAnalyzer с 150 сигналами
+
+**Входные данные:**
+```python
+signals: list[SignalRecord]  # 150 сигналов
+```
+
+**Процесс:**
+1. TF-IDF на 150 заголовков+summary
+2. HDBSCAN → ~12 кластеров + noise
+3. LLM-лейблинг каждого кластера
+4. Расчёт significance_score
+5. Сортировка, топ-20
+
+**Выход (sample):**
+```python
+{
+    "event_threads": [
+        {
+            "id": "thread_a1b2c3d4",
+            "title": "Дипломатический кризис между Россией и ЕС",
+            "summary": "После новых санкций дипломатическое напряжение между...",
+            "signal_ids": ["rss_x1", "ws_x2", "rss_x3", ...],
+            "cluster_size": 24,
+            "significance_score": 0.87,
+            "recency_score": 0.95,
+            "source_diversity": 0.67,  # 8 разных источников из 24 сигналов
+            "entities": ["Россия", "ЕС", "Брюссель", ...],
+        },
+        # ... ещё 19 потокиков
+    ],
+    "trajectories": [
+        {
+            "thread_id": "thread_a1b2c3d4",
+            "current_state": "Дипломатическое напряжение нарастает...",
+            "momentum": "escalating",
+            "scenarios": [
+                {"scenario_type": "baseline", "probability": 0.5, ...},
+                {"scenario_type": "pessimistic", "probability": 0.3, ...},
+                {"scenario_type": "optimistic", "probability": 0.2, ...},
+            ],
+        },
+        # ... ещё 19 траекторий
+    ],
+    "cross_impact_matrix": {
+        "entries": [
+            {
+                "source_thread_id": "thread_a1b2c3d4",
+                "target_thread_id": "thread_e5f6g7h8",
+                "impact_score": 0.65,
+                "explanation": "Дипломатический кризис отрицательно влияет на торговлю...",
+            },
+        ]
+    }
+}
+```
+
+---
+
+## Исходный код
+
+- `src/agents/collectors/news_scout.py`
+- `src/agents/collectors/event_calendar.py`
+- `src/agents/collectors/outlet_historian.py`
+- `src/agents/collectors/foresight_collector.py`
+- `src/agents/analysts/event_trend.py`
+- `src/data_sources/rss.py`
+- `src/data_sources/foresight.py`
+- `src/schemas/events.py`
+- `src/schemas/pipeline.py`
+- `src/llm/router.py`

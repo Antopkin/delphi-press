@@ -66,9 +66,9 @@ ForesightCollector не вызывает LLM (pure data agent), но conformant 
 
 ---
 
-## 9. Budget Default ($50)
+## 9. Budget Default (\$50)
 
-Budget дефолт $50. Один Opus call стоит $5–15; два прогноза могут исчерпать бюджет.
+Budget дефолт \$50. Один Opus call стоит \$5–15; два прогноза могут исчерпать бюджет.
 
 **Workaround:** увеличить дефолт или сделать configurable.
 

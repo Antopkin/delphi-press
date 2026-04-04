@@ -120,7 +120,7 @@ Polная архитектура pipeline: 9 стадий, 28 LLM-задач, ag
 
 - **Total LLM calls:** ~28 (distributed across 9 stages)
 - **Typical duration:** 40–60 minutes (dependent on parallel execution and LLM latency)
-- **Cost per run:** $5–15 (Opus model, openRouter pricing)
+- **Cost per run:** \$5–15 (Opus model, openRouter pricing)
 - **Parallel factor:** stages 1, 3, 4, 5 can run agents concurrently, overall pipeline remains sequential
 
 ## Notes
