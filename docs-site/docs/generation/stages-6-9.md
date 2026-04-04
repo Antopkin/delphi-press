@@ -270,8 +270,8 @@ StyleReplicator получает из `OutletProfile`:
 | ≥ 3 | ≥ 3 | нет | **PASS** |
 | < 3 | любой | любой | **REJECT** |
 | ≥ 3 | < 3 | нет | **REVISE** |
-| ≥ 3 | ≥ 3 | внутр. | **MERGE** |
-| ≥ 3 | ≥ 3 | внеш. | **DEPRIORITIZE** |
+| ≥ 3 | любой | внутр. | **MERGE** |
+| ≥ 3 | любой | внеш. | **DEPRIORITIZE** |
 
 !!! note "Условие для MERGE"
     MERGE срабатывает при $\text{factual\_score} \geq 3$ И наличии внутреннего дубликата. Стиль-скор не учитывается для этого решения.
@@ -301,3 +301,307 @@ StyleReplicator получает из `OutletProfile`:
 
 !!! warning "Параллельная обработка"
     До 5 заголовков проверяются одновременно с timeout 180 сек. При timeout применяется нейтральная оценка (score = 3, пропускает заголовок дальше).
+
+---
+
+## Подробное описание компонентов
+
+### QualityGate: Матрица решений и пороги
+
+QualityGate применяет детерминированный алгоритм принятия решений, основанный на трёх независимых сигналах. Все пороги жёстко определены в `src/agents/generators/quality_gate.py`.
+
+#### Параметры дверей
+
+| Параметр | Значение | Назначение |
+|----------|----------|-----------|
+| **FACTUAL_MIN_SCORE** | 3 | Минимальный балл фактической проверки для прохождения |
+| **STYLE_MIN_SCORE** | 3 | Минимальный балл стилистической проверки |
+| **INTERNAL_DEDUP_THRESHOLD** | 0.85 | Порог дедупликации внутри набора (SequenceMatcher.ratio) |
+| **EXTERNAL_DEDUP_THRESHOLD** | 0.80 | Порог дедупликации против реальных заголовков издания |
+| **SCORING_TIMEOUT_SECONDS** | 180 | Таймаут для одного заголовка (обе проверки параллельно) |
+| **SCORING_CONCURRENCY** | 5 | Количество заголовков, оцениваемых одновременно |
+
+!!! note "Гибкие пороги"
+    Пороги `FACTUAL_MIN_SCORE` и `STYLE_MIN_SCORE` переопределяются через `PipelineContext.pipeline_config["quality_gate_min_score"]` если нужна адаптация.
+
+#### Алгоритм принятия решений
+
+Для каждого заголовка QualityGate выполняет:
+
+1. **Параллельная оценка** (до 5 одновременно):
+   - Вызов `_check_factual()` (Claude LLM, task "quality_factcheck")
+   - Вызов `_check_style()` (Claude LLM, task "quality_style")
+   - Обе завершаются в timeout 180 сек или получают нейтральную оценку (score = 3)
+
+2. **Проверка на внутренние дубликаты**:
+   - Попарное сравнение всех заголовков через `SequenceMatcher(None, headline_i, headline_j).ratio()`
+   - Если ratio ≥ 0.85: дубликат — более слабый по среднему баллу помечается как `is_internal_duplicate=True`
+
+3. **Проверка на внешние дубликаты**:
+   - Сравнение заголовка с `OutletProfile.sample_headlines` (если есть)
+   - Если ratio ≥ 0.80: помечается как `is_external_duplicate=True`
+
+4. **Применение матрицы решений**:
+   ```
+   if factual_score < min_score:
+       decision = REJECT
+   elif is_internal_duplicate:
+       decision = MERGE
+   elif is_external_duplicate:
+       decision = DEPRIORITIZE
+   elif style_score < min_score:
+       decision = REVISE
+   else:
+       decision = PASS
+   ```
+
+#### Обработка timeout
+
+При timeout (180 сек) обе проверки получают нейтральную оценку:
+
+```python
+factual_score = min_score       # 3 по умолчанию
+factual_feedback = "scoring timeout — neutral score"
+style_score = min_score
+style_feedback = "scoring timeout — neutral score"
+```
+
+Нейтральная оценка (score = 3) находится на границе прохождения — заголовок пройдёт, если нет других причин для отклонения.
+
+#### Финальная фильтрация
+
+После применения матрицы:
+- Заголовки с решением `PASS` → попадают в `FinalPrediction`
+- Заголовки с `DEPRIORITIZE` → добавляются в конец списка (после `PASS`)
+- Все остальные (REJECT, REVISE, MERGE) → исключаются из вывода
+
+На входе: до 21 заголовка (3 × 7 событий).
+На выходе: 5–7 `FinalPrediction` (после фильтрации).
+
+---
+
+### Дедупликация: SequenceMatcher и пороги
+
+QualityGate использует **алгоритмическую дедупликацию без embeddings** через стандартный модуль Python `difflib`.
+
+#### Почему SequenceMatcher, а не embeddings
+
+- **Скорость:** O(n) для парной проверки (нет LLM-вызовов)
+- **Determinism:** одинаковый результат всегда
+- **Экономия:** нет затрат на модель embeddings
+- **Чувствительность:** хорошо работает для близких по структуре заголовков (перестановка слов, малые синтаксические изменения)
+
+#### Внутренняя дедупликация
+
+**Когда:** на этапе 2 execute(), после набора всех 21 заголовка.
+
+**Алгоритм:**
+```python
+for i in range(len(headlines)):
+    for j in range(i+1, len(headlines)):
+        sim = SequenceMatcher(None, headline[i], headline[j]).ratio()
+        if sim >= 0.85:  # INTERNAL_DEDUP_THRESHOLD
+            avg_score_i = (factual[i] + style[i]) / 2
+            avg_score_j = (factual[j] + style[j]) / 2
+            if avg_score_i <= avg_score_j:
+                mark headline[i] as is_internal_duplicate
+                set duplicate_of_id = headline[j].id
+            else:
+                mark headline[j] as is_internal_duplicate
+```
+
+Более слабый вариант помечается дубликатом по **среднему баллу** (factual + style) / 2.
+
+#### Внешняя дедупликация
+
+**Когда:** после внутренней дедупликации.
+
+**Источник сравнения:** `OutletProfile.sample_headlines` (реальные заголовки издания).
+
+**Алгоритм:**
+```python
+for headline in all_headlines:
+    for existing in outlet_profile.sample_headlines:
+        sim = SequenceMatcher(None, headline.text, existing).ratio()
+        if sim >= 0.80:  # EXTERNAL_DEDUP_THRESHOLD
+            mark headline as is_external_duplicate
+            break
+```
+
+Если найдено совпадение — заголовок помечается и переходит в категорию `DEPRIORITIZE`.
+
+#### Пороги: обоснование
+
+| Порог | Значение | Интерпретация |
+|-------|----------|---------------|
+| **INTERNAL (0.85)** | 85% сходство | Почти идентичные (перестановка 1–2 слов) |
+| **EXTERNAL (0.80)** | 80% сходство | Значительное сходство (может совпадать по смыслу) |
+
+Внешний порог ниже на 0.05, т.к. вероятность случайного совпадения с реальными заголовками выше.
+
+---
+
+### StyleReplicator: Few-shot инъекция и метрики
+
+StyleReplicator генерирует 3 варианта заголовка и первого абзаца для каждого события, адаптируя текст к стилю целевого издания.
+
+#### Few-shot примеры из OutletProfile
+
+StyleReplicator вводит в промпт реальные примеры из `OutletProfile`:
+
+| Поле | Количество | Назначение |
+|------|-----------|-----------|
+| **sample_headlines** | 10–20 → 15 в промпт | Примеры стиля и структуры |
+| **sample_first_paragraphs** | 3–5 → все в промпт | Примеры лидов (first paragraph) |
+
+#### Метрики стиля из OutletProfile
+
+Для каждого издания профиль содержит измеренные метрики:
+
+| Метрика | Поле в коде | Пример значений |
+|---------|-----------|-----------------|
+| Средняя длина заголовка | `headline_style.avg_length_chars` | 60–90 символов |
+| Величина слова (case) | `headline_style.capitalization` | "sentence_case", "title_case" |
+| Эмоциональный тон | `headline_style.emotional_tone` | "neutral", "urgent", "sensational" |
+| Регистр лексики | `headline_style.vocabulary_register` | "formal", "casual", "technical" |
+| Использование двоеточий | `headline_style.uses_colons` | bool (частота) |
+| Использование кавычек | `headline_style.uses_quotes` | bool (частота) |
+| Средняя длина лида | `writing_style.avg_first_paragraph_words` | 30–60 слов |
+
+Эти метрики инъектируются в системный промпт вместе с примерами для обучения few-shot.
+
+#### Вариантов и отклонение длины
+
+Для каждого события генерируется **VARIANTS_PER_PREDICTION = 3** заголовка.
+
+**Контроль длины:**
+```python
+target_len = profile.headline_style.avg_length_chars
+tolerance = 0.20  # ±20%
+min_len = target_len * (1 - tolerance)
+max_len = target_len * (1 + tolerance)
+actual_len = len(generated_headline)
+
+if actual_len < min_len or actual_len > max_len:
+    length_deviation = (actual_len - target_len) / target_len
+else:
+    length_deviation = 0.0
+```
+
+`length_deviation` сохраняется в `GeneratedHeadline` для последующего анализа (QualityGate может учитывать это в future версиях).
+
+#### Мультиязычность
+
+Выбор LLM-задачи зависит от языка издания:
+
+```python
+if language.lower() in ("ru", "russian", "русский"):
+    task = "style_generation_ru"    # Русский
+else:
+    task = "style_generation"       # Англ. или др.
+```
+
+Обе задачи используют **Claude Opus 4.6** (OpenRouter) с temperature **0.8** для творческого разнообразия.
+
+#### Выход GeneratedHeadline
+
+Каждый сгенерированный заголовок содержит:
+
+```python
+@dataclass
+class GeneratedHeadline:
+    headline: str                    # Основной текст
+    first_paragraph: str             # Лид
+    headline_language: str           # Язык ("ru", "en", ...)
+    event_thread_id: str             # ID события
+    length_deviation: float          # Отклонение от целевой длины
+    id: str                          # Уникальный ID
+```
+
+Поля `is_internal_duplicate`, `duplicate_of_id`, `is_external_duplicate` заполняются позже (на стадии QualityGate).
+
+---
+
+### FramingAnalyzer: Входные данные и выход
+
+FramingAnalyzer анализирует, **как конкретное издание подаст событие**, учитывая его редакционную позицию, стиль и целевую аудиторию.
+
+#### Входные данные из OutletProfile
+
+Для анализа фрейминга используются:
+
+| Поле | Источник | Назначение |
+|------|---------|-----------|
+| **outlet_name** | `OutletProfile.outlet_name` | Название издания для промпта |
+| **editorial_tone** | `OutletProfile.editorial_position.tone.value` | Тон редакции ("neutral", "conservative", "progressive") |
+| **emotional_tone** | `OutletProfile.headline_style.emotional_tone` | Эмоциональный окрас заголовков |
+| **vocabulary_register** | `OutletProfile.headline_style.vocabulary_register` | Уровень сложности лексики |
+| **focus_topics** | `OutletProfile.editorial_position.focus_topics` | 1–5 приоритетных тем |
+| **source_preferences** | `OutletProfile.editorial_position.source_preferences` | Предпочитаемые источники (люди, организации) |
+| **sample_headlines** | `OutletProfile.sample_headlines[:10]` | 10 примеров для контекста |
+
+#### Входные данные из RankedPrediction
+
+Для каждого события передаются:
+
+| Поле | Значение | Назначение |
+|------|----------|-----------|
+| **prediction_text** | Текст прогноза | Основное событие |
+| **probability** | `calibrated_probability` форматированный | Уверенность в % |
+| **newsworthiness** | `newsworthiness` форматированный | Новостная ценность в % |
+| **reasoning** | Обоснование от персон | Контекст решения |
+| **agreement_level** | Уровень согласия | CONSENSUS / MAJORITY / CONTESTED |
+
+#### Выход: FramingBrief
+
+Для каждого события генерируется структурированный `FramingBrief`:
+
+```python
+@dataclass
+class FramingBrief:
+    event_thread_id: str                    # Связь с событием
+    outlet_name: str
+    framing_strategy: FramingStrategy       # enum: 9 стратегий
+    angle: str                              # 1–2 предложения
+    emphasis_points: list[str]              # 2–5 элементов
+    omission_points: list[str]              # 0–5 элементов
+    headline_tone: str                      # "нейтральный", "тревожный" и т.д.
+    likely_sources: list[str]               # 1–5 источников
+    section: str                            # Раздел издания
+    news_cycle_hook: str = ""               # Привязка к циклу новостей
+    editorial_alignment_score: float        # 0.0–1.0
+```
+
+#### Девять стратегий фрейминга (переиспользование)
+
+| Стратегия | Описание | Примечание |
+|-----------|---------|-----------|
+| **THREAT** | Угроза для здоровья, безопасности, экономики | Мобилизует внимание |
+| **OPPORTUNITY** | Шанс, перспектива развития | Конструктивный тон |
+| **CRISIS** | Острая проблема, обострение ситуации | Срочность |
+| **ROUTINE** | Регулярное, периодическое событие | Низкий уровень тревожности |
+| **SENSATION** | Шокирующие подробности, неожиданный поворот | Для таблоидов |
+| **ANALYTICAL** | Глубокий анализ, контекст, причины | Для аналитических изданий |
+| **HUMAN_INTEREST** | История людей, личные драмы | Эмпатия, персонификация |
+| **NEUTRAL_REPORT** | Фактический отчёт без оценки | Для объективных СМИ |
+| **CONFLICT** | Столкновение позиций, дебаты | Для политических изданий |
+
+#### Fallback при ошибке парсинга
+
+Если LLM-ответ не парсится, FramingAnalyzer возвращает fallback `FramingBrief`:
+
+```python
+FramingBrief(
+    event_thread_id=prediction.event_thread_id,
+    outlet_name=profile.outlet_name,
+    framing_strategy="neutral_report",      # Безопасный выбор
+    angle=prediction.prediction,            # Копируем исходное событие
+    emphasis_points=[prediction.reasoning[:200]],
+    headline_tone="нейтральный",
+    likely_sources=profile.editorial_position.source_preferences[:3],
+    section="новости",
+    editorial_alignment_score=0.5,          # Неизвестна
+)
+```
+
+Такой fallback позволяет пайплайну продолжить работу без stopping.

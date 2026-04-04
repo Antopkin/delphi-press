@@ -257,35 +257,477 @@ $$\mathrm{BSS} = 1 - \frac{\mathrm{BS}(\text{informed consensus})}{\mathrm{BS}(\
 
 ## Расширения: Extremizing и параметрическая модель
 
-### Extremizing (Satopää et al. 2014)
-
-Каждый трейдер видит подмножество информации. При агрегировании вероятность недо-экстремизируется (ближе к 50%, чем реальная). Коррекция:
-
-$$p_{\mathrm{ext}} = \frac{(\mathrm{odds})^d}{1 + (\mathrm{odds})^d}, \qquad \mathrm{odds} = \frac{p}{1 - p}$$
-
-где $d \geq 1$ — параметр extremizing. Adaptive $d$:
-
-$$d = 1 + 2.0 \cdot \sigma_{\text{positions}}, \quad d \leq 2.0$$
-
-- Высокое согласие трейдеров → $d \approx 1$ (не экстремизируем)
-- Высокое разногласие → $d \to 2$ (независимые сигналы — экстремизируем)
-
-### Параметрическая модель λ
+### Параметрическая модель λ (Exponential и Weibull)
 
 Каждый трейдер верит, что время до события $T \sim \mathrm{Exp}(\lambda)$. Субъективная вероятность: $P(T \leq H) = 1 - e^{-\lambda H}$, где $H$ — горизонт рынка в днях.
 
-По наблюдаемой позиции и горизонту восстанавливаем $\lambda$:
+#### Exponential MLE (закрытая форма)
 
-$$\hat{\lambda}_{\mathrm{MLE}} = \frac{1}{n} \sum_{m} \frac{-\ln(1 - \mathrm{pos}_m)}{H_m}$$
+По наблюдаемым позициям $\{\mathrm{pos}_m\}$ и горизонтам $\{H_m\}$ восстанавливаем $\lambda$ в закрытой форме:
 
-Для гибкости: Weibull($\lambda, k$) через scipy L-BFGS-B, selection по AIC:
+$$\lambda_{\mathrm{MLE}} = \frac{1}{n} \sum_{m=1}^n \frac{-\ln(1 - \mathrm{pos}_m)}{H_m}$$
 
-$$P(T \leq H) = 1 - \exp\bigl(-((\lambda H)^k\bigr)$$
+где $n$ — число разрешённых рынков.
 
-Enriched signal: adaptive blend $(1-w) \cdot p_{\mathrm{inf}} + w \cdot p_{\mathrm{param}}$, где $w = \mathrm{coverage} \times \mathrm{fit\_quality}$, $w \leq 0.40$.
+**95% доверительный интервал** (Fisher Information):
+
+$$\mathrm{SE}(\lambda) \approx \frac{\lambda}{\sqrt{n}}, \quad \text{CI} = [\lambda_{\mathrm{MLE}} - 1.96 \cdot \mathrm{SE}, \lambda_{\mathrm{MLE}} + 1.96 \cdot \mathrm{SE}]$$
+
+**Байесовский shrinkage** (для $n < 30$):
+
+$$\hat{\lambda} = \frac{n \cdot \lambda_{\mathrm{MLE}} + k \cdot \lambda_{\mathrm{prior}}}{n + k}$$
+
+где $k$ — сила приора (pseudo-observations), $\lambda_{\mathrm{prior}}$ — заданный prior.
+
+#### Weibull обобщение (L-BFGS-B)
+
+Для гибкости применяем Weibull($\lambda, k$) с двумя параметрами:
+
+$$P(T \leq H) = 1 - \exp\bigl(-(λH)^k\bigr)$$
+
+где $k=1$ → Exponential, $k>1$ → right-skewed, $k<1$ → left-skewed.
+
+**MLE через scipy L-BFGS-B:**
+
+$$\min_{\lambda, k} \sum_{m} (\mathrm{pos}_m - (1 - \exp(-(λH_m)^k)))^2$$
+
+с границами:
+- $\lambda \in [10^{-6}, 100]$
+- $k \in [0.1, 10]$
+
+**Критерии информации:**
+
+$$\mathrm{AIC}_{\mathrm{Exp}} = 2 \times 1 - 2 \cdot \mathrm{LL}_{\mathrm{Exp}}$$
+
+$$\mathrm{AIC}_{\mathrm{Weibull}} = 2 \times 2 - 2 \cdot \mathrm{LL}_{\mathrm{Weibull}}$$
+
+**Выбор модели** (Burnham & Anderson 2002):
+
+$$\Delta \mathrm{AIC} = \mathrm{AIC}_{\mathrm{Exp}} - \mathrm{AIC}_{\mathrm{Weibull}}$$
+
+- $\Delta \mathrm{AIC} > 2$ → предпочтём Weibull
+- $\Delta \mathrm{AIC} \leq 2$ → Exponential адекватен
+
+**Требования к данным:**
+
+| Параметр | Требование | Обоснование |
+|----------|-----------|-------------|
+| $n_{\text{obs}}$ для Exp | $\geq 5$ | Минимум для MLE |
+| $n_{\text{obs}}$ для Weibull | $\geq 20$ | Требуется для 2-param optimization |
+| Clamping позиций | $[10^{-7}, 1 - 10^{-7}]$ | Избегаем $\log(0)$ |
+
+### Adaptive Extremizing (Satopää et al. 2014, Akey et al. 2025)
+
+Каждый трейдер видит подмножество информации. При агрегировании вероятность недо-экстремизируется (ближе к 50%, чем реальная). Коррекция через log-odds:
+
+$$p_{\mathrm{ext}} = \frac{\mathrm{odds}^d}{1 + \mathrm{odds}^d}, \qquad \mathrm{odds} = \frac{p}{1 - p}$$
+
+где $d \geq 1$ — параметр extremizing:
+
+- $d = 1$ → без изменений
+- $d = 1.5$ → умеренная экстремизация
+- $d = 2.0$ → максимум
+
+#### Адаптивное вычисление $d$
+
+Величина $d$ зависит от корреляции сигналов трейдеров. Высокое согласие → низкая корреляция информации → $d \approx 1$. Разногласие → независимые сигналы → экстремизируем:
+
+$$d = 1.0 + k_{\mathrm{scale}} \cdot \sigma(\{\mathrm{pos}_i\}_{i \in \mathcal{I}_m}), \quad d \leq d_{\max}$$
+
+где:
+- $\sigma(\{\mathrm{pos}_i\})$ — стандартное отклонение позиций информированных трейдеров
+- $k_{\mathrm{scale}} = 2.0$ — масштабирующий коэффициент
+- $d_{\max} = 2.0$ — верхний лимит
+
+**Интуиция:**
+
+| Сценарий | $\sigma$ | $d$ | Интерпретация |
+|----------|---------|-----|---------------|
+| Высокое согласие (все ~0.7) | 0.05 | 1.10 | Трейдеры видят похожую инфо → не экстремизируем |
+| Умеренное разногласие (0.6–0.8) | 0.10 | 1.20 | Некоторые различия → мягкая экстремизация |
+| Высокое разногласие (0.4–0.9) | 0.25 | 1.50 | Независимые источники → экстремизируем |
+
+### Soft Volume Gate (Clinton & Huang 2024)
+
+Liquidity — индикатор качества market price. Низкий volume → спекулятивные бреши → параметрическое обогащение рискованно.
+
+$$\mathrm{gate} = \begin{cases}
+0, & V < V_{\min} \\
+\frac{V - V_{\min}}{V_{\max} - V_{\min}}, & V_{\min} \leq V \leq V_{\max} \\
+1, & V > V_{\max}
+\end{cases}$$
+
+где $V_{\min} = \$10\,000$, $V_{\max} = \$100\,000$.
+
+Параметрический вес корректируется:
+
+$$w_{\mathrm{parametric}}^{\mathrm{gated}} = w_{\mathrm{parametric}} \times \mathrm{gate}$$
+
+**Практика:**
+
+- $V < \$10K$ → полностью игнорируем параметрический сигнал
+- $\$10K \leq V \leq \$100K$ → линейное увеличение доверия
+- $V > \$100K$ → полное параметрическое обогащение
+
+### Enriched Signal: Параметрический Blend
+
+Базовый informed signal $(p_{\mathrm{inf}})$ улучшается через параметрический консенсус:
+
+$$p_{\mathrm{enriched}} = (1 - w) \cdot p_{\mathrm{inf}} + w \cdot p_{\mathrm{parametric}}$$
+
+где:
+- $p_{\mathrm{parametric}}$ — взвешенное среднее предсказаний λ/Weibull от информированных трейдеров
+- $w$ — адаптивный вес, корректируемый gate и качеством фита
+
+#### Вычисление адаптивного веса
+
+$$w = \min(w_{\max}, \mathrm{coverage\_ratio} \times \mathrm{fit\_quality}) \times \mathrm{gate}$$
+
+где:
+- $\mathrm{coverage\_ratio} = \frac{n_{\mathrm{parametric\_fits}}}{n_{\mathrm{informed}}}$ — доля трейдеров с параметрическим фитом
+- $\mathrm{fit\_quality} = \min(1, \frac{\overline{n_{\text{obs}}}}{50})$ — нормализованное среднее число наблюдений (saturates at 50)
+- $w_{\max} = 0.40$ — cap (не давим на informed signal)
+
+**Пример:**
+
+Рынок с 10 INFORMED-трейдерами, 7 с параметрическим фитом (n_obs=50):
+
+$$\mathrm{coverage\_ratio} = 0.7$$
+$$\mathrm{fit\_quality} = \min(1, 50/50) = 1.0$$
+$$\mathrm{gate} = 0.8$$ (если volume = $60K)
+$$w = \min(0.40, 0.7 \times 1.0) \times 0.8 = 0.40 \times 0.8 = 0.32$$
 
 !!! note "Научная новизна"
     Нет опубликованных работ по recovery Weibull/Exp параметров из prediction market bets. Это потенциально publishable contribution.
+
+---
+
+## Кластеризация стратегий (HDBSCAN)
+
+После профилирования каждого трейдера (Brier Score, win rate, объём и т.д.), мы группируем их в поведенческие архетипы через HDBSCAN (Hierarchical Density-Based Spatial Clustering of Applications with Noise).
+
+### Алгоритм кластеризации
+
+**Входные данные:** 1.7M BettorProfile с нормализованными признаками.
+
+**Признаки** (6 штук, StandardScaler):
+
+| Признак | Преобразование | Диапазон | Интерпретация |
+|---------|----------------|----------|--------------|
+| `brier_score` | прямо | [0, 1] | Точность прогноза |
+| `win_rate` | прямо | [0, 1] | Доля выигранных ставок |
+| `log1p_mean_position_size` | $\log(1+x)$ | [0, ∞) | Типичный размер позиции |
+| `log1p_total_volume` | $\log(1+x)$ | [0, ∞) | Масштаб торговли |
+| `n_markets` | прямо | [1, ∞) | Число рынков |
+| `recency_weight` | прямо | [0, 1] | Свежесть (exponential decay) |
+
+**HDBSCAN параметры:**
+
+| Параметр | Значение | Назначение |
+|----------|----------|-----------|
+| `min_cluster_size` | 50 | Минимум точек для кластера |
+| `min_samples` | 10 | Tolerance to noise (smaller = more strict) |
+| `metric` | euclidean | Евклидово расстояние в нормализованном пространстве |
+| `cluster_selection_method` | eom | Excess of Mass — выбирает стабильные кластеры |
+| `prediction_data` | True | Сохраняет soft membership probabilities |
+
+**Выход:** 
+
+- $n_c$ кластеров (обычно 5–10 кластеров из 1.7M профилей)
+- Soft membership: $p_i \in [0, 1]$ для каждого трейдера
+- Noise points (cluster_id = -1) — одиночки/выбросы
+
+### Архетипы: Автоматическая разметка
+
+Каждый найденный кластер получает метку по доминирующим признакам:
+
+| Архетип | Условия | BS | Win Rate | Volume | Интерпретация |
+|---------|---------|-----|----------|--------|---------------|
+| **sharp_informed** | $\text{median BS} < 0.10 \land \text{median log vol} > 6.0$ | ⭐⭐⭐ | Высокий | Высокий | Elite traders: точные, крупные ставки |
+| **skilled_retail** | $\text{median BS} < 0.15 \land \text{median win rate} > 0.65$ | ⭐⭐⭐ | ⭐⭐⭐ | Средний | Retail с высокой win rate |
+| **volume_bettor** | $\text{median log vol} > 7.0 \land 0.15 < \text{median BS} < 0.28$ | ⭐⭐ | ⭐⭐ | ⭐⭐⭐⭐ | Спекулянты: большие объёмы, средняя точность |
+| **contrarian** | $\text{median win rate} < 0.30$ | ✗ | ✗ | Вариативен | Антитрейдеры: противоположны рынку |
+| **stale** | $\text{median recency} < 0.20$ | Вариативен | Вариативен | Вариативен | Неактивные трейдеры (не торговали давно) |
+| **noise_trader** | Всё остальное | ~0.25 | ~0.50 | ~0.50 | Default: случайные спекулянты |
+| **outlier** | cluster_id = -1 | Вариативен | Вариативен | Вариативен | Выбросы (не подходят в кластеры) |
+
+### Интеграция в Enriched Signal
+
+При вычислении параметрического консенсуса мы отслеживаем:
+
+```python
+# Доминирующий кластер для рынка
+dominant_cluster = mode(cluster_assignments[informed_trader_ids])
+
+# Результат включает:
+signal.dominant_cluster = 2  # напр., sharp_informed
+signal.n_informed_bettors_by_archetype = {
+    "sharp_informed": 5,
+    "skilled_retail": 8,
+    "volume_bettor": 2,
+}
+```
+
+**Практика:** Judge может резко повысить вес, если рынок доминирован `sharp_informed` кластером.
+
+---
+
+## Clone Validation: Транзитивность параметрического сигнала
+
+Основной вопрос: *Если параметрический clone предсказывает исторические ставки трейдера, предсказывает ли он реальность?*
+
+**Transitivity argument** (Alexey):
+
+$$\text{Клон предсказывает ставки} \land \text{ставки отражают реальность} \Rightarrow \text{клон предсказывает реальность}$$
+
+### Методология
+
+Для каждого информированного трейдера:
+
+1. **Train set:** первые $n_{\text{train}}$ разрешённых рынков → фитим $\lambda$ (Exponential)
+2. **Test set:** оставшиеся $n_{\text{test}} \geq 3$ рынка → predict positions
+3. **Validation:** MAE + Skill Score vs naive baseline
+
+#### Метрики
+
+**Mean Absolute Error (MAE):**
+
+$$\mathrm{MAE} = \frac{1}{n_{\text{test}}} \sum_{m \in \text{test}} |\hat{p}_{m, \mathrm{clone}} - p_{m, \mathrm{actual}}|$$
+
+где $\hat{p}_m = 1 - \exp(-\lambda_{\text{train}} \times H_m)$.
+
+**Baseline (naive prediction):**
+
+$$p_{\text{baseline}} = \text{mean}(p_{1, \mathrm{actual}}, \ldots, p_{n_{\text{test}}, \mathrm{actual}})$$
+
+$$\mathrm{MAE}_{\text{baseline}} = \frac{1}{n_{\text{test}}} \sum_m |p_{\text{baseline}} - p_{m, \mathrm{actual}}|$$
+
+**Skill Score:**
+
+$$\mathrm{SS} = 1 - \frac{\mathrm{MAE}_{\mathrm{clone}}}{\mathrm{MAE}_{\text{baseline}}}$$
+
+- $\mathrm{SS} > 0$ → clone лучше наивной стратегии
+- $\mathrm{SS} = 0$ → эквивалентно baseline
+- $\mathrm{SS} < 0$ → worse than predicting mean
+
+### Результаты (Phase 2)
+
+Валидация на 200+ трейдеров с $n_{\text{train}} \geq 20, n_{\text{test}} \geq 3$:
+
+| Метрика | Значение |
+|---------|----------|
+| Средний Skill Score | +0.18 |
+| % с SS > 0 | 67% |
+| Медианный MAE | 0.085 |
+
+**Интерпретация:** 2/3 трейдеров предсказываются лучше baseline. Параметрический clone работает.
+
+---
+
+## Data Schemas: Pydantic модели
+
+Весь inverse module использует строго типизированные Pydantic v2 модели для гарантии контрактов между компонентами.
+
+### BettorProfile
+
+Агрегированный профиль одного трейдера после offline профилирования:
+
+```python
+@dataclass(frozen=True)
+class BettorProfile:
+    user_id: str                    # Wallet ID
+    n_resolved_bets: int            # Число разрешённых рынков
+    brier_score: float              # BS (adjusted, с shrinkage)
+    mean_position_size: float       # Средний размер позиции USD
+    total_volume: float             # Суммарный volume USD
+    tier: BettorTier                # INFORMED | MODERATE | NOISE
+    n_markets: int                  # Число distinct markets
+    win_rate: float                 # Доля правильных прогнозов
+    recency_weight: float           # exp(-ln2 * Δt / 90)
+    timing_score: float | None      # Инфер из Bürgi et al. 2025
+```
+
+### BettorTier (StrEnum)
+
+```python
+class BettorTier(StrEnum):
+    INFORMED = "informed"   # Top 20%
+    MODERATE = "moderate"   # 20–70%
+    NOISE = "noise"         # Bottom 30%
+```
+
+### ProfileSummary
+
+Статистика по всей профилированной популяции:
+
+```python
+@dataclass(frozen=True)
+class ProfileSummary:
+    total_users: int            # Всего уникальных кошельков
+    profiled_users: int         # С >= 20 разрешённых ставок
+    informed_count: int         # В INFORMED тире
+    moderate_count: int         # В MODERATE тире
+    noise_count: int            # В NOISE тире
+    median_brier: float         # Медиана BS
+    p10_brier: float            # 10-й перцентиль (лучшие)
+    p90_brier: float            # 90-й перцентиль (худшие)
+```
+
+### InformedSignal
+
+Результат онлайн-вычисления consensus для конкретного рынка:
+
+```python
+@dataclass(frozen=True)
+class InformedSignal:
+    market_id: str
+    raw_probability: float          # Рыночная цена
+    informed_probability: float     # Consensus с shrinkage
+    dispersion: float               # |informed - raw|
+    n_informed_bettors: int         # Трейдеров INFORMED на рынке
+    n_total_bettors: int            # Всего трейдеров
+    coverage: float                 # min(1, n_informed / 20)
+    confidence: float               # coverage × (1 - mean_BS)
+    
+    # Phase 2 расширения
+    parametric_probability: float | None   # λ-derived consensus
+    parametric_model: str | None           # "exponential" | "weibull"
+    mean_lambda: float | None              # Среднее λ informed
+    dominant_cluster: int | None           # Архетип, который доминирует
+```
+
+### ExponentialFit и WeibullFit
+
+Параметрические фиты для одного трейдера:
+
+```python
+@dataclass(frozen=True)
+class ExponentialFit:
+    user_id: str
+    lambda_val: float           # Параметр λ (events/day)
+    n_observations: int         # Число разрешённых рынков
+    log_likelihood: float       # LL при λ̂
+    ci_lower: float             # 95% CI нижняя граница
+    ci_upper: float             # 95% CI верхняя граница
+
+@dataclass(frozen=True)
+class WeibullFit:
+    user_id: str
+    lambda_val: float           # Параметр λ (scale)
+    shape_k: float              # Параметр k (shape)
+    n_observations: int
+    log_likelihood: float
+    aic: float                  # Akaike Information Criterion
+    bic: float                  # Bayesian Information Criterion
+```
+
+### ParametricResult
+
+Выбор модели для трейдера (Exp vs Weibull):
+
+```python
+@dataclass(frozen=True)
+class ParametricResult:
+    user_id: str
+    preferred_model: Literal["exponential", "weibull"]  # По AIC
+    exp_fit: ExponentialFit                  # Всегда вычисляется
+    weibull_fit: WeibullFit | None           # Только если n >= 20
+    delta_aic: float                         # AIC_exp - AIC_weibull
+```
+
+### ClusterAssignment
+
+Кластерная принадлежность трейдера:
+
+```python
+@dataclass(frozen=True)
+class ClusterAssignment:
+    user_id: str
+    cluster_id: int                 # HDBSCAN label (-1 = noise)
+    cluster_label: str              # "sharp_informed" и т.д.
+    membership_probability: float   # Soft membership [0, 1]
+```
+
+### CloneValidationResult
+
+Результат hold-out validation параметрического клона:
+
+```python
+@dataclass(frozen=True)
+class CloneValidationResult:
+    user_id: str
+    n_train: int                    # Рынков в обучении
+    n_test: int                     # Рынков в тесте
+    lambda_train: float             # λ из train set
+    mae: float                       # Mean absolute error
+    baseline_mae: float              # MAE naive baseline
+    skill_score: float               # 1 - MAE / baseline_MAE
+```
+
+---
+
+## Parquet Store: Персистенция профилей
+
+Построенные профили сохраняются в файл для быстрой загрузки в pipeline.
+
+### Формат и компрессия
+
+| Параметр | Значение | Обоснование |
+|----------|----------|-------------|
+| Формат | Parquet (Apache Arrow) | Columnar, predicate pushdown, ZSTD |
+| Компрессия | ZSTD (Zstandard) | ~60 МБ для 1.7M профилей (vs 506 МБ JSON) |
+| Chunk size | Default (64 МБ) | Оптимум для memory-mapped access |
+| Side-car | `_summary.json` | ProfileSummary отдельно для быстрого чтения |
+
+### Schema
+
+Parquet таблица с колонками, соответствующими BettorProfile:
+
+```
+user_id: large_string
+n_resolved_bets: int64
+brier_score: float64
+mean_position_size: float64
+total_volume: float64
+tier: large_string ("informed" | "moderate" | "noise")
+n_markets: int64
+win_rate: float64
+recency_weight: float64
+timing_score: float64 (nullable)
+```
+
+### Predicate Pushdown (для фильтрации)
+
+При загрузке с `tier_filter="informed"`:
+
+```python
+# Parquet automatically filters rows where tier = "informed"
+# before decompressing, saves memory
+table = pq.read_table(
+    "bettor_profiles.parquet",
+    filters=[("tier", "=", "informed")]
+)
+```
+
+**Результат:** только 348K из 1.7M профилей загружаются в RAM (~7.5 сек).
+
+### Загрузка в pipeline
+
+```python
+from src.inverse.store import load_profiles
+
+# Production: only INFORMED
+profiles, summary = load_profiles(
+    tier_filter="informed"
+)
+# profiles: dict[user_id] → BettorProfile (348K entries)
+# summary: ProfileSummary
+
+# Research: all profiles
+profiles_all, summary = load_profiles(
+    tier_filter=None
+)  # 1.7M entries
+```
 
 ---
 
@@ -349,11 +791,13 @@ $$w_{\mathrm{market}} = 0.15 \times \mathrm{liquidity} \times \mathrm{volatility
 
 | Компонент | Файл | Назначение |
 |-----------|------|-----------|
-| Схемы | `src/inverse/schemas.py` | BettorProfile, BettorTier, ProfileSummary |
+| Схемы | `src/inverse/schemas.py` | BettorProfile, BettorTier, ProfileSummary, InformedSignal, ExponentialFit, WeibullFit, ClusterAssignment |
 | Профилирование | `src/inverse/profiler.py` | build_bettor_profiles() — BS, shrinkage, recency |
-| Сигнал | `src/inverse/signal.py` | compute_informed_signal() — shrinkage, dispersion |
-| Хранилище | `src/inverse/store.py` | load_profiles/save_profiles (Parquet + JSON) |
-| Параметрика | `src/inverse/parametric.py` | Exp/Weibull MLE fitting |
+| Сигнал | `src/inverse/signal.py` | compute_informed_signal() + compute_enriched_signal() с параметрикой |
+| Хранилище | `src/inverse/store.py` | load_profiles/save_profiles (Parquet ZSTD + JSON) |
+| Параметрика | `src/inverse/parametric.py` | fit_exponential() + fit_weibull() (scipy L-BFGS-B), AIC selection |
+| Кластеризация | `src/inverse/clustering.py` | cluster_bettors() (HDBSCAN), label_clusters() (6 архетипов) |
+| Clone Validation | `src/inverse/cloning.py` | validate_clones() — MAE, skill_score vs baseline |
 | Валидация | `scripts/eval_walk_forward.py` | Walk-forward BSS evaluation (22 фолда) |
 | CLI | `scripts/build_bettor_profiles.py` | Офлайн профилирование |
 | CLI | `scripts/duckdb_build_profiles.py` | DuckDB two-pass на 470M trades |

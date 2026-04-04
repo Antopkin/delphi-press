@@ -17,7 +17,7 @@ Delphi Press включает коллекцию полезных скрипто
 **Использование:**
 
 ```bash
-# По умолчанию: gemini-flash, ТАСС, 20 событийных потоков
+# По умолчанию: gemini-flash-lite, ТАСС, 5 событийных потоков
 export OPENROUTER_API_KEY=sk-or-...
 uv run python scripts/dry_run.py
 
@@ -34,9 +34,13 @@ uv run python scripts/dry_run.py --outlet "ТАСС" --model anthropic/claude-op
 **Входные данные:**
 
 - `--outlet` — название медиаизделия (default: "ТАСС")
-- `--model` — LLM модель через OpenRouter (default: `google/gemini-flash-lite`)
-- `--event-threads` — количество параллельных потоков анализа событий (default: 20)
-- `--cheap-model` — переопределить дешёвую модель для быстрых задач
+- `--model` — LLM модель через OpenRouter (default: `google/gemini-3.1-flash-lite-preview`)
+- `--event-threads` — количество параллельных потоков анализа событий (default: 5, production: 20)
+- `--persona-model` — отдельная модель для персон Дельфи (default: `anthropic/claude-opus-4.6`)
+- `--budget` — бюджет на один прогноз в USD (default: 15.0)
+- `--scrape` — включить скрейпинг статей
+- `--profiles` — путь к Parquet-файлу с профилями бетторов
+- `--trades` — путь к NDJSON-файлу с трейдами
 
 **Выходные данные:**
 
@@ -413,7 +417,9 @@ python3 scripts/hf_build_profiles.py --min-bets 3
 - `--min-bets` — минимум разрешённых ставок (default: 3)
 - `--data-dir` — директория для загрузки (default: `data/inverse/hf_cache`)
 - `--cleanup` — удалить `trades.parquet` и `markets.parquet` после обработки (flag)
-- `--output` — путь выходного JSON (default: `data/inverse/bettor_profiles.json`)
+- `--output` — путь выходного Parquet (default: `data/inverse/bettor_profiles.parquet`)
+- `--batch-size` — размер батча при обработке (default: 500,000)
+- `--skip-download` — пропустить загрузку с HuggingFace
 
 **Выходные данные:**
 
@@ -421,7 +427,7 @@ python3 scripts/hf_build_profiles.py --min-bets 3
 data/inverse/hf_cache/
 ├── trades.parquet                    (32.8 GB, downloaded)
 ├── markets.parquet                   (156 MB, downloaded)
-└── ../bettor_profiles.json           (506 MB, built profiles)
+└── ../bettor_profiles.parquet        (~60 MB, built profiles, ZSTD)
 
 bettor_profiles.json:
 {
@@ -559,6 +565,82 @@ stdout:
   Downloading bettor_profiles.parquet (62 MB)... done
   Verifying SHA-256: 9242b63a... ✓
   Download complete.
+```
+
+---
+
+## Docker Initialization
+
+### docker-entrypoint.sh
+
+**Назначение:** Автоматическая загрузка профилей при старте контейнера, если их нет
+
+Простой скрипт инициализации, запускаемый при запуске Docker контейнера приложения. Проверяет наличие `bettor_profiles.parquet` в контейнере. Если файл отсутствует, автоматически вызывает `scripts/download_profiles.py` для загрузки с GitHub Releases, затем запускает основное приложение.
+
+!!! info "Требования"
+    - Docker (используется в `Dockerfile`)
+    - Интернет доступ к GitHub (для загрузки профилей)
+    - ~5 минут на загрузку при первом старте
+
+**Использование (автоматическое):**
+
+```dockerfile
+# В Dockerfile
+COPY docker-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+```
+
+Скрипт вызывается автоматически при запуске контейнера:
+
+```bash
+# При docker compose up или docker run
+# Контейнер проверит наличие профилей и загрузит при необходимости
+docker compose up -d
+```
+
+**Внутренняя логика:**
+
+```bash
+1. Проверить наличие /app/data/inverse/bettor_profiles.parquet
+2. Если НЕ существует:
+   - Вывести сообщение: "[entrypoint] Bettor profiles not found, downloading..."
+   - Запустить: python /app/scripts/download_profiles.py
+   - Если ошибка загрузки: вывести WARNING и продолжить (profiles опциональны)
+3. Выполнить CMD (запустить FastAPI приложение)
+```
+
+**Выходные данные:**
+
+```bash
+# stdout/stderr при docker compose up:
+[entrypoint] Bettor profiles not found, downloading...
+↓ Downloading bettor_profiles.parquet from release data-v1...
+  ████████████████████████████░░░░ 62/62 MB (100%)
+✓ bettor_profiles.parquet verified
+✓ bettor_profiles_summary.json saved
+
+# Затем: запуск приложения
+INFO:     Uvicorn running on http://0.0.0.0:8000
+```
+
+**Важные замечания:**
+
+- **Graceful failure:** если загрузка не удалась (нет интернета, GitHub недоступен), контейнер всё равно запускается — profiles загружаются лениво при первом использовании
+- **Idempotent:** скрипт не переносит уже загруженные и проверенные файлы
+- **Контейнеризация:** путь `/app/data/inverse/` монтируется как volume в `docker-compose.yml`, так что данные сохраняются между перезапусками
+
+**Отладка:**
+
+```bash
+# Проверить логи загрузки
+docker compose logs -f app | grep entrypoint
+
+# Вручную загрузить профили в контейнер
+docker compose exec app python /app/scripts/download_profiles.py
+
+# Проверить наличие файлов
+docker compose exec app ls -lh /app/data/inverse/
 ```
 
 ---

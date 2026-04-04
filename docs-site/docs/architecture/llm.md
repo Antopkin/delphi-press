@@ -11,9 +11,9 @@
 - **Клиент**: OpenAI Python SDK v1.0+ с переопределённым `base_url`
 - **Аутентификация**: API-ключ в заголовке `Authorization: Bearer sk-or-...`
 
-## 27 LLM-задач с моделями и параметрами
+## 28 LLM-задач с моделями и параметрами
 
-Все 27 LLM-задач пайплайна настроены с primary и fallback моделями (Judge — детерминированный агент, LLM не вызывается):
+В `DEFAULT_ASSIGNMENTS` зарегистрировано 28 задач. Judge имеет запись (temp=0.3, json_mode=True), но фактически использует детерминированную агрегацию без LLM-вызовов:
 
 ### Коллекторы (Стадия 1)
 
@@ -86,8 +86,8 @@
 $$\text{delay}_n = \min\left(\text{base} \cdot 2^n, \text{max\_delay}\right) + \text{jitter}$$
 
 где:
-- base = 1 сек (базовая задержка)
-- max_delay = 30 сек (потолок)
+- base = 1 сек (базовая задержка, `llm_retry_base_delay`)
+- max_delay = 30 сек (потолок, `llm_retry_max_delay`)
 - jitter ∈ [0, 0.5] сек (случайный разброс для избежания thundering herd)
 - n = номер попытки (0, 1, 2, ...)
 
@@ -95,8 +95,7 @@ $$\text{delay}_n = \min\left(\text{base} \cdot 2^n, \text{max\_delay}\right) + \
 - Попытка 0: сразу выполнить
 - Попытка 1: ошибка → ждём 1–1.5 сек
 - Попытка 2: ошибка → ждём 2–2.5 сек
-- Попытка 3: ошибка → ждём 4–4.5 сек
-- Попытка 4 (последняя): ошибка → выбрасываем исключение
+- Попытка 3 (последняя): ошибка → выбрасываем исключение
 
 ### Fallback-цепочка
 
@@ -117,7 +116,44 @@ $$\begin{aligned}
 
 Если провайдер возвращает HTTP 429 с заголовком `Retry-After`, система уважает этот заголовок:
 
-$$\text{delay} = \max(\text{Retry-After}, \text{exponential backoff})$$
+Если заголовок `Retry-After` присутствует, он используется напрямую. Иначе — fallback на exponential backoff:
+
+```python
+delay = retry_after or min(base_delay * (2 ** attempt), max_delay)
+```
+
+## Таймауты на стадиях
+
+Каждая стадия пайплайна имеет индивидуальный таймаут, после которого выполнение прерывается. Таймауты учитывают сложность стадии и количество параллельных агентов:
+
+| Стадия | Агенты | Параллель | Таймаут (сек) | Поведение |
+|---|---|---|---|---|
+| 1. Collection | 4 коллектора | ✓ Параллельно | 600 | `min_successful=2` — нужны минимум 2 успешных |
+| 2. Event Identification | Event Trend Analyzer | Последовательно | 600 | Обязательна (required=True) |
+| 3. Trajectory | 3 аналитика | ✓ Параллельно | 600 | `min_successful=2` — нужны минимум 2 успешных |
+| 4. Delphi R1 | 5 персон | ✓ Параллельно | 600 | `min_successful=3` — нужны минимум 3 успешных |
+| 5. Delphi R2 | Медиатор + 5 персон | Последовательно | 900 | Обязательна (required=True) или пропускается если `delphi_rounds < 2` |
+| 6. Consensus | Judge | Последовательно | 300 | Обязательна (детерминированный, LLM не требуется) |
+| 7. Framing | Framing Agent | Последовательно | 300 | Обязательна |
+| 8. Generation | Style Replicator | Последовательно | 300 | Обязательна |
+| 9. Quality Gate | Quality Gate | Последовательно | 300 | Обязательна |
+
+!!! info "Fail-soft стратегия"
+    Стадии с параметром `min_successful` используют fail-soft подход: если достаточное количество параллельных агентов завершилось успешно, стадия считается пройденной, даже если некоторые агенты упали.
+
+### LLM timeout per call
+
+Каждый отдельный LLM-вызов имеет таймаут **120 сек** (`llm_timeout_seconds`). Если OpenRouter не ответил за этот период, система:
+1. Прерывает ожидание
+2. Генерирует `LLMProviderError`
+3. Переходит к следующей retry-попытке или fallback-модели
+
+### ARQ job timeout
+
+Полный пайплайн выполняется как ARQ job с таймаутом **5400 сек** (90 минут, `arq_job_timeout`). Если пайплайн не завершился за этот период:
+1. ARQ прерывает job
+2. Результат помечается как failed в БД
+3. Пользователь получает сообщение об ошибке через API
 
 ## Стоимость и бюджетный контроль
 
@@ -129,37 +165,58 @@ $$\text{cost\_usd} = \left(\frac{\text{tokens\_in}}{1{,}000{,}000} \times \text{
 
 где:
 - `tokens_in`, `tokens_out` — переданные OpenRouter в `usage`
-- `price_in`, `price_out` — цены из таблицы `MODEL_PRICING` ($/1M токенов)
+- `price_in`, `price_out` — цены из таблицы моделей ($/1M токенов)
 
 Пример: Claude Opus 4.6
-- Input: \$3 за 1М токенов
-- Output: \$15 за 1М токенов
-- Для 10k входных, 1k выходных: cost = (10k/1M × 3) + (1k/1M × 15) = 0.03 + 0.015 = \$0.045
+- Input: \$5 за 1М токенов
+- Output: \$25 за 1М токенов
+- Для 10k входных, 1k выходных: cost = (10k/1M × 5) + (1k/1M × 25) = 0.05 + 0.025 = \$0.075
 
-### Бюджетный контроль
+### Цены моделей (OpenRouter)
 
-**BudgetTracker** отслеживает расходы в рамках одного прогноза и блокирует вызовы, которые превысят лимит.
+| Модель | Input (\$/1М токенов) | Output (\$/1М токенов) | Использование |
+|---|---|---|---|
+| anthropic/claude-opus-4.6 | \$5.00 | \$25.00 | Основная модель (Opus, все агенты) |
+| anthropic/claude-sonnet-4.5 | \$3.00 | \$15.00 | Fallback для Opus задач |
+| google/gemini-3.1-flash-lite-preview | \$0.25 | \$1.50 | Primary для коллекторов (fast) |
+| google/gemini-2.5-flash | \$0.30 | \$2.50 | Fallback для коллекторов |
+| openai/gpt-4o-mini | \$0.15 | \$0.60 | Экономичная опция (не в use) |
+| openai/gpt-4o | \$2.50 | \$10.00 | Премиум OpenAI (не в use) |
+| google/gemini-2.5-pro | \$1.25 | \$10.00 | Премиум Gemini (не в use) |
+
+### Бюджетный контроль per-prediction
+
+**BudgetTracker** отслеживает расходы в рамках одного прогноза. Проверка бюджета выполняется ПЕРЕД каждым LLM-вызовом:
 
 | Параметр | Значение |
 |---|---|
-| Лимит на прогноз | \$50 USD (по умолчанию, настраивается) |
+| Лимит на прогноз (по умолчанию) | \$50 USD |
+| Лимит (настраивается через `max_budget_usd`) | От \$1 до \$500 USD |
 | Проверка перед вызовом | Если `estimated_cost > remaining_budget`, raise `LLMBudgetExceededError` |
-| Типичный прогноз | \$1–\$15 USD |
-| Максимальный прогноз | До \$50 USD (при многих событиях, долгих раундах) |
+| Типичный прогноз Light | ~\$1–\$2 USD |
+| Типичный прогноз Full | ~\$10–\$15 USD |
+| Максимальный прогноз (при большом объёме) | До \$50 USD |
 
-Алгоритм:
+Алгоритм проверки:
 
 $$\text{remaining} = \text{budget\_usd} - \sum_{i=1}^{n} \text{cost\_usd}_i$$
 
-$$\text{if } \text{estimated\_cost} > \text{remaining} \text{ then } \text{raise BudgetExceededError}$$
+$$\text{if } \text{estimated\_cost} > \text{remaining} \text{ then } \text{raise LLMBudgetExceededError}$$
 
-Оценка стоимости рассчитывается по количеству токенов в промпте:
+Оценка стоимости рассчитывается по количеству токенов в промпте с буфером:
 
-$$\text{estimated\_tokens\_in} = \text{estimate\_messages\_tokens}(\text{messages})$$
+\[\text{est\_tokens} = \text{estimate\_messages\_tokens}(\text{messages})\]
 
-$$\text{estimated\_cost} = \frac{\text{estimated\_tokens\_in}}{1{,}000{,}000} \times \text{price\_in} \times 1.2$$
+\[\text{est\_cost} = \frac{\text{est\_tokens}}{10^6} \times \text{price\_in} + \frac{\text{est\_tokens}}{10^6} \times \text{price\_out}\]
 
-Коэффициент 1.2 добавляет буфер на выходные токены (обычно выход меньше входа, но разница варьируется).
+Буфер обеспечивается тем, что `est_tokens` используется и для входных, и для выходных токенов (фактический выход обычно меньше входа).
+
+!!! warning "Бюджет исчерпан"
+    Если во время пайплайна бюджет исчерпывается:
+    - LLM-вызов блокируется исключением `LLMBudgetExceededError`
+    - Стадия падает с ошибкой
+    - Пайплайн прерывается (если стадия required=True)
+    - Результат помечается как failed, информация о расходах сохраняется в БД
 
 ### Примеры и мониторинг
 
@@ -169,7 +226,7 @@ $$\text{estimated\_cost} = \frac{\text{estimated\_tokens\_in}}{1{,}000{,}000} \t
 - `summary_by_model()`: расходы по моделям
 - `to_records()`: все `CostRecord` для сохранения в БД
 
-Пример логирования:
+Пример логирования прогноза:
 
 ```
 Стадия 1 (Collection): \$1.50
@@ -182,3 +239,98 @@ $$\text{estimated\_cost} = \frac{\text{estimated\_tokens\_in}}{1{,}000{,}000} \t
 -----------
 Итого: \$30.50 USD
 ```
+
+## Обработка ошибок и исключения
+
+### Иерархия исключений
+
+```python
+LLMProviderError                      # Базовое исключение провайдера
+├── LLMRateLimitError (HTTP 429)      # Rate limit
+└── [другие статусы 5xx]              # 500, 502, 503, 504
+
+LLMBudgetExceededError                # Превышен бюджет
+```
+
+### LLMProviderError
+
+Генерируется при ошибке OpenRouter или провайдера:
+
+- **HTTP 429** (Rate Limit): → `LLMRateLimitError` с `retry_after` заголовком
+- **HTTP 5xx** (Server Error): → `LLMProviderError` → retry с backoff
+- **Timeout** (120 сек): → `LLMProviderError` → retry
+- **Invalid API Key**: → `LLMProviderError` → агент возвращает `success=False`
+
+**Поведение:**
+1. Повторить с exponential backoff (3 попытки)
+2. Если primary модель не ответила, попробовать fallback
+3. Если все fallback отказали, выбросить исключение
+4. Агент ловит исключение в `BaseAgent.run()` → возвращает `AgentResult(success=False)`
+
+### LLMBudgetExceededError
+
+Генерируется перед вызовом, если оценённая стоимость превысит оставшийся бюджет:
+
+```python
+class LLMBudgetExceededError(Exception):
+    def __init__(self, budget_usd: float, spent_usd: float):
+        # Example: "Budget exceeded: spent $32.50 of $50.00"
+```
+
+**Поведение:**
+1. LLM-вызов БЛОКИРУЕТСЯ
+2. Router выбрасывает исключение
+3. Агент ловит в `BaseAgent.run()` → возвращает `AgentResult(success=False, error="Budget exceeded")`
+4. Стадия проверяет минимум успешных (если есть)
+5. Если стадия required=True, пайплайн падает
+
+### Стратегия восстановления
+
+| Сценарий | Действие | Результат |
+|---|---|---|
+| Timeout LLM-вызова | Retry с backoff × 3 | Успех или fallback |
+| Fallback исчерпаны | Выбросить ошибку | Агент возвращает `success=False` |
+| Стадия с `min_successful=2` и 1 агент упал | Продолжить | Стадия успешна если 2+ успешно |
+| Стадия required=True упала | Прервать пайплайн | Пайплайн → failed |
+| Бюджет исчерпан | Блокировать вызов | Стадия падает |
+
+## Конфигурация LLM-слоя
+
+Все параметры LLM настраиваются через переменные окружения (файл `.env`):
+
+```bash
+# OpenRouter API
+OPENROUTER_API_KEY=sk-or-...
+
+# Модели по умолчанию
+DEFAULT_MODEL_CHEAP=google/gemini-3.1-flash-lite-preview
+DEFAULT_MODEL_REASONING=anthropic/claude-opus-4.6
+DEFAULT_MODEL_STRONG=anthropic/claude-opus-4.6
+
+# Retry и таймауты
+LLM_MAX_RETRIES=3                      # Количество retry-попыток per model
+LLM_RETRY_BASE_DELAY=1.0               # Базовая задержка (сек)
+LLM_RETRY_MAX_DELAY=30.0               # Максимальная задержка (сек)
+LLM_TIMEOUT_SECONDS=120.0              # Таймаут single LLM call (сек)
+
+# Бюджет
+MAX_BUDGET_USD=50.0                    # Лимит на прогноз (USD)
+BUDGET_WARNING_THRESHOLD=0.8           # Предупреждение при 80% расходе
+```
+
+### Пример с переопределением для тестирования
+
+```bash
+# Дешёвый тест (Gemini Flash)
+OPENROUTER_API_KEY=sk-or-...
+DEFAULT_MODEL_REASONING=google/gemini-2.5-flash
+MAX_BUDGET_USD=5.0
+
+# Production (Claude Opus)
+OPENROUTER_API_KEY=sk-or-...
+DEFAULT_MODEL_REASONING=anthropic/claude-opus-4.6
+MAX_BUDGET_USD=50.0
+```
+
+!!! tip "Presets вместо env vars"
+    Для удобства используйте presets (`light`, `full`) в API вместо переопределения env vars. Presets уже оптимизированы для стоимости и качества.

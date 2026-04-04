@@ -155,62 +155,307 @@ F1-метрика BERTScore против лучшего совпадающего
 
 ---
 
+---
+
+## Murphy Decomposition: Анализ компонент Brier Score
+
+Чтобы глубже понять, откуда берётся ошибка предсказания, используется трёхкомпонентное разложение Brier Score, разработанное Мёрфи (1973). Оно разделяет BS на три ортогональные компоненты:
+
+\[
+BS = \text{REL} - \text{RES} + \text{UNC}
+\]
+
+где:
+
+- **REL (надёжность)** — штраф за неправильную калибровку; показывает, насколько часто система выдаёт вероятность $p_k$, а фактическая база событий равна $\bar{o}_k \neq p_k$
+- **RES (разрешающая способность)** — способность различать события; чем больше RES, тем лучше система предсказывает разные исходы
+- **UNC (неопределённость)** — врождённая неопределённость в целевом наборе данных; зависит только от доли положительных примеров
+
+### Формулы
+
+Пусть $N$ — всего предсказаний, $o$ — вектор исходов, $p$ — вектор предсказанных вероятностей. Разделим предсказания на $K$ равноширинных бинов (по умолчанию $K = 10$):
+
+**Надёжность (Reliability):**
+
+\[
+\text{REL} = \sum_{k=1}^{K} \frac{n_k}{N} \left(\bar{o}_k - \bar{p}_k\right)^2
+\]
+
+где $n_k$ — число предсказаний в бине $k$, $\bar{o}_k$ — среднее значение исходов в бине, $\bar{p}_k$ — среднее предсказанной вероятности в бине.
+
+**Разрешающая способность (Resolution):**
+
+\[
+\text{RES} = \sum_{k=1}^{K} \frac{n_k}{N} \left(\bar{o}_k - \bar{o}\right)^2
+\]
+
+где $\bar{o}$ — общая доля положительных исходов (базовая частота).
+
+**Неопределённость (Uncertainty):**
+
+\[
+\text{UNC} = \bar{o} \left(1 - \bar{o}\right)
+\]
+
+### Интерпретация
+
+- **Высокая REL, низкая RES**: система хорошо откалибрована, но не различает события → предсказывает вероятность близко к 0.5 для всех случаев (бесполезно).
+- **Низкая REL, высокая RES**: система хорошо различает события, но плохо откалибрована → отличные ранжирования, но вероятности смещены (исправимо через Platt scaling).
+- **Высокая REL, высокая RES**: система хорошо различает события и правильно откалибрована → отличное качество.
+
+### Пример
+
+Для набора данных с 100 предсказаниями, где 30% положительных:
+
+- $\bar{o} = 0.3$
+- $\text{UNC} = 0.3 \times 0.7 = 0.21$ (фиксировано для набора)
+- Если система предсказала BS = 0.15:
+  - Вариант A: REL = 0.02, RES = 0.08 → $0.02 - 0.08 + 0.21 = 0.15$ ✓ (хорошо откалибрована, хорошо различает)
+  - Вариант B: REL = 0.15, RES = 0.01 → $0.15 - 0.01 + 0.21 = 0.35$ ✗ (плохо откалибрована)
+
+### Применение в Delphi Press
+
+Разложение вычисляется функцией `brier_decomposition()` с параметром `n_bins=10` (равноширинные бины). Результат включается в еженедельный мониторинг:
+
+```python
+from src.eval.metrics import brier_decomposition
+
+decomp = brier_decomposition(pred_probs, outcomes, n_bins=10)
+print(f"REL={decomp.reliability:.4f}, RES={decomp.resolution:.4f}, UNC={decomp.uncertainty:.4f}")
+
+if decomp.reliability > 0.05:
+    # Применить Platt scaling (калибровка)
+    pass
+if decomp.resolution < 0.10:
+    # Система недостаточно различает → пересмотреть агентов
+    pass
+```
+
+---
+
+## Калибровка: Slope и Expected Calibration Error
+
+Помимо общего Brier Score, система отслеживает два специфичных показателя калибровки для диагностики и улучшения.
+
+### Calibration Slope (OLS регрессия)
+
+**Определение:** OLS-регрессия логистическая: $\text{outcome} \sim \text{predicted\_probability}$. Получается наклон (slope).
+
+\[
+\text{slope} = \frac{\text{cov}(p, o)}{\text{var}(p)}
+\]
+
+где $p$ — вектор предсказанных вероятностей, $o$ — вектор исходов.
+
+**Интерпретация:**
+
+- **slope ≈ 1.0** — идеальная калибровка (система соответствует действительности)
+- **slope < 1.0** — переуверенность (predictions слишком экстремальны: слишком много ~0 и ~1, мало средних значений)
+- **slope > 1.0** — недоуверенность (predictions слишком близко к 0.5, не достаточно экстремальны)
+
+**Пример:** если slope = 0.8, система выдала среднюю вероятность $\bar{p} = 0.50$, а реальная доля положительных $\bar{o} = 0.30$, то система переуверена на 20%.
+
+**Исправление:** можно применить линейную трансформацию (Platt scaling):
+
+\[
+p_{\text{calibrated}} = \text{sigmoid}(a \cdot \text{logit}(p) + b)
+\]
+
+где $a, b$ подбираются на валидационном наборе.
+
+### Expected Calibration Error (ECE)
+
+**Определение:** ECE измеряет среднее абсолютное расхождение между предсказанной вероятностью и фактической частотой в каждом бине.
+
+\[
+\text{ECE} = \sum_{k=1}^{K} \frac{n_k}{N} \left| \bar{p}_k - \bar{o}_k \right|
+\]
+
+**Алгоритм (equal-frequency binning):**
+
+1. Сортировать предсказания по возрастанию вероятности
+2. Разделить на $K$ бинов равного размера (не равной ширины)
+3. Для каждого бина вычислить среднюю предсказанную $\bar{p}_k$ и среднюю реальную $\bar{o}_k$
+4. Суммировать взвешенные абсолютные разности
+
+**Интерпретация:**
+
+- **ECE < 0.05** — отличная калибровка
+- **0.05 ≤ ECE < 0.10** — хорошая калибровка
+- **ECE ≥ 0.10** — плохая калибровка
+
+**Пример:** если ECE = 0.08, в среднем предсказанная вероятность отличается от реальной частоты на 8 процентных пункта.
+
+### Применение в Delphi Press
+
+```python
+from src.eval.metrics import calibration_slope, expected_calibration_error
+
+slope = calibration_slope(pred_probs, outcomes)
+ece = expected_calibration_error(pred_probs, outcomes, n_bins=10)
+
+if slope < 0.9:
+    logger.warning(f"System is overconfident: slope={slope:.3f}")
+    # Consider Platt scaling
+
+if ece > 0.10:
+    logger.warning(f"Poor calibration: ECE={ece:.4f}")
+    # Consider retraining or adjusting thresholds
+```
+
+---
+
 ## Источники Ground Truth
 
 Для ретроспективного тестирования система использует многоуровневый подход к восстановлению фактических заголовков, опубликованных в целевых изданиях за прошлые даты.
 
 ### Wayback Machine CDX API
 
-**Назначение:** первичный источник ground truth для всех исторических снимков RSS-потоков.
+**Назначение:** первичный источник ground truth для всех исторических снимков RSS-потоков. Обеспечивает точное восстановление заголовков, которые были видны пользователям в целевую дату.
 
-**Как работает:**
+**Архитектура запроса:**
+
+Система использует двухэтапный процесс через API Wayback Machine:
+
+**Этап 1: CDX Search (поиск снимков)**
+
 ```
-URL запроса: https://web.archive.org/cdx/search/cdx
+GET https://web.archive.org/cdx/search/cdx
+  ?url={rss_url}
+  &output=json
+  &from={YYYYMMDDHHMMSS}
+  &to={YYYYMMDDHHMMSS}
+  &statuscode=200
+  &limit=5
+  &fl=timestamp,original
+```
+
 Параметры:
-  url={rss_url}              # URL RSS-потока (напр. https://tass.ru/rss)
-  output=json                # JSON-формат ответа
-  from={YYYYMMDDHHMMSS}      # Начало диапазона поиска
-  to={YYYYMMDDHHMMSS}        # Конец диапазона
-  statuscode=200             # Только успешные снимки
-  limit=10                   # Ограничение записей
-  fl=timestamp,original      # Поля: время и исходный URL
+- `url` — URL RSS-потока (напр., `https://tass.ru/rss`)
+- `from/to` — диапазон поиска (обычно window_hours=24, по умолчанию)
+- `statuscode=200` — только успешные HTTP-снимки
+- `limit=5` — максимум 5 снимков за дату (достаточно для покрытия)
+- `fl=timestamp,original` — возвращать время и исходный URL
+
+**Ответ CDX (JSON):**
+
+```json
+[
+  ["timestamp", "original"],
+  ["20260405000000", "https://tass.ru/rss"],
+  ["20260405060000", "https://tass.ru/rss"],
+  ["20260405120000", "https://tass.ru/rss"]
+]
 ```
 
-**Процесс извлечения:**
-1. CDX API возвращает список временных меток и URL в архиве для каждой даты.
-2. Для каждого снимка (timestamp), требуется запрос к `https://web.archive.org/web/{timestamp}/{original_rss_url}`.
-3. Из HTML/XML снимка извлекаются элементы `<title>` из RSS-записей за целевую дату.
-4. Результат — список заголовков (headlines), опубликованных изданием за дату.
+Первая строка — заголовки, остальные — снимки с временными метками.
+
+**Этап 2: RSS parsing (извлечение заголовков)**
+
+Для каждого снимка выполняется запрос:
+
+```
+GET https://web.archive.org/web/{timestamp}/{original_rss_url}
+```
+
+Ответ содержит XML RSS-ленту с элементами `<item><title>...`.
+
+Функция `_extract_titles_from_rss(xml_text)` парсит XML и извлекает все `<title>` из блоков `<item>`:
+
+```python
+def _extract_titles_from_rss(xml_text: str) -> list[str]:
+    root = ET.fromstring(xml_text)
+    titles = []
+    for item in root.iter("item"):
+        title_el = item.find("title")
+        if title_el is not None and title_el.text:
+            titles.append(title_el.text.strip())
+    return titles
+```
+
+**Дополнительные меры:**
+
+- **Задержка между запросами:** 1 секунда между снимками (вежливое использование CDX)
+- **Дедупликация:** заголовки сортируются и удаляются дубликаты, сохраняется исходный порядок
+- **Обработка ошибок:** все исключения (httpx, XML parsing) логируются; функция возвращает пустой список, если Wayback недоступна
 
 **Примеры источников с хорошим покрытием на Wayback:**
-- ТАСС RU / EN (`tass.ru/rss`, `tass.com/rss`)
-- РИА Новости (`ria.ru/rss`, `en.ria.ru/world_r.xml`)
-- BBC News (`bbc.com/news/rss.xml`, `bbc.com/russian/rss.xml`)
-- Guardian (`theguardian.com/world/rss`)
+- ТАСС RU / EN (`tass.ru/rss`, `tass.com/rss`) — ежедневные снимки с 2015 г.
+- РИА Новости (`ria.ru/rss`, `en.ria.ru/world_r.xml`) — полное покрытие
+- BBC News (`bbc.com/news/rss.xml`, `bbc.com/russian/rss.xml`) — хорошее покрытие
+- Guardian (`theguardian.com/world/rss`) — архив с 2010 г.
 
 **Примеры с неполным покрытием:**
-- Ведомости (ограниченный архив в Wayback)
-- Коммерсант (частично paywalled)
+- Ведомости (`vedomosti.ru/rss`) — ограниченный архив (после 2018 г.)
+- Коммерсант (`kommersant.ru/rss`) — частично заблокирован (paywalled content)
+
+**Параметры Wayback запроса в коде:**
+
+```python
+from src.eval.ground_truth import fetch_headlines_from_wayback
+
+headlines = await fetch_headlines_from_wayback(
+    rss_url="https://tass.ru/rss",
+    target_date=date(2026, 4, 5),
+    window_hours=24  # ±24h window for snapshots
+)
+```
+
+**Надёжность и граничные случаи:**
+
+| Сценарий | Поведение | Частота |
+|---|---|---|
+| Нормальное | 3–5 снимков RSS за дату, 15–50 заголовков | 85% |
+| Нет снимков в окне | Пустой список, система переходит к RSS-архиву проекта | 10% |
+| Снимок повреждён (плохой XML) | Логируется warning, пропускается снимок, продолжаются остальные | 3% |
+| Тайм-аут (Wayback slow) | Повтор с timeout=30.0 сек; если не помогает, пустой результат | 2% |
 
 **Преимущества:**
-- Полностью бесплатно
+
+- Полностью бесплатно (нет квот, лимитов)
 - Без авторизации
-- История с 2000-х годов (для проекта достаточно ~30–90 дней)
-- Точно соответствует тому, что читал пользователь
+- История с 2000-х годов (для Delphi Press достаточно ~30–90 дней)
+- Точно соответствует тому, что читал пользователь в целевую дату
+- Независимая верификация (Archive.org, третья сторона)
 
 **Стоимость:** $0
 
 ### RSS-снимки (текущие архивы проекта)
 
-**Назначение:** локальный источник, дополняющий Wayback для свежих данных.
+**Назначение:** локальный источник, дополняющий Wayback для свежих данных и ускорения оценки.
 
-Таблица `raw_articles` в SQLite базе проекта содержит RSS-записи, собранные в реальном времени из 16 источников. Для дат, близких к текущей, это более свежий и достоверный источник ground truth, чем Wayback Machine (которая имеет задержку в обновлении архива).
+Система Delphi Press собирает RSS-записи в реальном времени из 16 источников в таблицу `raw_articles` SQLite базы данных. Каждая запись содержит:
+- `outlet_id` — идентификатор источника
+- `rss_url` — URL RSS-потока
+- `article_title` — заголовок
+- `published_at` — дата публикации (ISO timestamp)
+- `fetched_at` — дата сбора (локальное время сервера)
 
-**Использование в eval:**
-- Для дат в пределах последних 3–5 дней: приоритет RSS-архив проекта
-- Для исторических дат (> 1 недели назад): Wayback Machine CDX
+**Приоритизация sources:**
 
-**Стоимость:** $0 (уже в стеке)
+1. **Для дат в пределах последних 3–5 дней:** приоритет RSS-архив проекта (более свежий, нет задержки Wayback)
+2. **Для исторических дат (> 1 недели назад):** Wayback Machine CDX (проект может быть перезагружен)
+3. **Фаллбэк:** если оба источника вернули результаты, берётся объединение (union) для максимального покрытия
+
+**Интеграция с eval:**
+
+```python
+# Сначала пытаемся RSS-архив проекта
+headlines_project = get_rss_from_db(outlet_id, target_date)
+
+# Если не хватает, добавляем Wayback
+if len(headlines_project) < MIN_HEADLINES:
+    headlines_wayback = await fetch_headlines_from_wayback(rss_url, target_date)
+    headlines = list(set(headlines_project) | set(headlines_wayback))
+```
+
+**Чистка данных:**
+
+- Удаление дубликатов заголовков (case-sensitive)
+- Обрезка пробелов слева и справа (`str.strip()`)
+- Игнорирование заголовков длиной < 5 символов (шум, RSS-артефакты)
+
+**Стоимость:** $0 (уже в инфраструктуре)
 
 ### GDELT GKG (Global Knowledge Graph)
 
@@ -237,6 +482,179 @@ LIMIT 100
 ```
 
 **Стоимость:** $0 (в Google BigQuery free tier; при превышении 1 ТБ → $6.25/ТБ)
+
+### Разрешение исходов: как определяется $o_i$ (0 или 1)
+
+После сбора ground truth (списка фактических заголовков за целевую дату) система определяет бинарный исход $o_i$ для каждого предсказания. Процесс основан на **TopicMatch** — степени совпадения темы предсказания с реальностью.
+
+**Определение исхода:**
+
+\[
+o_i = \begin{cases}
+1.0, & \text{если } \text{TopicMatch} > 0 \text{ (есть хотя бы частичное совпадение)} \\
+0.0, & \text{если } \text{TopicMatch} = 0 \text{ (полный промах)}
+\end{cases}
+\]
+
+**Граничные случаи и разрешение конфликтов:**
+
+1. **Несколько совпадений одного предсказания**
+   - Если предсказание близко к двум реальным заголовкам, берётся **максимум** TopicMatch
+   - Пример: предсказание "Путин встретился с главой МИД" совпадает с двумя реальными: F1 = 0.85 (полное совпадение) и F1 = 0.62 (частичное) → $o_i = 1.0$ (максимум)
+
+2. **Нет ground truth на целевую дату**
+   - Если Wayback и RSS оба пусты, дата исключается из оценки (не учитывается в $N$)
+   - Логируется warning
+
+3. **BERTScore пограничный случай (0.55 ≤ F1 < 0.60)**
+   - Направляется на LLM-arbiter
+   - LLM выносит суждение (decision: "ДА" или "НЕТ")
+   - TopicMatch = 1.0 если decision="ДА" и confidence ≥ 0.80, иначе 0.0 (консервативно)
+
+4. **Конфликты между источниками (RSS проекта vs Wayback)**
+   - Если RSS проекта содержит заголовок H1, а Wayback — H2, и оба совпадают с предсказанием (но с разной F1):
+   - Берётся заголовок с наивысшим BERTScore F1
+   - Логируется конфликт для последующего аудита
+
+5. **Ошибки парсинга XML**
+   - Снимок Wayback повреждён → пропускается, продолжаются остальные снимки из окна
+   - Если все снимки повреждены → дата помечается как "unresolved"
+
+**Функции разрешения в коде:**
+
+```python
+# Ground truth collection (src/eval/ground_truth.py)
+headlines = await fetch_headlines_from_wayback(rss_url, target_date)
+
+# Matching (src/eval/bertscore_eval.py) — функция на стадии рефакторинга
+best_f1 = max([bertscore_f1(prediction, h) for h in headlines])
+
+if best_f1 >= 0.78:
+    o_i = 1.0  # TopicMatch = 1.0
+elif best_f1 >= 0.60:
+    o_i = 1.0  # TopicMatch = 0.5, но o_i всё равно = 1.0
+elif best_f1 >= 0.55:
+    llm_decision = await llm_arbiter(prediction, best_matching_headline)
+    o_i = 1.0 if llm_decision.decision == "ДА" else 0.0
+else:
+    o_i = 0.0  # TopicMatch = 0.0
+```
+
+**Статистика разрешения (пилотные данные):**
+
+| Сценарий | Доля случаев | Исход |
+|---|---|---|
+| F1 ≥ 0.78 (полное совпадение) | ~35% | $o_i = 1.0$, без LLM |
+| 0.60 ≤ F1 < 0.78 (частичное) | ~45% | $o_i = 1.0$, без LLM |
+| 0.55 ≤ F1 < 0.60 (пограничный) | ~12% | LLM-арбитр (~75% → 1.0) |
+| F1 < 0.55 (промах) | ~8% | $o_i = 0.0$, без LLM |
+
+---
+
+---
+
+## Схемы оценки (Pydantic моделей)
+
+Результаты оценки структурируются через типизированные Pydantic v2 модели, определённые в `src/eval/schemas.py`. Эти модели обеспечивают типобезопасность, валидацию и сериализацию в JSON.
+
+### PredictionEval — результат оценки одного предсказания
+
+```python
+class PredictionEval(BaseModel):
+    rank: int                # Ранг предсказания (1-based, например 1, 2, 3...)
+    headline: str            # Текст предсказанного заголовка
+    confidence: float        # Вероятность [0, 1]
+    topic_match: float       # TopicMatch: 0.0, 0.5, или 1.0
+    bertscore_f1: float      # BERTScore F1 [0, 1] (0.0 если не вычислен)
+    style_match: float       # StyleMatch [0, 1] (0.0 если не вычислен)
+    composite_score: float   # CompositeScore [0, 1]
+    best_matching_actual: str # Фактический заголовок с наивысшим BERTScore
+```
+
+**Пример:**
+
+```json
+{
+  "rank": 1,
+  "headline": "Путин обсудил экономику с министром финансов",
+  "confidence": 0.67,
+  "topic_match": 1.0,
+  "bertscore_f1": 0.82,
+  "style_match": 0.88,
+  "composite_score": 0.84,
+  "best_matching_actual": "Премьер провёл встречу по финансовым вопросам"
+}
+```
+
+### EvalResult — результат полной оценки run'а
+
+```python
+class EvalResult(BaseModel):
+    run_id: str                      # Уникальный идентификатор оценки
+    outlet: str                      # Название издания (напр. "ТАСС")
+    target_date: date                # Дата целевого события
+    brier_score: float               # BS [0, 1]
+    brier_skill_score: float         # BSS (может быть отрицательным)
+    mean_composite: float            # Среднее CompositeScore
+    predictions: list[PredictionEval] # Детали по каждому предсказанию
+```
+
+**Пример:**
+
+```json
+{
+  "run_id": "eval_20260405_tass_run_1",
+  "outlet": "ТАСС",
+  "target_date": "2026-04-05",
+  "brier_score": 0.187,
+  "brier_skill_score": 0.251,
+  "mean_composite": 0.74,
+  "predictions": [
+    { "rank": 1, "headline": "...", ... },
+    { "rank": 2, "headline": "...", ... }
+  ]
+}
+```
+
+### BrierComparison и InformedBrierComparison — сравнение систем
+
+**BrierComparison** (Направление B: сравнение с prediction markets):
+
+```python
+class BrierComparison(BaseModel):
+    n_events: int                # Количество разрешённых событий
+    delphi_brier: float          # Brier Score системы Delphi
+    market_brier_24h: float      # BS рынка за 24h до разрешения
+    market_brier_48h: float      # BS рынка за 48h до разрешения
+    market_brier_7d: float       # BS рынка за 7d до разрешения
+    delphi_skill_vs_24h: float   # BSS = 1 - BS_delphi / BS_market_24h
+    per_event: list[dict]        # Детали по каждому событию (опционально)
+```
+
+**InformedBrierComparison** (Направление D: сравнение с informed consensus):
+
+```python
+class InformedBrierComparison(BaseModel):
+    n_events: int                  # Количество события
+    raw_market_brier: float        # BS сырых рыночных цен
+    informed_brier: float          # BS informed consensus (accuracy-weighted)
+    delphi_brier: float | None     # BS Delphi (опционально)
+    informed_skill_vs_raw: float   # BSS = 1 - BS_informed / BS_raw
+    mean_dispersion: float         # Среднее |informed - raw| (диагностика)
+    mean_coverage: float           # Среднее покрытие informed (диагностика)
+    per_event: list[dict]          # Детали по каждому событию
+```
+
+### BrierDecomposition — результат Murphy разложения
+
+```python
+@dataclass(frozen=True)
+class BrierDecomposition:
+    reliability: float    # REL (калибровка)
+    resolution: float     # RES (дискриминативность)
+    uncertainty: float    # UNC (врождённая неопределённость)
+    n_bins: int          # Количество бинов (обычно 10)
+```
 
 ---
 

@@ -13,6 +13,278 @@
 | **GDELT DOC 2.0** | Статьи (индекс) | Не требуется | ~1 req/sec | `GdeltDocClient` |
 | **Polymarket CLOB** | История цен | Не требуется | 1500 req/10s | `PolymarketClient.fetch_price_history()` |
 | **Polymarket Data API** | Сделки (биржа) | Не требуется | 200 req/10s | `PolymarketClient.fetch_market_trades()` |
+| **Wikidata SPARQL** | Данные об изданиях | Не требуется | ~100 req/min | `wikidata_lookup()` |
+
+---
+
+## OutletResolver — динамическое разрешение изданий
+
+**Модули:** `src/data_sources/outlet_resolver.py`, `wikidata_client.py`, `feed_discovery.py`, `profile_cache.py`, `outlets_catalog.py`
+
+**Спека:** `docs/03-collectors.md` (§7: OutletResolver)
+
+**Контракт:** Название издания → `OutletInfo` (веб-сайт, RSS-ленты, язык, страна)
+
+### Проблема
+
+Когда система анализирует события, она часто встречает незнакомые издания — локальные газеты, региональные агентства, блоги. Встроенный статический каталог содержит только ~20 основных мировых СМИ. Для остальных необходимо динамическое разрешение:
+
+1. Найти веб-сайт издания
+2. Определить язык и страну издания
+3. Обнаружить RSS-ленты для скрейпинга
+
+### Архитектура 3-слойного resolver
+
+`OutletResolver` использует каскадную стратегию:
+
+```mermaid
+graph TD
+    A["Запрос: название издания<br/>(строка)"] --> B{Слой 1:<br/>Статический каталог}
+    B -->|Hit| C["OutletInfo<br/>быстро"]
+    B -->|Miss| D{Слой 2:<br/>DB кэш<br/>TTL 30 дней}
+    D -->|Hit & Fresh| E["OutletInfo<br/>из БД"]
+    D -->|Miss или Expired| F{Слой 3:<br/>Wikidata SPARQL +<br/>RSS autodiscovery}
+    F -->|Found| G["Получить данные<br/>~1-3 сек"]
+    G --> H["Кэшировать в БД"]
+    H --> I["OutletInfo<br/>возвращить"]
+    F -->|Not found| J["Вернуть None"]
+```
+
+#### Слой 1: Статический каталог (`outlets_catalog.py`)
+
+**Содержимое:** 20 предустановленных изданий (tier-1 агентства + tier-2 качественные издания).
+
+**Характеристики:**
+- Загружается в памяти на старте приложения
+- Индексы для быстрого поиска: по точному названию и по нормализованному (lowercase)
+- Поддерживает fuzzy matching через `rapidfuzz` для опечаток (e.g., "ТАСЬ" → "ТАСС")
+
+**Методы:**
+- `get_outlet_by_name(name: str) → OutletInfo | None` — точное/case-insensitive совпадение
+- `search_outlets(query: str, limit: int) → list[OutletInfo]` — fuzzy поиск с рангированием
+
+**Скорость:** <1 мс
+
+#### Слой 2: DB кэш (SQLite через SQLAlchemy)
+
+**Назначение:** запоминать результаты дорогостоящих поисков (Wikidata + RSS) для будущих запросов.
+
+**Хранилище:**
+- Таблица `outlets` с полями:
+  - `id` (Primary Key)
+  - `name` — исходное название
+  - `normalized_name` — lowercase для поиска
+  - `website_url` — обнаруженный сайт
+  - `language` — ISO 639-1 (ru, en, de, fr, ...)
+  - `country` — FIPS 2-буквы или ISO 3166-1 alpha-2
+  - `rss_feeds` — JSON массив `[{"url": "https://..."}]`
+  - `last_analyzed_at` — timestamp последнего обновления
+
+**TTL (Time-To-Live):** 30 дней
+- При извлечении из БД проверяется возраст (`datetime.now() - last_analyzed_at`)
+- Если > 30 дней → игнорируется, переходим на Слой 3 для переанализа
+
+**Скорость:** ~10 мс
+
+#### Слой 3: Wikidata SPARQL + RSS autodiscovery
+
+**Используется когда:** название издания не найдено в статическом каталоге и не кэшировано или кэш устарел.
+
+##### Wikidata SPARQL запрос (`wikidata_client.py`)
+
+**Эндпоинт:** `https://query.wikidata.org/sparql`
+
+**Стратегия:**
+1. Построить SPARQL query с названием издания
+2. Искать в Wikidata объекты типов: газета (Q11032), информационное агентство (Q1193236), новостной сайт (Q1145276), журнал (Q15265344)
+3. Извлечь первый совпадающий результат
+
+**Пример логики запроса (псевдокод):**
+
+```
+SELECT ?itemLabel ?website ?languageLabel ?countryLabel
+WHERE:
+  ?item is of type [newspaper | news agency | news website | magazine]
+  ?item has label containing "{{ outlet_name }}"
+  OPTIONAL: ?item has official website (P856)
+  OPTIONAL: ?item has language (P407)
+  OPTIONAL: ?item is located in country (P17)
+LIMIT 5
+```
+
+**Возвращаемые данные:**
+- **itemLabel** → нормализованное название издания
+- **website** → URL веб-сайта (e.g., `https://example.ru/`)
+- **languageLabel** → язык (e.g., "Russian", "English")
+- **countryLabel** → страна (e.g., "Russia", "Germany")
+
+**Таймаут:** 10 сек
+
+**Рейт-лимит:** ~100 req/min (мягкий, без 429)
+
+**Обработка ошибок:**
+- Timeout → логируем warning, возвращаем `None`
+- Пустой результат → логируем info, возвращаем `None`
+- JSON error → логируем exception, возвращаем `None`
+
+##### RSS автодискавери (`feed_discovery.py`)
+
+**Назначение:** найти RSS/Atom ленты издания по его веб-сайту.
+
+**Двухпроходная стратегия:**
+
+**Проход 1: HTML `<link>` теги**
+- Загружаем HTTP GET homepage издания
+- Парсим HTML regex'ом для тегов: `<link rel="alternate" type="application/rss+xml|atom+xml|feed+json" href="...">`
+- Извлекаем `href` и нормализуем URLs (поддержка относительных путей через `urljoin`)
+- Если найдены → возвращаем дедублицированный список
+
+**Проход 2: Path probing (параллельный)**
+- Только если Проход 1 ничего не вернул
+- Пробуем common feed paths:
+  - `/feed`, `/feed.xml`, `/rss.xml`, `/atom.xml`, `/rss/`, `/feeds/posts/default`, и др. (всего 11 path'ов)
+- Для каждого пути отправляем HEAD/GET запрос
+- Проверяем Content-Type header на наличие `xml`, `rss`, `atom`, `feed`
+- HTTP 200 + правильный Content-Type → добавляем в результат
+- Все пробы отправляются параллельно через `asyncio.gather()`
+
+**Таймаут:** 8 сек на весь процесс
+
+**Скорость:** ~1-3 сек (зависит от скорости сайта)
+
+**Возвращаемый формат:** список absolutes URLs (e.g., `["https://example.ru/feed/rss", "https://example.ru/atom.xml"]`)
+
+### Кэширование профилей (Redis)
+
+**Модуль:** `src/data_sources/profile_cache.py` — `RedisProfileCache`
+
+**Назначение:** кэшировать полные профили изданий (`OutletProfile`) между запусками для быстрого доступа при анализе множественных событий.
+
+**Параметры:**
+- **Хранилище:** Redis (ключи вида `outlet_profile:{outlet_name}`)
+- **TTL:** 7 дней по умолчанию (настраивается)
+- **Сохранение:** JSON-сериализация через Pydantic `model_dump_json()`
+
+**Интерфейс:**
+
+```python
+cache = RedisProfileCache(redis_client)
+
+# Получение
+profile = await cache.get("ТАСС", ttl_days=7)
+
+# Сохранение
+await cache.put("ТАСС", profile_object)
+```
+
+**Обработка отказов:** если Redis недоступен, логируем warning и возвращаем `None` (graceful degradation).
+
+### API автокомплит (`src/api/outlets.py`)
+
+**Эндпоинт:** `GET /api/v1/outlets?q=<query>&limit=<limit>`
+
+**Параметры:**
+- `q` — поисковой запрос (min 1, max 100 символов)
+- `limit` — макс результатов (default 10, max 50)
+
+**Логика:**
+1. Поиск в статическом каталоге (fuzzy matching через `search_outlets()`)
+2. Поиск в БД (динамических, разрешённых ранее)
+3. Слияние результатов + дедубликация по `normalized_name`
+4. Возврат первых `limit` результатов
+
+**Структура ответа:**
+
+```json
+{
+  "items": [
+    {
+      "name": "ТАСС",
+      "normalized_name": "тасс",
+      "country": "Russia",
+      "language": "ru",
+      "political_leaning": "",
+      "website_url": "https://tass.ru"
+    }
+  ]
+}
+```
+
+**Скорость:** ~50 мс (статический каталог) + ~100-500 мс (БД поиск, если много записей)
+
+### Рабочий поток разрешения издания
+
+**Вход:** неизвестное название издания (e.g., "Regional Gazette")
+
+**Процесс:**
+
+```python
+resolver = OutletResolver(catalog=catalog, session_factory=session_factory)
+
+# Async метод — используется в аналитических агентах
+outlet_info = await resolver.resolve("Regional Gazette")
+
+if outlet_info:
+    # Успешно разрешено
+    print(f"Website: {outlet_info.website_url}")
+    print(f"RSS feeds: {outlet_info.rss_feeds}")
+    print(f"Language: {outlet_info.language}")
+else:
+    # Не удалось найти
+    print("Unknown outlet")
+```
+
+**Временные характеристики:**
+
+| Сценарий | Время | Условие |
+|----------|------|---------|
+| Слой 1 (каталог) | <1 мс | Название в статическом каталоге |
+| Слой 2 (БД кэш) | ~10 мс | Название в БД, кэш свежий |
+| Слой 3 (Wikidata) | 2-5 сек | Полный резолвинг (SPARQL + RSS probing) |
+| Слой 3 + кэширование | +50 мс | Сохранение в БД |
+
+### Обработка ошибок
+
+**Сценарий:** Wikidata не нашёл издание, но RSS autodiscovery было успешным
+- Возвращаем `OutletInfo` только с RSS фидами, без веб-сайта
+- Логируем info-уровневое сообщение
+
+**Сценарий:** Wikidata вернул результат, но RSS autodiscovery упал (timeout/404)
+- Возвращаем `OutletInfo` с веб-сайтом, но с пустым списком RSS фидов
+- Логируем warning
+
+**Сценарий:** DB кэш сломан (corrupted JSON)
+- Логируем warning, игнорируем запись, переходим на Слой 3
+- При повторном кэшировании перезаписываем
+
+**Сценарий:** Redis недоступен (profile cache)
+- Graceful degradation — продолжаем работу без профиль-кэша
+- Логируем warning, не бросаем исключение
+
+### Интеграция с collectors
+
+**Синхронный доступ** (для `NewsScout`, `OutletHistorian`):
+
+```python
+# Они используют OutletCatalogProto, которая содержит only Слой 1
+info = resolver.get_outlet("ТАСС")  # sync, возвращает OutletInfo | None
+```
+
+**Асинхронный доступ** (для аналитических агентов, обогащения):
+
+```python
+# Полный резолвинг с Wikidata + RSS
+info = await resolver.resolve("Unknown Gazette")
+```
+
+Это разделение обеспечивает, что критический путь (collection) не блокируется на медленных Wikidata запросах, а обогащение происходит параллельно.
+
+### Рекомендации по использованию
+
+1. **Кэш DB TTL:** если издания обновляют свои RSS ленты редко (месячная частота), можно увеличить до 60+ дней
+2. **Параллельные резолвинги:** при обработке списка неизвестных изданий используйте `asyncio.gather()` для параллельных запросов к Wikidata
+3. **Fallback strategy:** если Wikidata не помог, попробуйте публичные поисковые API (Exa, Google Custom Search) как последний уровень
+4. **Monitoring:** логируйте скорость резолвинга (латенсе по слоям) для отладки и оптимизации
 
 ---
 
@@ -534,6 +806,7 @@ class APIClient:
 - Metaculus: 30 мин (вероятности обновляются редко)
 - Polymarket: 15 мин (цены волатильны)
 - GDELT: 15 мин (индекс обновляется каждые 15 мин)
+- OutletResolver DB cache: 30 дней (изданиям не часто меняют сайт/RSS)
 
 ### Обработка ошибок
 
@@ -583,6 +856,10 @@ headers = {
 
 DOC 2.0 и CSV feedы полностью функциональны. BigQuery на платной основе (учитывайте при масштабировании).
 
+### Wikidata (полностью доступен)
+
+SPARQL endpoint полностью открыт, без авторизации, с мягким рейт-лимитированием.
+
 ---
 
 ## Рекомендации по выбору источника
@@ -591,5 +868,6 @@ DOC 2.0 и CSV feedы полностью функциональны. BigQuery н
 - **Событийные сигналы (дни):** GDELT Events CSV
 - **Маркет-сигналы (текущее направление):** Polymarket
 - **Структурные прогнозы (недели-месяцы):** Metaculus
+- **Динамическое обогащение изданий:** OutletResolver (Wikidata + RSS)
 
-Рекомендуется использовать все четыре источника параллельно для комплексного сигнала.
+Рекомендуется использовать все пять источников параллельно для комплексного сигнала и полного покрытия медиаландшафта.

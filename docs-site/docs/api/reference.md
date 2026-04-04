@@ -138,7 +138,7 @@ curl -X GET https://delphi.antopkin.ru/api/v1/auth/me \
 |----------|-----|-----------|---------|
 | `outlet` | string (1–200 символов) | Да | Название или сокращение СМИ (например: "ТАСС", "BBC Russian", "Независимая газета") |
 | `target_date` | date (YYYY-MM-DD) | Да | Целевая дата, на которую делается прогноз |
-| `preset` | string | Нет (по умолчанию "full") | Конфигурация пайплайна: `light`, `standard` или `full` |
+| `preset` | string | Нет (по умолчанию "full") | Конфигурация пайплайна: `light` или `full` |
 | `api_key` | string | Нет | Ваш OpenRouter API-ключ. Если не указан, используется сохранённый в профиле |
 | `outlet_url` | string (URL) | Нет | URL официального сайта СМИ для уточнения разрешения |
 
@@ -167,13 +167,14 @@ curl -X GET https://delphi.antopkin.ru/api/v1/auth/me \
 | `status` | `pending`, `processing`, `completed`, `failed` |
 | `progress_url` | SSE-эндпоинт для подписки на обновления прогресса |
 | `result_url` | Полный результат после завершения |
-| `outlet_resolved` | Удалось ли системе автоматически разрешить СМИ |
-| `outlet_language` | Язык выходных заголовков (ISO 639-1) |
-| `key_source` | Источник API-ключа: `manual` (вручную), `user` (сохранённый), `server` (серверный) |
+| `outlet_resolved` | Удалось ли системе автоматически разрешить СМИ (определить язык и URL) |
+| `outlet_language` | Язык выходных заголовков (ISO 639-1 код, например `ru`, `en`) |
+| `outlet_url` | Разрешённый или переданный URL СМИ |
+| `key_source` | Источник API-ключа: `manual` (вручную в запросе), `user` (сохранённый в профиле), `server` (серверный) |
 
 **Ошибки:**
 - `400 Bad Request` — Неверный `preset` или некорректная дата
-- `401 Unauthorized` — API-ключ не предоставлен и не сохранён
+- `401 Unauthorized` — API-ключ не предоставлен, не сохранён и нет серверного ключа
 - `409 Conflict` — Прогноз с такими параметрами уже существует
 - `503 Service Unavailable` — Очередь задач недоступна
 
@@ -191,13 +192,13 @@ curl -X POST https://delphi.antopkin.ru/api/v1/predictions \
 ```
 
 !!! note "Асинхронная обработка"
-    Эндпоинт возвращает `201 Created` с метаданными прогноза. Обработка запускается асинхронно. Используйте `progress_url` или `result_url` для отслеживания статуса.
+    Эндпоинт возвращает `201 Created` с метаданными прогноза. Обработка запускается асинхронно в фоне. Используйте `progress_url` для подписки на обновления в реальном времени или `result_url` для получения финального результата.
 
 ---
 
 ### GET /predictions
 
-Список всех прогнозов пользователя с пагинацией.
+Список прогнозов с пагинацией. Возвращает все прогнозы в системе (включая анонимные и публичные).
 
 **Query Parameters:**
 
@@ -205,7 +206,7 @@ curl -X POST https://delphi.antopkin.ru/api/v1/predictions \
 |----------|-----|-------------|---------|
 | `limit` | integer (1–100) | 20 | Количество результатов на странице |
 | `offset` | integer (≥0) | 0 | Смещение от начала списка |
-| `status` | string | Нет | Фильтр по статусу: `pending`, `processing`, `completed`, `failed` |
+| `status` | string | Нет | Фильтр по статусу: `pending`, `collecting`, `analyzing`, `forecasting`, `generating`, `completed`, `failed` |
 
 **Response: 200 OK**
 ```json
@@ -229,9 +230,11 @@ curl -X POST https://delphi.antopkin.ru/api/v1/predictions \
 
 **Пример:**
 ```bash
-curl -X GET 'https://delphi.antopkin.ru/api/v1/predictions?status=completed&limit=10' \
-  -H "Authorization: Bearer $TOKEN"
+curl -X GET 'https://delphi.antopkin.ru/api/v1/predictions?status=completed&limit=10'
 ```
+
+!!! note "Доступность"
+    Этот эндпоинт доступен без аутентификации. Возвращает публичный список всех прогнозов, включая те, которые принадлежат другим пользователям.
 
 ---
 
@@ -304,13 +307,16 @@ curl -X GET 'https://delphi.antopkin.ru/api/v1/predictions?status=completed&limi
 ```
 
 **Ошибки:**
-- `404 Not Found` — Прогноз не найден или не принадлежит пользователю
-- `403 Forbidden` — Доступ запрещён (прогноз другого пользователя)
+- `404 Not Found` — Прогноз не найден
+- `403 Forbidden` — Доступ запрещён (прогноз принадлежит другому аутентифицированному пользователю)
+
+**Доступность:**
+- Анонимные прогнозы (user_id = None) доступны всем
+- Личные прогнозы доступны только владельцу
 
 **Пример:**
 ```bash
-curl -X GET 'https://delphi.antopkin.ru/api/v1/predictions/a1b2c3d4-e5f6-7890-abcd-ef1234567890' \
-  -H "Authorization: Bearer $TOKEN" | jq '.headlines[0]'
+curl -X GET 'https://delphi.antopkin.ru/api/v1/predictions/a1b2c3d4-e5f6-7890-abcd-ef1234567890'
 ```
 
 ---
@@ -382,7 +388,11 @@ with httpx.stream(
 
 ### GET /outlets
 
-Автокомплит-поиск СМИ по названию. Поиск проводится по статическому каталогу (20 популярных изданий) и динамической базе (разрешённые издания).
+Автокомплит-поиск СМИ по названию. Поиск проводится по двум источникам:
+1. **Статический каталог** — 20 популярных мировых изданий (быстрый поиск в памяти)
+2. **Динамическая база** — СМИ, которые были разрешены в процессе прогнозирования
+
+Результаты дедублицируются и объединяются.
 
 **Query Parameters:**
 
@@ -467,9 +477,9 @@ curl -X GET 'https://delphi.antopkin.ru/api/v1/outlets?q=ТАСС&limit=5'
 | `id` | Числовой идентификатор ключа |
 | `provider` | Провайдер LLM (на данный момент только `openrouter`) |
 | `label` | Пользовательское имя/описание ключа |
-| `is_active` | Используется ли ключ по умолчанию |
-| `health` | `ok` (рабочий) или `corrupted` (повреждён, требует пересохранения) |
-| `last_used_at` | Время последнего использования или `null` |
+| `is_active` | Используется ли ключ по умолчанию при создании прогнозов |
+| `health` | `ok` (рабочий) или `corrupted` (повреждён при расшифровке, требуется пересохранение) |
+| `last_used_at` | Время последнего использования для прогнозирования или `null` |
 
 **Пример:**
 ```bash
@@ -497,7 +507,7 @@ curl -X GET https://delphi.antopkin.ru/api/v1/keys \
 | Параметр | Тип | Обязателен | Описание |
 |----------|-----|-----------|---------|
 | `provider` | string | Да | `openrouter` |
-| `api_key` | string (≥10 символов) | Да | Ваш OpenRouter API-ключ |
+| `api_key` | string (≥10 символов) | Да | Ваш OpenRouter API-ключ (начинается с `sk-or-`) |
 | `label` | string (≤100 символов) | Нет | Описание ключа для личного учёта |
 
 **Response: 201 Created**
@@ -639,6 +649,13 @@ curl -X POST https://delphi.antopkin.ru/api/v1/keys/1/validate \
 }
 ```
 
+**Проверяемые компоненты:**
+
+| Компонент | Что проверяется |
+|-----------|-----------------|
+| `database` | SQLite/PostgreSQL отвечает на SELECT 1 |
+| `redis` | Redis отвечает на PING, измеряется задержка |
+
 **Пример:**
 ```bash
 curl -X GET https://delphi.antopkin.ru/api/v1/health
@@ -651,7 +668,7 @@ curl -X GET https://delphi.antopkin.ru/api/v1/health
 
 ### GET /health/feeds
 
-Статус RSS-фидов для каждого источника данных.
+Статус RSS-фидов для каждого источника данных. Информация загружается из Redis по данным, накопленным RSSCollector-ом.
 
 **Response: 200 OK**
 ```json
@@ -675,10 +692,23 @@ curl -X GET https://delphi.antopkin.ru/api/v1/health
 }
 ```
 
+**Поля:**
+
+| Поле | Описание |
+|------|---------|
+| `feed_url` | URL RSS-фида |
+| `last_fetched_at` | Момент последней успешной загрузки |
+| `articles_count` | Количество статей, загруженных из фида |
+| `error_count` | Количество ошибок при загрузке |
+| `last_error` | Последняя ошибка (если есть) |
+
 **Пример:**
 ```bash
 curl -X GET https://delphi.antopkin.ru/api/v1/health/feeds
 ```
+
+!!! note "Анонимный эндпоинт"
+    Доступен без аутентификации для мониторинга.
 
 ---
 
@@ -859,6 +889,7 @@ API использует семантическое версионировани
 - **CSRF-защита** активна для форм на веб-интерфейсе
 - **JWT-токены** подписаны и не истекают (настраивается через `JWT_EXPIRE_DAYS`)
 - **API-ключи** шифруются Fernet перед сохранением и никогда не передаются в открытом виде
+- **Ownership checks** предотвращают доступ к чужим прогнозам (IDOR protection)
 
 ---
 
@@ -867,5 +898,5 @@ API использует семантическое версионировани
 Если возникли вопросы или проблемы:
 
 1. Проверьте [документацию по архитектуре](../architecture/overview.md)
-2. Посмотрите примеры на странице [примеры workflow](#примеры-workflow)
+2. Посмотрите примеры запросов в секциях эндпоинтов выше
 3. Напишите issue на [GitHub](https://github.com/antopkin/delphi-press)

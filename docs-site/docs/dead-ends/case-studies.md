@@ -12,6 +12,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **Lesson learned:** Never assume backward compatibility in third-party APIs. Even if legacy endpoints work for 10+ months, they may be deprecated. Subscribe to official API channels, save documentation locally, fix rate limits conservatively (120 req/min for Metaculus), and make credentials configurable from environment.
 
+!!! tip "Урок"
+    **Никогда не предполагай обратную совместимость внешней API**, даже если старый endpoint работает 10+ месяцев. Это может быть legacy layer, а не гарантия. 
+
+    - Подписывайся на изменения API через официальные каналы (RSS, email newsletters, GitHub releases)
+    - При интеграции сохраняй последнюю документацию локально (в проекте: `tasks/research/`)
+    - Зафиксируй rate limit консервативно (для Metaculus: 120 req/min без официального публикованного лимита)
+    - При auth-требовании явно документируй, как получить credentials, и сделай их конфигурируемыми из окружения
+    - Версия v0.9.4: API отключена из-за tier lock (BENCHMARKING tier требуется)
+
 ---
 
 ### Case Study 2: GDELT Cyrillic Query Crash (pre-v0.5.1, v0.9.4)
@@ -21,6 +30,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 **What was done:** Added Content-Type header check before JSON parsing, implemented null-safe articles handling (`(data.get("articles") or [])`), switched to English queries, used GDELT language operators (`sourcelang:russian + sourcecountry:RS`).
 
 **Lesson learned:** Never trust charset support without explicit testing. Filter languages through operators rather than query text. Check Content-Type headers before parsing JSON. Protect against null values with `(field or [])` rather than `get(field, [])`. Rate limit GDELT at ~1 req/sec.
+
+!!! tip "Урок"
+    **Никогда не доверяй charset-поддержке без явного тестирования**, даже если документация не упоминает ограничения.
+
+    - Запрашиваемые языки фильтруй через операторы API (e.g., `sourcelang:russian`), а не через текст query
+    - Проверяй `content-type` заголовок перед парсингом JSON — спасает от HTML error pages
+    - Защищайся от null values: `(data.get("field") or [])` вместо `data.get("field", [])`
+    - Rate limit GDELT: ~1 req/sec, добавь exponential backoff на 429
+    - Граничные случаи (non-ASCII characters, будущие даты): всегда тестируй живо
 
 ---
 
@@ -32,6 +50,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **Lesson learned:** Always test all endpoints live before production deploy. Do not assume consistency between similar endpoints. Create local reference documentation for external APIs with examples. When receiving 422, check each parameter against docs.
 
+!!! tip "Урок"
+    **API inconsistency — это дизайн-баг, но при интеграции нужно быть готовым.** Polymarket `/markets` требует camelCase, а `/events` — snake_case.
+
+    - Тестируй все endpoints той же API живо перед production deploy
+    - Не полагайся на consistency между похожими endpoints
+    - Создай локальный reference документ для каждого внешнего API (pattern: `tasks/research/`)
+    - При 422 Unprocessable Entity: проверь каждый параметр через документацию
+    - Для Polymarket: `volume24hr` (camelCase), не `volume_24hr`
+
 ---
 
 ### Case Study 4: Reuters RSS Feed Deprecation (v0.9.4)
@@ -41,6 +68,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 **What was done:** Removed all Reuters feeds from `src/agents/collectors/news_scout.py`. Alternative sources (BBC, AP, Bloomberg) remain.
 
 **Lesson learned:** RSS feeds are live resources requiring periodic health checks. Large publishers may close public feeds without warning. Maintain fallback sources. Do not rely on single publisher. Track 404/410 errors in logs as signals of dead feeds.
+
+!!! tip "Урок"
+    **RSS feeds — живые ресурсы. Периодически проверяй их здоровье.**  Reuters (feeds.reuters.com) закрыт полностью с 2020 года.
+
+    - Добавь health-check для RSS feeds в мониторинг (попытка fetch за последнюю неделю)
+    - Имей fallback источники (если один закрывается, pipeline не ломается)
+    - Не полагайся на одного издателя — diversify через BBC, AP, Bloomberg и others
+    - Отслеживай 404/410 в логах как сигнал мёртвого feed
+    - При dead feed обновление могут приуроченить к release (v0.9.4)
 
 ---
 
@@ -54,6 +90,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **Lesson learned:** Do not architect fallback to unreliable second provider. Single well-tested provider beats two half-implemented ones. Choose one primary provider and stick with it. If redundancy needed, fully test both.
 
+!!! tip "Урок"
+    **Не строй архитектуру на наличии двух провайдеров, если один не работает.** Single LLM provider лучше, чем fallback на неработающего second.
+
+    - Выбери один primary провайдер и придерживайся его
+    - Если нужна redundancy, выбери два провайдера, оба fully tested и integrated
+    - Не добавляй условную логику "если API key отсутствует, используй другого" — это скрывает problems
+    - Документируй, какой провайдер primary, в CLAUDE.md
+    - Все 28 LLM-задач на одном провайдере (OpenRouter) проще, чем сплит
+
 ---
 
 ### Case Study 6: Non-Existent Preset Sonnet 4.6 (v0.9.4)
@@ -63,6 +108,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 **What was done:** Removed Standard preset. Kept Light (Gemini 2.5 Flash) and Opus (Claude Opus 4.6). Updated UI.
 
 **Lesson learned:** Validate model names before deploy. Add CI/CD step testing each preset with real API calls. Maintain current list of available models per provider. Better 1 working preset than 3 broken ones.
+
+!!! tip "Урок"
+    **Валидируй model names до production deploy.** Confusion между Sonnet версиями: есть `claude-3.5-sonnet`, но нет `claude-sonnet-4.6`.
+
+    - Добавь CI/CD step, который тестирует каждый пресет с real API call перед deploy
+    - Держи актуальный список доступных моделей на каждом провайдере в wiki
+    - Лучше иметь 1 пресет, который работает, чем 3, из которых 2 сломаны
+    - Синхронизируй `src/config.py` presets с OpenRouter pricing docs
+    - v0.9.4: оставлены только 2 пресета — Light (Gemini 2.5 Flash) и Opus (Claude Opus 4.6)
 
 ---
 
@@ -74,6 +128,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **Lesson learned:** Do not add features without user request. YAGNI principle. Even "nice to have" features cost maintenance. Gather feedback before adding UI features. One well-done theme beats two poorly-done ones.
 
+!!! tip "Урок"
+    **Не добавляй features без спроса. YAGNI.** Даже если feature кажется "nice to have", цена maintenance высока.
+
+    - Собирай feedback перед добавлением UI features
+    - Если feature не используется, удали её (dead code — source of bugs)
+    - Лучше одна хорошо-сделанная тема с OKLCH палитрой, чем две плохо-сделанные
+    - CSS и JS complexity для dark mode дублировали код и тестирование
+    - User confusion: toggle не discoverable → feature не используется
+
 ---
 
 ### Case Study 8: Pico.css → Tailwind CSS Migration (v0.8.0)
@@ -83,6 +146,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 **What was done:** Migrated to Tailwind CSS v4.2.2 with PostCSS build pipeline. Implemented Impeccable design system with 17 JS-referenced `fn-*` components. Used Newsreader/Source Sans 3/JetBrains Mono from Google Fonts.
 
 **Lesson learned:** Classless frameworks are trap for anything more complex than landing page. Evaluate UI ceiling at project start, not by current needs. Migration cost grows non-linearly with template count. Utility framework scales; classless doesn't.
+
+!!! tip "Урок"
+    **Classless CSS-фреймворки — ловушка для всего, что сложнее landing page.** Требования выросли за потолок Pico.css: OKLCH-палитра, компоненты, анимации.
+
+    - Оценивай потолок UI-требований на старте проекта (dashboard, timeline, cards), а не по текущим потребностям
+    - Стоимость миграции CSS растёт нелинейно с количеством шаблонов
+    - Утилитарный фреймворк (Tailwind) масштабируется; classless нет
+    - Миграция выявила потребность в дизайн-системе (Impeccable с 17 `fn-*` компонентами)
+    - Новая типография: Newsreader (заголовки) + Source Sans 3 (body) + JetBrains Mono (code)
 
 ---
 
@@ -96,7 +168,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **Result:** Leaked BSS +0.092 vs clean BSS +0.117 on same folds. Leak added noise, not signal.
 
-**Lesson learned:** Temporal cutoff requires time dimension in data, not global aggregation. Never use pre-aggregated data for temporal validation. Bucketed aggregates enable point-in-time queries. Always verify: no trades/signals dated > cutoff $T$.
+!!! tip "Урок"
+    **Temporal cutoff требует временного измерения в данных, не глобального агрегирования.** Это критично для walk-forward evaluation.
+
+    - Никогда не используй pre-aggregated data для temporal validation
+    - Bucketed/timestamped aggregates позволяют point-in-time queries: `avg_position_as_of_T WHERE time_bucket <= T`
+    - Всегда проверяй: есть ли trades/signals с датой > cutoff T? Если да, это leak
+    - Unit test: add explicit check что `as_of_date < cutoff_date` для всех test data
+    - Дизайн-паттерн: SUM(weighted_price_sum) / SUM(total_usd) для composable aggregates
+    - Результат: на тех же фолдах clean BSS = +0.117 (vs leaked +0.092); robust mean по 22 фолдам = +0.127
 
 ---
 
@@ -106,7 +186,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **What was done:** Changed join key to `conditionId`. Added documentation comments explaining both IDs.
 
-**Lesson learned:** When third-party API has multiple IDs, document purpose of each. Add code comments: "market.id: local (Gamma), market.conditionId: global (CLOB)". Test: fetch via both endpoints, verify both IDs return. Unit test: join on wrong ID must return 0 matches. Add assertion checking match count > 0.
+!!! tip "Урок"
+    **Когда third-party API имеет несколько IDs, документируй purpose каждого в code comments.**
+
+    - Добавь inline comment: `# conditionId: global (CLOB + Data API), id: local (Gamma marketplace)`
+    - Test: fetch market через оба endpoints, verify оба ID'а возвращаются
+    - Unit test: join на wrong ID должен вернуть 0 matches (catch этот конкретный баг)
+    - Добавь assertion: `assert len(matches) > 0, "No markets matched! Check join keys."`
+    - Версия v0.9.3: 99% signal loss из-за неправильного join key
+    - Дизайн-паттерн: для multi-ID API создай separate test, используя wrong ID
 
 ---
 
@@ -116,7 +204,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **What was done:** Added `@field_serializer` decorators converting `datetime.date` to ISO format. Alternative: use `model_dump(mode="json")` explicitly.
 
-**Lesson learned:** Serialization must be unit-tested. Never assume `model_dump()` yields JSON-ready dict. Test: `model_dump() → json.dumps() → json.loads()` round-trip. When adding date/datetime fields, immediately add serializer. Use `model_dump(mode="json")` in production (more explicit). Remember: Pydantic v2 requires explicit mode for JSON types.
+!!! tip "Урок"
+    **Serialization должна быть unit-tested. Никогда не предполагай, что `model_dump()` даст JSON-ready dict.**
+
+    - Pydantic v2 требует explicit `mode="json"` для JSON serialization (не default mode)
+    - Add test: `model_dump() → json.dumps() → json.loads()` round-trip для каждого schema с date/datetime
+    - При добавлении новых date/datetime fields, immediately add `@field_serializer`
+    - Используй `model_dump(mode="json")` в production code (explicit, не default)
+    - Pipeline проходит 9 стадий за 40 мин, crash на save = полная потеря результата (\$5-15 cost)
+    - Алтернатива: `model_dump(mode="json")` везде, но `@field_serializer` более локален
 
 ---
 
@@ -124,9 +220,17 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **Problem:** EventTrendAnalyzer requests JSON from LLM (e.g., Gemini Flash). When LLM returns truncated JSON (`finish_reason="length"`), catch-all exception handler returned empty dict `{}`. Downstream expected `EventThreads` (required fields), got `{}` → ValidationError → silent assessment drop → empty timeline.
 
-**What was done:** Distinguished JSON parse errors from validation errors. For parse errors: log and fallback to raw headlines. For validation errors: return structured default `EventThreads(threads=[])`. 
+**What was done:** Distinguished JSON parse errors from validation errors. For parse errors: log and fallback to raw headlines. For validation errors: return structured default `EventThreads(threads=[])`.
 
-**Lesson learned:** Never silently swallow exceptions. Either fail-fast or graceful fallback with logged reason. Distinguish error types (parse vs validation) — different fix strategies. Fallback value must have correct structure, not empty `{}`. Log exception content, not just message. Unit test: LLM returns truncated JSON, verify fallback works.
+!!! tip "Урок"
+    **Никогда не swallow exceptions молча. Either fail-fast или graceful fallback с logged reason.**
+
+    - Distinguish error types: parse errors vs validation errors имеют разные fix strategies
+    - Fallback value должен иметь корректную структуру (не `{}`, а `Model(field1=[], field2=None)`)
+    - Логируй exception content (e.g., `str(e)` или `e.json()`), не только message
+    - Unit test: LLM возвращает truncated JSON (`finish_reason="length"`), verify fallback works
+    - Дизайн-паттерн: distinguish JSON decode error (fallback to raw) vs validation error (return default)
+    - Версия v0.5.2: первый fix PromptParseError; v0.9.4: добавлен resilient event_identification с proper fallback
 
 ---
 
@@ -136,7 +240,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **What was done:** Wrapped check-and-update with `asyncio.Lock()`.
 
-**Lesson learned:** Shared state in async code requires synchronization primitives. Use `asyncio.Lock()` for read-modify-write. Never assume single-threaded safety in async context. Unit test: run concurrent calls with `asyncio.gather()`, verify atomicity. Code review: flag any `self.field =` in async function — potential race condition.
+!!! tip "Урок"
+    **Shared state в async code требует synchronization primitives (asyncio.Lock).**
+
+    - Используй `asyncio.Lock()` для защиты read-modify-write операций (TOCTOU fix)
+    - Никогда не предполагай, что single-threaded code безопасен в async context
+    - Unit test: запусти с `asyncio.gather()` несколько concurrent calls, verify atomicity
+    - Code review: флаг на любое `self.field = ...` в async function — potential race condition
+    - Race condition: Agent 1 reads, Agent 2 reads (оба видят 48), потом оба пишут → check bypassed
+    - Паттерн: `async with self._lock: [check and write]`
 
 ---
 
@@ -146,7 +258,14 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **What was done:** Raised default from 300s to 600s (2x p95 latency). Per-stage tuning: `outlet_historian` 300s (lightweight), `delphi_r2` 900s (complex multi-agent), others 600s.
 
-**Lesson learned:** Default timeouts must be based on 2x observed p95 latency, not optimistic averages. Monitor real latency before setting thresholds. Tune per-stage — one stage can be 10x heavier than another. Cascading timeout failure worse than extra 5 minutes wait.
+!!! tip "Урок"
+    **Дефолтные таймауты должны базироваться на 2× наблюдаемый p95 latency, а не на оптимистичных средних.**
+
+    - Мониторь реальные latency перед выставлением порогов (заведи метрики per stage)
+    - Настраивай таймауты per stage — одна стадия может быть 10× тяжелее другой
+    - Каскадный отказ от таймаута хуже, чем дополнительные 5 минут ожидания
+    - Версия v0.9.4: outlet_historian 300s, delphi_r2 900s (5 персон в медиации), остальные 600s
+    - Правило: `timeout = max(p95_latency) × 2`, не средние значения
 
 ---
 
@@ -156,7 +275,14 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **What was done:** Removed cap entirely. Discovered OpenRouter's credit reservation mechanism: `max_tokens` amount reserved upfront.
 
-**Lesson learned:** LLM API pricing models are non-obvious. Test cost impact of `max_tokens` before production. Check how provider handles it: billing by actual output or reserved cap? For OpenRouter: unlimited `max_tokens` cheaper than high fixed cap. Document pricing gotchas per provider.
+!!! tip "Урок"
+    **LLM API pricing модели неочевидны. Тестируй cost impact параметра `max_tokens` перед production deploy.**
+
+    - Проверяй, как провайдер обрабатывает `max_tokens`: billing по фактическому output или по зарезервированному?
+    - Для OpenRouter: unlimited `max_tokens` дешевле, чем высокий фиксированный cap (credit reservation gotcha)
+    - Документируй pricing gotchas для каждого LLM-провайдера в проектной wiki
+    - Версия v0.9.4: `max_tokens` установлен как None (unlimited)
+    - Обнаружено: `max_tokens=16384` резервирует \$5+ за call, даже если фактический выход 2000 tokens
 
 ---
 
@@ -166,7 +292,14 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **What was done:** Implemented per-stage incremental save. Each completed stage persists to `PipelineStep.output_data`. Worker can resume from last checkpoint.
 
-**Lesson learned:** Long-running pipelines must checkpoint after expensive steps. "All-or-nothing" unacceptable when each step costs dollars. Lost work cost proportional to stages without checkpoints. Checkpoint recovery saves time and money.
+!!! tip "Урок"
+    **Долгоживущие pipeline обязаны делать checkpoint после каждого дорогого шага. "Всё или ничего" неприемлемо.**
+
+    - Стоимость потерянной работы пропорциональна количеству стадий без checkpoint'ов
+    - Checkpoint recovery позволяет retry с последней точки, экономя и время, и деньги
+    - Паттерн: каждый stage записывает `PipelineStep.output_data` сразу после успешного завершения
+    - Версия v0.9.5: stage_callback в orchestrator сохраняет headlines после каждой стадии
+    - Если timeout на stage 8 (40 мин, \$5-15), пользователь всё равно видит draft headlines из stage 1-7
 
 ---
 
@@ -178,7 +311,13 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **Why deferred:** Data sparsity. Only ~100 of 348K informed bettors have >5 resolved bets per domain. BS on small N has huge variance. Stratifying drops 99% of bettors.
 
-**Lesson:** Don't add complexity for marginal gains (1–3% improvement) on limited data.
+!!! tip "Урок"
+    **Не добавляй complexity для marginal gains на limited data.** 1–3% улучшение требует 10× больше данных.
+
+    - Domain-specific BS обещает 1–3% BSS gain, но requires stratification
+    - Из 348K informed бетторов, только ~100 имеют >5 resolved bets per domain
+    - BS на малом N имеет огромную дисперсию (lucky streak классифицируется как INFORMED)
+    - Cost-benefit: effort > benefit
 
 ---
 
@@ -188,7 +327,13 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **Why deferred:** Speculative hypothesis needs special pipeline: working GDELT API, per-outlet RSS, temporal alignment (complex time model), validation unclear.
 
-**Lesson:** Research hypotheses need pilot data before full engineering effort.
+!!! tip "Урок"
+    **Research hypotheses требуют pilot data перед full engineering effort.** Не начинай building без evidence.
+
+    - Спекулятивная гипотеза требует специального pipeline: GDELT API (fixed в v0.9.4, но limited), RSS per outlet, temporal alignment (complex)
+    - Validation unclear: есть ли реальная correlation между news и bettor positions?
+    - Процесс: hypothesis → pilot data collection → evidence → full engineering
+    - Без pilot data это speculative, не engineering task
 
 ---
 
@@ -198,7 +343,13 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **Why deferred:** Pure research project, not engineering task. Requires novel statistical methods, publication-quality validation, large dataset, clear "belief" definition.
 
-**Lesson:** Distinguish engineering (solve known problem) from research (formulate new problem). Don't fill product roadmap with research ideas.
+!!! tip "Урок"
+    **Distinguish между engineering (solve known problem) и research (formulate new problem).** Не заполняй product roadmap research ideas.
+
+    - Иерархические модели требуют новых statistical methods (Bayesian hierarchical modeling)
+    - Publication-quality validation: peer review, reproducibility, novel methods
+    - Требуется четкое определение "belief" в контексте prediction markets
+    - Это research project, не engineering task (product roadmap != research agenda)
 
 ---
 
@@ -208,7 +359,14 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **Why deferred:** US-only, low ROI. ~500 active markets (vs Polymarket ~5000+), no public bettor profiles, higher regulation. Integration cost 3 days, result +200 low-quality markets, 0 new signals.
 
-**Lesson:** Evaluate ROI before adding data source. Not all APIs worth integrating.
+!!! tip "Урок"
+    **Evaluate ROI перед adding new data source.** Не все API'ов стоят интегрирования.
+
+    - Kalshi: ~500 active markets (vs Polymarket ~5000+)
+    - US-only coverage, higher regulation, no public bettor profiles (vs Polymarket on-chain transparency)
+    - Integration cost: ~3 days (API, schema changes, tests)
+    - Result: +200 рынков (низкое качество), 0 новых signals
+    - Cost-benefit: effort > benefit
 
 ---
 
@@ -218,7 +376,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 **Why deferred:** Cost-prohibitive. Unoptimized query: \$1.94/query. Optimized: \$0.04/query. 100-query batch: \$200-\$400. Alternative: free 15-minute CSV polling + local DuckDB. Total cost \$0, speed acceptable for monitoring.
 
-**Lesson:** Evaluate cloud costs vs local alternatives. Free polling beats paid queries.
+!!! tip "Урок"
+    **Evaluate cloud costs vs local alternatives. Free polling beats paid queries.** BigQuery viable для retrospective, но не для real-time.
+
+    - BigQuery pricing: \$6.25/TB (после 1 TB free/месяц)
+    - Unoptimized query: 311 GB scanned = \$1.94 per query
+    - Optimized query: 6.28 GB scanned = \$0.04 per query
+    - 100-query batch retrospective: \$200-\$400 (depends on optimization)
+    - Alternative: 15-minute CSV polling (free, 2–5 MB per batch) + local DuckDB
+    - Total cost: \$0, speed: достаточна для production monitoring
 
 ---
 

@@ -86,12 +86,38 @@ Token содержит следующие claims:
 ```json
 {
   "sub": "550e8400-e29b-41d4-a716-446655440000",  // user_id (subject)
-  "jti": "a7c5b9e1-2f3d-4a5f-8c9d-0e1f2a3b4c5d",  // jti (JWT ID, уникален)
-  "iat": 1701432000,                               // Issued At
-  "exp": 1702036800,                               // Expiration (7 дней)
-  "iat": <unix_timestamp>
+  "jti": "a7c5b9e1-2f3d-4a5f-8c9d-0e1f2a3b4c5d",  // JWT ID (уникален)
+  "iat": 1701432000,                               // Issued At (timestamp)
+  "exp": 1702036800                                // Expiration (7 дней)
 }
 ```
+
+#### JWT ID (jti) — уникальный идентификатор токена
+
+**Назначение:** Каждый токен получает уникальный идентификатор для возможной отозванности (future feature).
+
+```python
+# src/security/jwt.py
+def create_access_token(user_id: str, secret_key: str, expire_days: int = 7) -> str:
+    """Создаёт подписанный JWT с HS256."""
+    now = datetime.now(UTC)
+    payload = {
+        "sub": user_id,
+        "jti": str(uuid.uuid4()),  # UUID v4 — 128 бит энтропии
+        "iat": now,
+        "exp": now + timedelta(days=expire_days),
+    }
+    return jwt.encode(payload, secret_key, algorithm="HS256")
+```
+
+**Генерация:** `uuid.uuid4()` — криптографически случайный UUID (128 бит).
+
+**Использование:**
+
+- Настоящее: идентификация каждого токена (логирование, отладка)
+- Будущее: создание реестра отозванных токенов (token blacklist) при logout или смене пароля
+
+**Хранение:** На данный момент `jti` не хранится в БД, но может быть добавлено в таблицу `revoked_tokens` для реализации logout-функции.
 
 ### Параметры токена
 
@@ -122,11 +148,30 @@ def create_access_token(
 
 ```python
 # src/api/dependencies.py
-async def require_user(request: Request) -> User:
-    """Dependency для проверки JWT токена."""
-    token = extract_token_from_header(request)
-    payload = decode_access_token(token, settings.secret_key)
-    user = await load_user_from_db(payload["sub"])
+async def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> User | None:
+    """Опциональная авторизация — None если без токена."""
+    # 1. Извлечь токен из Bearer header или cookie
+    token = credentials.credentials if credentials else request.cookies.get("access_token")
+    
+    if token is None:
+        return None
+    
+    # 2. Декодировать JWT
+    try:
+        payload = decode_access_token(token, settings.secret_key)
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+    
+    # 3. Загрузить пользователя из БД
+    user_id = payload.get("sub")
+    user = await UserRepository.get_by_id(user_id)
+    
+    if user is None or not user.is_active:
+        return None
+    
     return user
 ```
 
@@ -328,7 +373,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         # 2. Для безопасных методов (GET, HEAD) — просто установить cookie
         if request.method in {"GET", "HEAD", "OPTIONS"}:
             response = await call_next(request)
-            response.set_cookie("csrf_token", token, httponly=False, samesite="lax")
+            response.set_cookie("csrf_token", token, httponly=False, samesite="lax", path="/")
             return response
         
         # 3. JSON API запросы защищены CORS + SameSite (exempt)
@@ -345,7 +390,19 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 ```
 
-### Поток
+#### Генерация токена
+
+**Место:** `src/security/csrf.py`, строка 27
+
+```python
+token = request.cookies.get("csrf_token") or secrets.token_urlsafe(32)
+```
+
+- `secrets.token_urlsafe(32)` — криптографически случайная строка (256 бит, base64-кодирована в ~43 символа)
+- Генерируется один раз при первом GET-запросе к странице
+- Устанавливается в HttpOnly=False cookie (требуется для чтения в JavaScript и отправки в форме)
+
+#### Поток валидации
 
 **На странице (Jinja2 шаблон):**
 
@@ -360,13 +417,30 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 </form>
 ```
 
-**При отправке формы:**
+**При отправке формы (form data, не JSON):**
 
-1. Browser отправляет cookie с `csrf_token`
-2. Browser отправляет form data с `csrf_token`
-3. Middleware проверяет совпадение (constant-time сравнение)
-4. Если совпадает — запрос пропускается
-5. Если не совпадает — `403 Forbidden`
+1. Browser прочитывает CSRF токен из cookie: `csrf_token_from_cookie`
+2. Browser отправляет токен в теле формы: `csrf_token_from_form`
+3. Middleware перехватывает запрос
+4. Middleware сравнивает `secrets.compare_digest(csrf_token_from_cookie, csrf_token_from_form)`
+5. Если совпадает → запрос пропускается дальше
+6. Если не совпадает → `403 Forbidden` с сообщением "CSRF token mismatch."
+
+**Защита от timing attacks:** `secrets.compare_digest()` выполняет constant-time сравнение (не выходит рано при первой ошибке).
+
+#### Защищённые эндпоинты
+
+**Требует CSRF токена (form data):**
+
+- `POST /api/v1/keys` — добавление API-ключей
+- `DELETE /api/v1/keys/{id}` — удаление API-ключей
+- `POST /api/v1/auth/logout` — logout из веб-UI
+
+**Защищены автоматически (CORS + SameSite):**
+
+- `POST /api/v1/predictions` (JSON API)
+- `POST /api/v1/auth/login` (JSON API)
+- `POST /api/v1/auth/register` (JSON API)
 
 ### JSON API запросы
 
@@ -387,6 +461,259 @@ fetch('/api/v1/keys', {
 
 !!! note "HttpOnly Cookie"
     JWT токены хранятся в HttpOnly cookie (`_set_auth_cookie` в `src/web/router.py`). Web UI использует cookie (не `Authorization` заголовок). Это защищает токен от XSS-атак — JavaScript не имеет доступа к cookie.
+
+---
+
+## SSRF Защита
+
+### Уязвимость
+
+Server-Side Request Forgery (SSRF) — когда приложение делает HTTP запросы на адреса, контролируемые пользователем, что позволяет атакующему получить доступ к приватным сетям или metadata endpoints.
+
+**Примеры опасных адресов:**
+
+- `http://127.0.0.1:6379` — локальный Redis (drain учётные данные)
+- `http://169.254.169.254/latest/meta-data/` — AWS metadata endpoint (IAM credentials)
+- `http://10.0.0.1:8080` — приватная сеть (внутренние сервисы)
+- `http://[::1]/admin` — IPv6 loopback
+
+### Решение: URL валидация
+
+Delphi Press валидирует все user-provided URLs перед server-side запросами:
+
+```python
+# src/utils/url_validator.py
+def validate_url_safe(url: str) -> None:
+    """Validate that a URL is safe for server-side requests."""
+    parsed = urlparse(url)
+    
+    # 1. Проверить scheme
+    if parsed.scheme not in {"http", "https"}:
+        raise SSRFBlockedError(url, f"scheme '{parsed.scheme}' not allowed")
+    
+    # 2. Проверить hostname не пустой
+    if not parsed.hostname:
+        raise SSRFBlockedError(url, "no hostname")
+    
+    # 3. Если hostname — IP литерал, проверить на private ranges
+    try:
+        addr = ipaddress.ip_address(parsed.hostname)
+        if _is_blocked(addr):
+            raise SSRFBlockedError(url, f"private IP {addr}")
+        return
+    except ValueError:
+        pass  # Not an IP literal, proceed to DNS resolution
+    
+    # 4. Если hostname — доменное имя, resolve и проверить IPs
+    try:
+        results = socket.getaddrinfo(parsed.hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except socket.gaierror:
+        return  # DNS failure — let the HTTP client handle it
+    
+    for family, _type, _proto, _canonname, sockaddr in results:
+        ip_str = sockaddr[0]
+        addr = ipaddress.ip_address(ip_str)
+        if _is_blocked(addr):
+            raise SSRFBlockedError(url, f"resolves to private IP {addr}")
+```
+
+#### Блокированные сети (IPv4 и IPv6)
+
+```python
+# src/utils/url_validator.py
+_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),        # Loopback
+    ipaddress.ip_network("10.0.0.0/8"),         # Private class A
+    ipaddress.ip_network("172.16.0.0/12"),      # Private class B
+    ipaddress.ip_network("192.168.0.0/16"),     # Private class C
+    ipaddress.ip_network("169.254.0.0/16"),     # Link-local (APIPA)
+    ipaddress.ip_network("::1/128"),            # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),           # IPv6 unique local (private)
+    ipaddress.ip_network("fe80::/10"),          # IPv6 link-local
+]
+```
+
+**Покрывает:**
+
+- **127.0.0.0/8** — localhost (127.0.0.1)
+- **10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16** — RFC 1918 private ranges
+- **169.254.0.0/16** — APIPA (кроме AWS metadata через DNS rebinding в некоторых случаях)
+- **IPv6 эквиваленты** — fc00::/7, fe80::/10
+
+#### Использование
+
+```python
+# src/data_sources/feed_discovery.py
+from src.utils.url_validator import validate_url_safe
+
+async def discover_feeds(outlet_domain: str):
+    """Discover RSS feeds for a news outlet."""
+    # SSRF protection
+    await validate_url_safe_async(f"https://{outlet_domain}")
+    
+    # Now safe to make HTTP request
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"https://{outlet_domain}")
+```
+
+**Raises:**
+
+- `SSRFBlockedError(url, reason)` — если URL pointing to blocked network
+
+### Async DNS (не блокирующее разрешение)
+
+#### Проблема
+
+В FastAPI async app, использование `socket.getaddrinfo()` (блокирующий вызов DNS) может заблокировать весь event loop:
+
+```python
+# BAD: блокирует весь event loop
+results = socket.getaddrinfo("example.com", 80)  # ~50ms DNS query
+```
+
+Пока один корутин ждёт DNS разрешения, другие корутины не могут выполняться.
+
+#### Решение: asyncio.to_thread()
+
+```python
+# src/utils/url_validator.py
+async def validate_url_safe_async(url: str) -> None:
+    """Async version — runs DNS resolution in a thread pool."""
+    import asyncio
+    
+    await asyncio.to_thread(validate_url_safe, url)
+```
+
+**Как работает:**
+
+1. `asyncio.to_thread(func, args)` запускает `func` в отдельном потоке из `ThreadPoolExecutor`
+2. Event loop продолжает обрабатывать другие корутины
+3. Когда DNS разрешение завершается, корутин возобновляется с результатом
+
+**Где используется:**
+
+- `await validate_url_safe_async(feed_url)` перед HTTP запросами на внешние сайты
+
+!!! warning "DNS Rebinding"
+    Даже с SSRF защитой есть атака **DNS Rebinding**: атакующий контролирует DNS сервер и возвращает разные IPs при повторных запросах (сначала публичный, потом приватный). Mitigation: либо повторная валидация перед HTTP запросом, либо использование DNS-over-HTTPS (DoH).
+
+---
+
+## Fail-fast на секреты
+
+### Проблема
+
+Hardcoded dev секреты в production могут привести к критическим уязвимостям:
+- `SECRET_KEY = "dev-insecure-key-change-in-production-32ch"` → все токены подделываются
+- `FERNET_KEY = "3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o="` → все API-ключи расшифровываются
+
+### Решение: Pydantic validators
+
+Delphi Press использует **model validators** (Pydantic v2) для fail-fast при старте в production:
+
+```python
+# src/config.py
+class Settings(LLMConfig):
+    """Центральная конфигурация приложения."""
+    
+    secret_key: str = Field(
+        default="dev-insecure-key-change-in-production-32ch",
+        description="Секретный ключ для подписи сессий и CSRF-токенов.",
+        min_length=32,
+    )
+    
+    fernet_key: str = Field(
+        default="3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o=",
+        description="Fernet encryption key for user API keys (base64, 32 bytes).",
+    )
+    
+    cors_origins: list[str] = Field(
+        default=["http://localhost:8000"],
+        description="Allowed CORS origins. Set explicitly in production.",
+    )
+    
+    _INSECURE_SECRET_KEY = "dev-insecure-key-change-in-production-32ch"
+    _INSECURE_FERNET_KEY = "3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o="
+    
+    @model_validator(mode="after")
+    def _reject_insecure_defaults_in_production(self) -> Settings:
+        """Fail-fast if production runs with hardcoded dev secrets."""
+        
+        # Only enforce when DEBUG=False AND DELPHI_PRODUCTION=1
+        if self.debug or not os.environ.get("DELPHI_PRODUCTION"):
+            return self  # Allow in dev/test
+        
+        # Check SECRET_KEY
+        if self.secret_key == self._INSECURE_SECRET_KEY:
+            raise ValueError(
+                "SECRET_KEY is set to the insecure dev default. "
+                "Set a strong SECRET_KEY in .env for production (min 32 chars)."
+            )
+        
+        # Check FERNET_KEY
+        if self.fernet_key == self._INSECURE_FERNET_KEY:
+            raise ValueError(
+                "FERNET_KEY is set to the insecure dev default. "
+                "Generate a new key: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+            )
+        
+        # Check CORS_ORIGINS
+        if self.cors_origins == ["*"]:
+            raise ValueError(
+                "CORS_ORIGINS=['*'] is not allowed in production. "
+                "Set explicit origins: CORS_ORIGINS='[\"https://yourdomain.com\"]'"
+            )
+        
+        return self
+```
+
+#### Поток
+
+**Development (DEBUG=True или DELPHI_PRODUCTION не установлен):**
+
+```bash
+$ python -m src.main
+# ✓ Works fine with dev defaults
+```
+
+**Production с забытыми секретами:**
+
+```bash
+$ docker run -e DELPHI_PRODUCTION=1 -e DEBUG=False <image>
+# ValueError: SECRET_KEY is set to the insecure dev default.
+# Application REFUSES TO START
+```
+
+**Production с правильными секретами:**
+
+```bash
+$ docker run \
+  -e DELPHI_PRODUCTION=1 \
+  -e DEBUG=False \
+  -e SECRET_KEY="$(openssl rand -base64 32)" \
+  -e FERNET_KEY="$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" \
+  <image>
+# ✓ Application starts normally
+```
+
+#### Где проверяется
+
+- `src/config.py` → `Settings._reject_insecure_defaults_in_production()` (model_validator)
+- Вызывается при создании Settings: `get_settings()` → `Settings()` (Pydantic validation)
+- Запускается **перед** созданием app, worker'а, DB connection — app не запустится
+
+!!! danger "DELPHI_PRODUCTION флаг"
+    В Docker Compose (production) обязательно установить:
+    
+    ```yaml
+    environment:
+      DELPHI_PRODUCTION: "1"
+      DEBUG: "false"
+      SECRET_KEY: "${SECRET_KEY}"
+      FERNET_KEY: "${FERNET_KEY}"
+    ```
+    
+    Без флага валидация пропускается (для локальной разработки).
 
 ---
 
@@ -655,6 +982,7 @@ access_log /var/log/nginx/access.log main;
 - [ ] `SECRET_KEY` установлен на 32+ символа (используйте `os.urandom(32).hex()`)
 - [ ] `FERNET_KEY` сгенерирован и сохранён `cryptography.fernet.Fernet.generate_key()`
 - [ ] `.env` файлы в `.gitignore` (никогда не коммитьте secrets)
+- [ ] `DELPHI_PRODUCTION=1` установлен в Docker (включает fail-fast валидацию)
 - [ ] CORS настроен правильно (`allow_origins` не `["*"]`)
 - [ ] Rate limiting включен в nginx
 - [ ] HTTPS работает (сертификаты Let's Encrypt действительны)
@@ -665,6 +993,7 @@ access_log /var/log/nginx/access.log main;
 - [ ] Логирование включено (access log + error log)
 - [ ] Резервные копии БД выполняются регулярно
 - [ ] Резервные копии `FERNET_KEY` хранятся отдельно
+- [ ] SSRF валидация включена для всех user-provided URLs
 
 ---
 
@@ -675,13 +1004,13 @@ access_log /var/log/nginx/access.log main;
 | A01:2021 – Broken Access Control | JWT + role-based checks |
 | A02:2021 – Cryptographic Failures | Fernet (AES-128-CBC), bcrypt |
 | A03:2021 – Injection | Pydantic validation, parameterized queries (SQLAlchemy) |
-| A04:2021 – Insecure Design | Security headers, rate limiting, CSRF protection |
-| A05:2021 – Security Misconfiguration | TLS 1.2+, disabled debug в production, secure defaults |
+| A04:2021 – Insecure Design | Security headers, rate limiting, CSRF protection, SSRF validation |
+| A05:2021 – Security Misconfiguration | TLS 1.2+, disabled debug в production, fail-fast на secrets, secure defaults |
 | A06:2021 – Vulnerable Components | Зависимости обновляются, используются modern versions |
-| A07:2021 – Authentication Failures | bcrypt + async hashing, JWT с HS256 |
+| A07:2021 – Authentication Failures | bcrypt + async hashing, JWT с HS256, timing attack protection |
 | A08:2021 – Data Integrity Failures | CSRF token validation, HTTPS everywhere |
 | A09:2021 – Logging/Monitoring Failures | Логирование auth events, exception handlers |
-| A10:2021 – SSRF | API ключи используются только для OpenRouter (trusted partner) |
+| A10:2021 – SSRF | SSRF валидация для всех user-provided URLs, async DNS |
 
 ---
 
@@ -693,3 +1022,4 @@ access_log /var/log/nginx/access.log main;
 - [cryptography.fernet](https://cryptography.io/en/latest/fernet/)
 - [Mozilla Security Headers](https://infosec.mozilla.org/guidelines/web_security)
 - [HSTS Preload List](https://hstspreload.org/)
+- [OWASP SSRF Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html)

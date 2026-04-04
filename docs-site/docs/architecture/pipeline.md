@@ -19,6 +19,112 @@
 !!! note "Что такое min_successful?"
     Минимальное число агентов, которые должны завершиться успешно для продолжения pipeline. Обеспечивает graceful degradation: если одни агенты отказали, другие достаточно.
 
+## Отказоустойчивость пайплайна
+
+Delphi Press реализует несколько механизмов для предотвращения потери данных при сбоях на поздних стадиях:
+
+### Инкрементальное сохранение (stage_callback)
+
+После каждой завершённой стадии (успешной или нет) запускается **stage_callback** — асинхронный callback, который сохраняет прогресс в БД:
+
+```
+Stage N завершена → emit_stage_complete() → stage_callback() → save PipelineStep + headlines
+```
+
+**Что сохраняется:**
+
+- **PipelineStep**: метрики стадии (stage_name, duration_ms, LLM-токены, стоимость, статус)
+- **Заголовки (headlines)**:
+  - После стадии 8 (GENERATION): draft заголовки из `generated_headlines` (текст + первый абзац)
+  - После стадии 9 (QUALITY_GATE) при успехе: final заголовки из `final_predictions` (заменяют draft)
+
+**Где это реализовано:** `src/worker.py` — функции `_make_stage_callback()`, `_build_draft_headlines()`, `_build_final_headlines()`.
+
+### Атомарная замена заголовков
+
+Переход draft → final гарантирует консистентность:
+
+```python
+async def replace_headlines(
+    prediction_id: str,
+    headlines_data: list[dict[str, Any]],
+) -> list[Headline]:
+    """Удалить старые, вставить новые в одной транзакции."""
+    await session.execute(delete(Headline).where(...))  # atomic delete
+    await session.flush()
+    return await save_headlines(prediction_id, headlines_data)  # atomic insert
+```
+
+Если задача прерывается между generation и quality_gate:
+
+- Пользователь получит draft заголовки (достаточно информативные)
+- Когда quality_gate переделается (retry), они заменяются на final
+
+**Где реализовано:** `src/db/repositories.py` — `replace_headlines()`.
+
+### Обработка ошибок воркера
+
+При сбое на любой стадии:
+
+| Сценарий | Поведение | Результат |
+|---|---|---|
+| **Агент отказал, но min_successful ≥ 1** | Стадия продолжается с успешными агентами | Pipeline не прерывается |
+| **min_successful не достигнут** | Стадия возвращает error | Pipeline останавливается на этой стадии |
+| **Pipeline.run_prediction() упал** | Оркестратор возвращает PredictionResponse с status='failed' | Уже сохранённые данные сохраняются (headlines, pipeline_steps) |
+| **Воркер убит (timeout/shutdown)** | asyncio.CancelledError перехватывается, обновляется DB | Статус = FAILED + error_message='Task cancelled' |
+| **Краш воркера** | Exception перехватывается в run_prediction_task() | DB обновляется + error логируется |
+
+**Где реализовано:**
+
+- Orc stages: `src/agents/orchestrator.py` — метод `_run_stage()` (lines 246–284)
+- Worker error handling: `src/worker.py` — `run_prediction_task()` (lines 376–418)
+- Min_successful logic: `orchestrator.py` (line 262: `if successful_count < min_required`)
+
+### Восстановление затрат на LLM
+
+Ключевое преимущество инкрементального сохранения: **затраты на LLM ранних стадий не теряются**.
+
+Пример:
+
+1. **Stage 1–5** успешны: потрачено \$12,00
+2. **Stage 7** (Framing) падает: потрачено \$14,00
+3. Пользователь видит error в API
+4. **Но:** PipelineSteps и промежуточные данные уже в БД
+5. При retry (новый вызов API):
+   - Stage 1–6 переделаны (переполучены эмбеддинги)
+   - Stage 7+ переделаны (новые LLM-вызовы)
+   - Старые затраты записаны в old PipelineSteps
+
+!!! warning "Текущее ограничение"
+    На данный момент **нет встроенного checkpoint-restart**: пайплайн перезапускается с нуля (Stage 1). Архив старых PipelineSteps сохраняется для анализа, но не переиспользуется. Это спроектировано так намеренно: пересчёт ранних стадий обычно дешевле (Gemini-flash), чем комплексность развилок в коде.
+
+### Cleanup при сбое воркера
+
+При старте воркера выполняется **crash recovery** (startup hook):
+
+```python
+# src/worker.py, startup()
+stuck_statuses = [
+    PredictionStatus.COLLECTING,
+    PredictionStatus.ANALYZING,
+    PredictionStatus.FORECASTING,
+    PredictionStatus.GENERATING,
+]
+cutoff = datetime.now(UTC) - timedelta(minutes=30)
+
+# Помечаем потерянные задачи как FAILED (старше 30 мин)
+update(Prediction).where(
+    Prediction.status.in_(stuck_statuses),
+    Prediction.created_at < cutoff,
+).values(status=PredictionStatus.FAILED)
+```
+
+Если воркер упал во время задачи:
+
+- Через 30 минут задача автоматически помечается как FAILED
+- Пользователь получает уведомление о таймауте
+- Может переправить прогноз (новая задача в очереди)
+
 ## 18 агентов, 27 LLM-задач
 
 | Агент | Стадия | LLM-задачи | Слоты контекста | Файл |
