@@ -32,7 +32,15 @@ COPY src/ ./src/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
 
-# ── Stage 2: Runtime ─────────────────────────────────────────────────────────
+# ── Stage 2: Docs Builder (MkDocs) ───────────────────────────────────────────
+FROM python:3.12-slim AS docs-builder
+
+WORKDIR /build
+COPY docs-site/ docs-site/
+RUN pip install --no-cache-dir mkdocs-material pymdown-extensions \
+    && mkdocs build -f docs-site/mkdocs.yml -d docs-site/site
+
+# ── Stage 3: Runtime ─────────────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime
 
 RUN apt-get update && \
@@ -55,6 +63,9 @@ COPY --chown=appuser:appgroup scripts/download_profiles.py /app/scripts/download
 # Entrypoint (downloads profiles if missing)
 COPY --chown=appuser:appgroup docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
+
+# Copy built MkDocs site
+COPY --from=docs-builder /build/docs-site/site /app/docs-site/site
 
 # Data directories (SQLite + inverse profiles)
 RUN mkdir -p /app/data /app/data/inverse && chown -R appuser:appgroup /app/data

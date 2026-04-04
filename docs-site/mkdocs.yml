@@ -1,0 +1,103 @@
+site_name: Delphi Press — Методология
+site_description: Внутренняя документация системы прогнозирования заголовков СМИ
+site_url: https://delphi.antopkin.ru/docs/
+repo_url: https://github.com/Antopkin/delphi-press
+repo_name: Antopkin/delphi-press
+
+theme:
+  name: material
+  language: ru
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Тёмная тема
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Светлая тема
+  font:
+    text: Source Sans 3
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - overrides/stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.mark
+  - pymdownx.critic
+  - pymdownx.keys
+  - tables
+  - footnotes
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+extra_javascript:
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Antopkin/delphi-press
+    - icon: fontawesome/brands/telegram
+      link: https://t.me/Antopkin
+
+nav:
+  - Главная: index.md
+  - Архитектура:
+    - Обзор системы: architecture/overview.md
+    - "Pipeline: 9 стадий": architecture/pipeline.md
+    - LLM-инфраструктура: architecture/llm.md
+  - Сбор данных:
+    - Стадии 1–2: data-collection/stages-1-2.md
+  - Метод Дельфи:
+    - Анализ (стадия 3): delphi-method/analysis.md
+    - Раунды Дельфи (стадии 4–5): delphi-method/delphi-rounds.md
+  - Генерация:
+    - Стадии 6–9: generation/stages-6-9.md
+  - Polymarket:
+    - Обратная задача: polymarket/inverse.md
+  - Оценка качества:
+    - Метрики: evaluation/metrics.md
+  - Dead Ends:
+    - 21 case study: dead-ends/case-studies.md
+  - Дорожная карта:
+    - Задачи и backlog: roadmap/tasks.md
+    - Дискуссия — архетипы: roadmap/discussion.md
+  - Приложения:
+    - Data Flow: appendix/data-flow.md
+    - Промпты агентов: appendix/prompts.md
+    - Известные ограничения: appendix/gotchas.md
+    - Библиография: bibliography.md

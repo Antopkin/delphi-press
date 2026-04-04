@@ -33,5 +33,8 @@ data/inverse/*
 *.fdb_latexmk
 *.synctex.gz
 docs/research/*.pdf
+# MkDocs build output
+docs-site/site/
+docs-site/docs-site/
 # Снимок конфигурации сервера (локальный)
 docs/server-migration-snapshot.md
