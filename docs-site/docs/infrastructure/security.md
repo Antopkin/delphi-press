@@ -385,8 +385,8 @@ fetch('/api/v1/keys', {
 - SameSite=Lax cookie не отправляется cross-site
 - Вредоносный сайт не может прочитать JWT токен (HttpOnly невозможно из-за архитектуры)
 
-!!! note "HttpOnly"
-    JWT токены хранятся в localStorage (не HttpOnly), т.к. их нужно передавать в `Authorization` заголовке. CSRF защита для JSON API работает через CORS.
+!!! note "HttpOnly Cookie"
+    JWT токены хранятся в HttpOnly cookie (`_set_auth_cookie` в `src/web/router.py`). Web UI использует cookie (не `Authorization` заголовок). Это защищает токен от XSS-атак — JavaScript не имеет доступа к cookie.
 
 ---
 

@@ -1,275 +1,275 @@
-# Stage 3: Trajectory Analysis & Assessments
+# Стадия 3: Анализ траектории и оценки
 
-## Three Parallel Analyst Agents
+## Три параллельных аналитических агента
 
-At Stage 3 (Trajectory Analysis), event threads identified by `EventTrendAnalyzer` flow into three specialized analytical agents working in **parallel**:
+На стадии 3 (анализ траектории) событийные нити, идентифицированные `EventTrendAnalyzer`, поступают в три специализированных аналитических агента, работающих **параллельно**:
 
-1. **GeopoliticalAnalyst** — Strategic actors, power dynamics, escalation probability, military and sanction implications
-2. **EconomicAnalyst** — Affected economic indicators, market impacts, supply chains, fiscal implications
-3. **MediaAnalyst** — Event media value assessment through six-dimensional Galtung & Ruge (1965) framework
+1. **GeopoliticalAnalyst** — Стратегические акторы, динамика власти, вероятность эскалации, военные и санкционные последствия
+2. **EconomicAnalyst** — Затронутые экономические индикаторы, влияние на рынки, цепочки поставок, фискальные последствия
+3. **MediaAnalyst** — Оценка медийной ценности события через шестимерный фреймворк Galtung & Ruge (1965)
 
-Each analyst produces an assessment (`GeopoliticalAssessment`, `EconomicAssessment`, `MediaAssessment`) for every event thread. Minimum successful analysts: 2 out of 3; the architecture tolerates failure of one analyst.
+Каждый аналитик производит оценку (`GeopoliticalAssessment`, `EconomicAssessment`, `MediaAssessment`) для каждой событийной нити. Минимум успешных аналитиков: 2 из 3; архитектура допускает отказ одного аналитика.
 
 ### GeopoliticalAnalyst
 
-**File**: `src/agents/analysts/geopolitical.py`
+**Файл**: `src/agents/analysts/geopolitical.py`
 
-**LLM Model**: `anthropic/claude-opus-4.6` (primary, fallback: claude-sonnet-4.5)
+**LLM модель**: `anthropic/claude-opus-4.6` (основная, fallback: claude-sonnet-4.5)
 
-For each event thread, the agent constructs a profile of strategic actors and power relationships:
+Для каждой событийной нити агент создаёт профиль стратегических акторов и отношений власти:
 
-- **Strategic actors** (2–5 per thread): States, alliances (NATO, SCO), international organizations (UN, EU, WTO)
-  - Each actor has: name, role (initiator/target/mediator/ally/observer/spoiler), interests, likely actions, leverage points
-- **Power dynamics**: Description of relative strength and positioning
-- **Alliance shifts**: Possible realignment or coalition changes
-- **Escalation probability** (0–1): Numeric forecast for military/diplomatic escalation
-- **Second-order effects** (3–5): Causal chains showing cascading reactions between actors
-- **Sanctions risk**: Assessment level (none/low/medium/high/imminent)
-- **Military implications**: If applicable to the event
-- **Headline angles**: Geopolitical framing opportunities for news outlets
+- **Стратегические акторы** (2–5 на нить): Государства, альянсы (НАТО, ШОС), международные организации (ООН, ЕС, ВТО)
+  - Каждый актор имеет: имя, роль (инициатор/цель/медиатор/союзник/наблюдатель/противник), интересы, вероятные действия, точки давления
+- **Динамика власти**: Описание относительной силы и позиционирования
+- **Сдвиги альянсов**: Возможное переформатирование или смена коалиций
+- **Вероятность эскалации** (0–1): Численный прогноз для военной/дипломатической эскалации
+- **Эффекты второго порядка** (3–5): Причинно-следственные цепи, показывающие каскадные реакции между акторами
+- **Риск санкций**: Уровень оценки (нет/низкий/средний/высокий/неминуемый)
+- **Военные последствия**: Если применимо к событию
+- **Углы фрейминга**: Возможности геополитического фреймирования для новостных агентств
 
-**Output**: `GeopoliticalAssessment` schema (see below).
+**Вывод**: схема `GeopoliticalAssessment` (см. ниже).
 
 ### EconomicAnalyst
 
-**File**: `src/agents/analysts/economic.py`
+**Файл**: `src/agents/analysts/economic.py`
 
-**LLM Model**: `anthropic/claude-opus-4.6` (primary, fallback: claude-sonnet-4.5)
+**LLM модель**: `anthropic/claude-opus-4.6` (основная, fallback: claude-sonnet-4.5)
 
-For each event thread, the agent forecasts economic impacts:
+Для каждой событийной нити агент прогнозирует экономические последствия:
 
-- **Affected indicators** (list): Currency pairs, commodity prices (oil, metals), stock indices, bond spreads
-  - Each indicator: name, direction (up/down/neutral/volatile), magnitude (low/medium/high), confidence (0–1), timeframe (immediate/days/weeks/months)
-- **Market impact**: Overall market direction (strongly_negative → strongly_positive)
-- **Affected sectors**: Which industries face direct exposure
-- **Supply chain impact**: Geographic breaks, production/logistics disruptions
-- **Fiscal calendar events**: Related government budget/policy events
-- **Central bank signals**: Policy adjustments or forward guidance triggered
-- **Trade flow impact**: Changes to import/export volumes and routes
-- **Commodity prices**: Specific commodity markets affected
-- **Employment impact**: Labor market effects
-- **Headline angles**: Economic framing opportunities
+- **Затронутые индикаторы** (список): Валютные пары, цены на сырьё (нефть, металлы), фондовые индексы, спреды облигаций
+  - Каждый индикатор: имя, направление (вверх/вниз/нейтрально/волатильно), масштаб (низкий/средний/высокий), уверенность (0–1), временной горизонт (неотложно/дни/недели/месяцы)
+- **Влияние на рынок**: Общее направление рынка (резко_отрицательное → резко_положительное)
+- **Затронутые секторы**: Какие отрасли испытывают прямое воздействие
+- **Влияние на цепочку поставок**: Географические разрывы, нарушения производства/логистики
+- **События фискального календаря**: Связанные события бюджета/политики государства
+- **Сигналы центральных банков**: Корректировки политики или перспективные ориентиры
+- **Влияние на потоки торговли**: Изменения объёмов и маршрутов импорта/экспорта
+- **Цены на сырьё**: Затронутые рынки сырья
+- **Влияние на занятость**: Эффекты на рынке труда
+- **Углы фрейминга**: Возможности экономического фреймирования
 
-**Output**: `EconomicAssessment` schema (see below).
+**Вывод**: схема `EconomicAssessment` (см. ниже).
 
 ### MediaAnalyst
 
-**File**: `src/agents/analysts/media.py`
+**Файл**: `src/agents/analysts/media.py`
 
-**LLM Model**: `anthropic/claude-opus-4.6` (primary, fallback: claude-sonnet-4.5)
+**LLM модель**: `anthropic/claude-opus-4.6` (основная, fallback: claude-sonnet-4.5)
 
-Unique to this agent: it receives the target outlet's `OutletProfile` (from Stage 1) to assess coverage likelihood for that **specific outlet**, not just generic newsworthiness.
+Уникальность этого агента: он получает `OutletProfile` целевого агентства (с этапа 1) для оценки вероятности освещения именно **этим конкретным агентством**, а не просто общей новостной ценности.
 
-For each event thread, relative to the outlet, the agent assesses:
+Для каждой событийной нити относительно агентства агент оценивает:
 
-- **Newsworthiness** (six dimensions, Galtung & Ruge 1965):
-  - **Timeliness** (0–1): Event occurs now, not archived
-  - **Impact** (0–1): Scale of affected persons/assets/systems
-  - **Prominence** (0–1): Known figures, celebrities, industry leaders involved
-  - **Proximity** (0–1): Geographic, cultural, or thematic closeness to outlet's audience
-  - **Conflict** (0–1): Presence of explicit opposition, tension, or emotional charge
-  - **Novelty** (0–1): Event is unexpected, radically different from precedent
-- **Editorial fit** (0–1): Alignment with outlet's editorial line (from profile)
-- **Editorial fit explanation**: Why the story fits or doesn't fit
-- **News cycle position**: breaking/developing/emerging/declining
-- **Saturation** (0–1): How long topic has been in news (>14 days straight → newsroom seeks fresh angle)
-- **Coverage probability** (0–1): Forecast of publication likelihood for this outlet
-- **Predicted prominence**: Where story would appear if covered (top_headline/major/secondary/brief/ignore)
-- **Likely framing**: Expected angle/tone for this outlet
-- **Competing stories**: Other stories competing for space on target date
-- **Headline angles**: Framing opportunities tailored to outlet voice
+- **Новостная ценность** (шесть измерений, Galtung & Ruge 1965):
+  - **Своевременность** (0–1): События происходят сейчас, не в архиве
+  - **Влияние** (0–1): Масштаб затронутых лиц/активов/систем
+  - **Значимость** (0–1): Известные личности, знаменитости, лидеры отрасли в центре событий
+  - **Близость** (0–1): Географическая, культурная или тематическая близость к аудитории агентства
+  - **Конфликт** (0–1): Наличие явного противостояния, напряжения или эмоционального заряда
+  - **Новизна** (0–1): Событие неожиданно, радикально отличается от прецедентов
+- **Редакционное соответствие** (0–1): Согласованность с редакционной линией агентства (из профиля)
+- **Объяснение редакционного соответствия**: Почему история подходит или не подходит
+- **Позиция в новостном цикле**: breaking/developing/emerging/declining
+- **Насыщение** (0–1): Как долго тема находится в новостях (>14 дней подряд → редакция ищет свежий угол)
+- **Вероятность освещения** (0–1): Прогноз вероятности публикации для этого агентства
+- **Предсказанная значимость**: Где появится история при её освещении (top_headline/major/secondary/brief/ignore)
+- **Вероятный фрейминг**: Ожидаемый угол/тон для этого агентства
+- **Конкурирующие истории**: Другие истории, конкурирующие за место в целевую дату
+- **Углы фрейминга**: Возможности фреймирования, адаптированные к голосу агентства
 
-**Output**: `MediaAssessment` schema (see below).
+**Вывод**: схема `MediaAssessment` (см. ниже).
 
 ---
 
-## Trajectory Modeling
+## Траекторийное моделирование
 
-After parallel analysis, each event thread receives an `EventTrajectory` describing its development path.
+После параллельного анализа каждая событийная нить получает `EventTrajectory`, описывающую её путь развития.
 
-### EventTrajectory Schema
+### Схема EventTrajectory
 
-| Field | Type | Purpose |
+| Поле | Тип | Назначение |
 |---|---|---|
-| `thread_id` | str | Reference to `EventThread.id` |
-| `current_state` | str | Current situation description (2–3 sentences) |
-| `momentum` | str | Development vector: escalating, stable, de_escalating, emerging, culminating, fading |
-| `momentum_explanation` | str | Why the event has this momentum |
-| `scenarios` | list[Scenario] | 2–4 scenario variants; min 2, max 4 |
-| `key_drivers` | list[str] | 3–5 forces determining development |
-| `uncertainties` | list[str] | 2–3 major uncertainty points |
+| `thread_id` | str | Ссылка на `EventThread.id` |
+| `current_state` | str | Описание текущей ситуации (2–3 предложения) |
+| `momentum` | str | Вектор развития: escalating, stable, de_escalating, emerging, culminating, fading |
+| `momentum_explanation` | str | Почему событие имеет такой momentum |
+| `scenarios` | list[Scenario] | 2–4 варианта сценариев; мин. 2, макс. 4 |
+| `key_drivers` | list[str] | 3–5 сил, определяющих развитие |
+| `uncertainties` | list[str] | 2–3 основные точки неопределённости |
 
-**Momentum** describes short-term development:
+**Momentum** описывает краткосрочное развитие:
 
-- **escalating**: Situation intensifies; crisis likelihood rises
-- **stable**: Status quo maintained; no major changes expected
-- **de_escalating**: Tension declining; crisis has passed peak
-- **emerging**: New event just appearing in media space
-- **culminating**: Event approaching critical point, resolution, climax
-- **fading**: Event losing topicality; media attention falling
+- **escalating**: Ситуация интенсифицируется; вероятность кризиса растёт
+- **stable**: Статус-кво сохраняется; кардинальных изменений не ожидается
+- **de_escalating**: Напряжение падает; кризис миновал пик
+- **emerging**: Новое событие только что появляется в информационном пространстве
+- **culminating**: Событие приближается к критической точке, разрешению, апогею
+- **fading**: Событие теряет актуальность; медийное внимание падает
 
-### Scenario Schema
+### Схема Scenario
 
-Each `Scenario` in the `scenarios` list contains:
+Каждый `Scenario` в списке `scenarios` содержит:
 
-| Field | Type | Purpose |
+| Поле | Тип | Назначение |
 |---|---|---|
 | `scenario_type` | ScenarioType | baseline, optimistic, pessimistic, black_swan, wildcard |
-| `description` | str | Scenario summary (2–3 sentences) |
-| `probability` | float | Assigned probability (0.0–1.0); sum across all scenarios = 1.0 |
-| `key_indicators` | list[str] | 2–3 signs pointing to scenario realization |
-| `headline_potential` | str | Possible headline this scenario could generate |
+| `description` | str | Резюме сценария (2–3 предложения) |
+| `probability` | float | Назначенная вероятность (0.0–1.0); сумма всех сценариев = 1.0 |
+| `key_indicators` | list[str] | 2–3 признака, указывающих на реализацию сценария |
+| `headline_potential` | str | Возможный заголовок, который может сгенерировать этот сценарий |
 
-**Scenario Types** (5 total):
+**Типы сценариев** (всего 5):
 
-1. **BASELINE** — Most likely development given current trajectory
-2. **OPTIMISTIC** — Situation improves on key parameters
-3. **PESSIMISTIC** — Situation deteriorates
-4. **BLACK_SWAN** — Extreme, previously unthinkable turn
-5. **WILDCARD** — Surprising but plausible development requiring activation of identified risks
+1. **BASELINE** — Наиболее вероятное развитие при текущей траектории
+2. **OPTIMISTIC** — Ситуация улучшается по ключевым параметрам
+3. **PESSIMISTIC** — Ситуация ухудшается
+4. **BLACK_SWAN** — Экстремальный, ранее немыслимый поворот
+5. **WILDCARD** — Удивительное, но правдоподобное развитие, требующее активации выявленных рисков
 
 !!! note
-    Probabilities across all scenarios must sum to 1.0. The framework supports 2–4 scenarios per thread (typically 3).
+    Вероятности всех сценариев должны суммироваться до 1.0. Фреймворк поддерживает 2–4 сценария на нить (типично 3).
 
 ---
 
-## Cross-Impact Matrix
+## Матрица перекрёстного влияния
 
-Events in information space are not independent. One event's development affects others' probability, creating feedback loops.
+События в информационном пространстве не являются независимыми. Развитие одного события влияет на вероятность других, создавая обратные связи.
 
-The cross-impact matrix is built as a **sparse representation** — only meaningful connections included:
+Матрица перекрёстного влияния строится как **разреженное представление** — включены только значимые связи:
 
 $$\text{CrossImpactEntry:} \quad (\text{source\_thread\_id}, \text{target\_thread\_id}, \text{impact\_score}) \in \mathbb{R}$$
 
-where:
+где:
 
-- **source_thread_id** — causal event ID
-- **target_thread_id** — consequence event ID
-- **impact_score** $\in [-1.0, 1.0]$ — influence strength and direction:
-  - $> 0$ — reinforcing influence (source accelerates, makes target more likely)
-  - $< 0$ — dampening influence (source slows, makes target less likely)
-  - $= 0$ — no influence (typically omitted from matrix)
+- **source_thread_id** — ID причинного события
+- **target_thread_id** — ID события-следствия
+- **impact_score** $\in [-1.0, 1.0]$ — сила и направление влияния:
+  - $> 0$ — усиливающее влияние (источник ускоряет, повышает вероятность целевого события)
+  - $< 0$ — ослабляющее влияние (источник замедляет, снижает вероятность целевого события)
+  - $= 0$ — отсутствие влияния (обычно исключается из матрицы)
 
-For a typical 20-event portfolio, the full matrix has $20 \times 19 = 380$ potential pairs. In practice, 30–50 meaningful connections exist. This sparsity is critical for Delphi scalability.
+Для типичного портфеля из 20 событий полная матрица имеет $20 \times 19 = 380$ потенциальных пар. На практике существует 30–50 значимых соединений. Эта разреженность критична для масштабируемости Дельфи-метода.
 
-### CrossImpactMatrix Schema
+### Схема CrossImpactMatrix
 
-| Field | Type | Purpose |
+| Поле | Тип | Назначение |
 |---|---|---|
-| `entries` | list[CrossImpactEntry] | Sparse impact relationships (empty list if <2 threads) |
-| `generated_at` | datetime | Timestamp of matrix generation (UTC) |
+| `entries` | list[CrossImpactEntry] | Разреженные отношения влияния (пустой список если <2 нитей) |
+| `generated_at` | datetime | Временная метка создания матрицы (UTC) |
 
-where `CrossImpactEntry` contains:
+где `CrossImpactEntry` содержит:
 
-| Field | Type | Purpose |
+| Поле | Тип | Назначение |
 |---|---|---|
-| `source_thread_id` | str | ID of causal event thread |
-| `target_thread_id` | str | ID of consequence event thread |
-| `impact_score` | float | Influence magnitude $\in [-1.0, 1.0]$ |
-| `explanation` | str | Brief explanation of causal mechanism |
+| `source_thread_id` | str | ID причинной событийной нити |
+| `target_thread_id` | str | ID событийной нити-следствия |
+| `impact_score` | float | Величина влияния $\in [-1.0, 1.0]$ |
+| `explanation` | str | Краткое объяснение причинного механизма |
 
 ---
 
-## Assessment Schemas
+## Схемы оценок
 
 ### NewsworthinessScore
 
-Six-dimensional assessment used by `MediaAnalyst`:
+Шестимерная оценка, используемая `MediaAnalyst`:
 
-| Dimension | Field | Range | Meaning |
+| Измерение | Поле | Диапазон | Значение |
 |---|---|---|---|
-| 1 | `timeliness` | [0, 1] | Event occurs now vs. archived |
-| 2 | `impact` | [0, 1] | Scale of affected persons/assets |
-| 3 | `prominence` | [0, 1] | Known figures involved |
-| 4 | `proximity` | [0, 1] | Geographic/cultural closeness to audience |
-| 5 | `conflict` | [0, 1] | Presence of opposition/tension |
-| 6 | `novelty` | [0, 1] | Unexpectedness; departure from precedent |
+| 1 | `timeliness` | [0, 1] | Событие происходит сейчас vs. в архиве |
+| 2 | `impact` | [0, 1] | Масштаб затронутых лиц/активов |
+| 3 | `prominence` | [0, 1] | Известные личности в центре |
+| 4 | `proximity` | [0, 1] | Географическая/культурная близость к аудитории |
+| 5 | `conflict` | [0, 1] | Наличие противостояния/напряжения |
+| 6 | `novelty` | [0, 1] | Неожиданность; отклонение от прецедентов |
 
-**Composite score** (weighted average):
+**Композитная оценка** (средневзвешенное):
 
 $$\text{composite} = 0.25 \times \text{impact} + 0.20 \times \text{timeliness} + 0.20 \times \text{prominence} + 0.15 \times \text{conflict} + 0.10 \times \text{proximity} + 0.10 \times \text{novelty}$$
 
 ### GeopoliticalAssessment
 
-Output schema of `GeopoliticalAnalyst`:
+Выходная схема `GeopoliticalAnalyst`:
 
-| Field | Type | Purpose |
+| Поле | Тип | Назначение |
 |---|---|---|
-| `thread_id` | str | Reference to `EventThread.id` |
-| `strategic_actors` | list[StrategicActor] | 2–5 key geopolitical players |
-| `power_dynamics` | str | Description of relative strength |
-| `alliance_shifts` | list[str] | Possible coalition realignments |
-| `escalation_probability` | float | [0, 1] probability of escalation |
-| `second_order_effects` | list[str] | 3–5 cascading effects |
-| `sanctions_risk` | str | none/low/medium/high/imminent |
-| `military_implications` | str | Military consequences (if applicable) |
-| `headline_angles` | list[str] | Geopolitical framing opportunities |
+| `thread_id` | str | Ссылка на `EventThread.id` |
+| `strategic_actors` | list[StrategicActor] | 2–5 ключевых геополитических игроков |
+| `power_dynamics` | str | Описание относительной силы |
+| `alliance_shifts` | list[str] | Возможные переформатирования коалиций |
+| `escalation_probability` | float | [0, 1] вероятность эскалации |
+| `second_order_effects` | list[str] | 3–5 каскадных эффектов |
+| `sanctions_risk` | str | нет/низкий/средний/высокий/неминуемый |
+| `military_implications` | str | Военные последствия (если применимо) |
+| `headline_angles` | list[str] | Возможности геополитического фреймирования |
 
-where `StrategicActor` contains:
+где `StrategicActor` содержит:
 
-| Field | Type | Purpose |
+| Поле | Тип | Назначение |
 |---|---|---|
-| `name` | str | Actor name (country, leader, organization) |
-| `role` | str | initiator/target/mediator/ally/observer/spoiler |
-| `interests` | list[str] | Key interests at stake |
-| `likely_actions` | list[str] | Probable near-term moves |
-| `leverage` | str | Economic/military/diplomatic/information tools |
+| `name` | str | Имя актора (страна, лидер, организация) |
+| `role` | str | инициатор/цель/медиатор/союзник/наблюдатель/противник |
+| `interests` | list[str] | Ключевые интересы в игре |
+| `likely_actions` | list[str] | Вероятные ближайшие шаги |
+| `leverage` | str | Экономические/военные/дипломатические/информационные инструменты |
 
 ### EconomicAssessment
 
-Output schema of `EconomicAnalyst`:
+Выходная схема `EconomicAnalyst`:
 
-| Field | Type | Purpose |
+| Поле | Тип | Назначение |
 |---|---|---|
-| `thread_id` | str | Reference to `EventThread.id` |
-| `affected_indicators` | list[EconomicIndicator] | Markets/indices impacted |
-| `market_impact` | str | Overall market direction assessment |
-| `affected_sectors` | list[str] | Industries with exposure |
-| `supply_chain_impact` | str | Logistics/production disruptions |
-| `fiscal_calendar_events` | list[str] | Related government events |
-| `central_bank_signals` | list[str] | Policy/guidance adjustments |
-| `trade_flow_impact` | str | Changes to import/export flows |
-| `commodity_prices` | list[str] | Specific commodities affected |
-| `employment_impact` | str | Labor market effects |
-| `headline_angles` | list[str] | Economic framing opportunities |
+| `thread_id` | str | Ссылка на `EventThread.id` |
+| `affected_indicators` | list[EconomicIndicator] | Затронутые рынки/индексы |
+| `market_impact` | str | Общая оценка направления рынка |
+| `affected_sectors` | list[str] | Отрасли с подверженностью |
+| `supply_chain_impact` | str | Нарушения логистики/производства |
+| `fiscal_calendar_events` | list[str] | Связанные государственные события |
+| `central_bank_signals` | list[str] | Корректировки политики/ориентиры |
+| `trade_flow_impact` | str | Изменения в потоках импорта/экспорта |
+| `commodity_prices` | list[str] | Затронутые сырьевые товары |
+| `employment_impact` | str | Эффекты на рынке труда |
+| `headline_angles` | list[str] | Возможности экономического фреймирования |
 
-where `EconomicIndicator` contains:
+где `EconomicIndicator` содержит:
 
-| Field | Type | Purpose |
+| Поле | Тип | Назначение |
 |---|---|---|
-| `name` | str | Indicator name (e.g., "EUR/USD") |
-| `direction` | str | up/down/neutral/volatile |
-| `magnitude` | str | low/medium/high |
-| `confidence` | float | [0, 1] confidence in direction forecast |
-| `timeframe` | str | immediate/days/weeks/months |
+| `name` | str | Имя индикатора (например, "EUR/USD") |
+| `direction` | str | вверх/вниз/нейтрально/волатильно |
+| `magnitude` | str | низкий/средний/высокий |
+| `confidence` | float | [0, 1] уверенность в направлении прогноза |
+| `timeframe` | str | неотложно/дни/недели/месяцы |
 
 ### MediaAssessment
 
-Output schema of `MediaAnalyst`:
+Выходная схема `MediaAnalyst`:
 
-| Field | Type | Purpose |
+| Поле | Тип | Назначение |
 |---|---|---|
-| `thread_id` | str | Reference to `EventThread.id` |
-| `newsworthiness` | NewsworthinessScore | 6-dimensional assessment |
-| `editorial_fit` | float | [0, 1] alignment with outlet editorial |
-| `editorial_fit_explanation` | str | Why story fits or doesn't fit |
+| `thread_id` | str | Ссылка на `EventThread.id` |
+| `newsworthiness` | NewsworthinessScore | Шестимерная оценка |
+| `editorial_fit` | float | [0, 1] согласованность с редакционной политикой |
+| `editorial_fit_explanation` | str | Почему история подходит или не подходит |
 | `news_cycle_position` | str | breaking/developing/emerging/declining |
-| `saturation` | float | [0, 1] how long in news cycle |
-| `coverage_probability` | float | [0, 1] likelihood of publication |
+| `saturation` | float | [0, 1] как долго находится в новостях |
+| `coverage_probability` | float | [0, 1] вероятность публикации |
 | `predicted_prominence` | str | top_headline/major/secondary/brief/ignore |
-| `likely_framing` | str | Expected angle/tone for outlet |
-| `competing_stories` | list[str] | Other stories competing for space |
-| `headline_angles` | list[str] | Framing opportunities for outlet voice |
+| `likely_framing` | str | Ожидаемый угол/тон для агентства |
+| `competing_stories` | list[str] | Другие истории, конкурирующие за место |
+| `headline_angles` | list[str] | Возможности фреймирования для голоса агентства |
 
 ---
 
-## Source Code References
+## Ссылки на исходный код
 
 - **GeopoliticalAnalyst**: `src/agents/analysts/geopolitical.py`
 - **EconomicAnalyst**: `src/agents/analysts/economic.py`
 - **MediaAnalyst**: `src/agents/analysts/media.py`
-- **EventTrendAnalyzer** (trajectories + cross-impact): `src/agents/analysts/event_trend.py`
-- **All schemas**: `src/schemas/events.py`
-- **LLM model routing**: `src/llm/router.py` (lines 77–97)
+- **EventTrendAnalyzer** (траектории + перекрёстное влияние): `src/agents/analysts/event_trend.py`
+- **Все схемы**: `src/schemas/events.py`
+- **Маршрутизация LLM-модели**: `src/llm/router.py` (строки 77–97)
 
-For specifications and prompts, see `docs/04-analysts.md` (§3–5: Analyst specifications, §2: Trajectory Analysis).
+Для спецификаций и промптов см. `docs/04-analysts.md` (§3–5: спецификации аналитиков, §2: анализ траектории).

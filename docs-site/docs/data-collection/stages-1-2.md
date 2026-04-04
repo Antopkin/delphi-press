@@ -110,7 +110,7 @@
    Каждый: `num_results=10`, параллельно.
 
 2. **LLM-структурирование** (ExtractEventsPrompt): Парсинг результатов поиска → ScheduledEvent-объекты.
-   - Модель: claude-opus-4.6 (task `event_calendar`)
+   - Модель: gemini-3.1-flash-lite (task `event_calendar`)
    - JSON-режим
 
 3. **Дедупликация**: Levenshtein-расстояние (ratio > 80) + совпадение типа события + дата.

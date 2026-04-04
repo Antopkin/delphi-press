@@ -55,7 +55,7 @@ PersonaAssessment(
 | `prediction` | `str` | Конкретное утверждение (не общие слова) |
 | `probability` | `float` | 0.0–1.0: оценка вероятности события |
 | `newsworthiness` | `float` | 0.0–1.0: вероятность попасть в выпуск (фильтр гейткипинга) |
-| `scenario_type` | `ScenarioType` | `BASELINE` / `UPSIDE` / `DOWNSIDE` |
+| `scenario_type` | `ScenarioType` | `BASELINE` / `OPTIMISTIC` / `PESSIMISTIC` / `BLACK_SWAN` / `WILDCARD` |
 | `reasoning` | `str` | 3–7 предложений с цепочкой рассуждений |
 | `key_assumptions` | `list[str]` | 2–4 ключевых предпосылки |
 | `evidence` | `list[str]` | Ссылки на конкретные факты из контекста |
