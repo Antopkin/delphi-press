@@ -46,6 +46,7 @@
             <ul class="flex items-center gap-6 list-none m-0 p-0">
                 <li><a href="/" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">Главная</a></li>
                 <li><a href="/about" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/about' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">О методологии</a></li>
+                <li><a href="/docs/" class="no-underline transition-colors duration-fast hover:text-primary text-text-muted" target="_blank">Документация</a></li>
                 {% if current_user %}
                 <li><a href="/settings" class="no-underline transition-colors duration-fast hover:text-primary {% if request.url.path == '/settings' %}font-semibold text-primary{% else %}text-text-muted{% endif %}">Настройки</a></li>
                 <li><form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ request.state.csrf_token | default('') }}"><button type="submit" class="text-text-muted bg-transparent border-none cursor-pointer transition-colors duration-fast hover:text-primary p-0 font-inherit">Выйти</button></form></li>
@@ -62,6 +63,7 @@
             <ul class="absolute right-0 top-full mt-2 bg-surface-0 border border-border rounded-md shadow-lg py-2 min-w-[160px] list-none m-0 p-0 z-50">
                 <li><a href="/" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">Главная</a></li>
                 <li><a href="/about" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">О методологии</a></li>
+                <li><a href="/docs/" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline" target="_blank">Документация</a></li>
                 {% if current_user %}
                 <li><a href="/settings" class="block px-4 py-2 text-text hover:bg-surface-1 no-underline">Настройки</a></li>
                 <li><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ request.state.csrf_token | default('') }}"><button type="submit" class="block w-full text-left px-4 py-2 text-text hover:bg-surface-1 bg-transparent border-none cursor-pointer font-inherit">Выйти</button></form></li>
