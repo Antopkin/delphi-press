@@ -1,0 +1,172 @@
+\section{Brier Score: основная метрика}
+
+Калибровка вероятностных предсказаний измеряется стандартной метрикой \emph{Brier Score} (BS), изначально разработанной для оценки метеорологических прогнозов.
+
+\begin{equation}
+BS = \frac{1}{N} \sum_{i=1}^{N} (f_i - o_i)^2
+\label{eq:brier_score}
+\end{equation}
+
+где $f_i \in [0,1]$ "--- предсказанная вероятность события $i$, $o_i \in \{0,1\}$ "--- фактический исход (1, если событие произошло, 0 "--- в противном случае).
+
+В контексте Delphi Press предсказываемым событием является наличие освещения прогнозируемой темы в целевом медиаиздании на заданный горизонт времени (1, 3 или 7 дней). Вероятность $f_i$ берётся из поля \texttt{FinalPrediction.confidence}, а бинаризация исхода $o_i$ определяется как:
+
+\begin{equation}
+o_i = \begin{cases}
+1, & \text{если } \texttt{TopicMatch} > 0 \\
+0, & \text{иначе}
+\end{cases}
+\end{equation}
+
+Источники для ground truth "--- актуальные RSS-потоки уже имеющихся 16 источников проекта (ТАСС RU/EN, РИА Новости, Интерфакс, BBC, Al Jazeera, Guardian и др.) и Wayback Machine CDX API, позволяющий восстанавливать снимки веб-страниц за прошлые даты.
+
+Для оценки навыка система использует \emph{Brier Skill Score}:
+
+\begin{equation}
+BSS = 1 - \frac{BS}{0.25}
+\end{equation}
+
+где 0.25 "--- базовая ошибка случайного угадывания (всегда вероятность 50\%). BSS интерпретируется как относительное улучшение: $BSS = 0$ означает производительность на уровне случайности, $BSS = 1$ "--- идеальное предсказание.
+
+Таблица~\ref{tab:brier_benchmarks} приводит калибровочные ориентиры из актуальных источников (состояние на апрель 2026 года):
+
+\begin{table}[h!]
+\centering
+\caption{Benchmarks Brier Score для прогнозных систем}
+\label{tab:brier_benchmarks}
+\begin{tabular}{lrrl}
+\toprule
+\textbf{Система/уровень} & \textbf{Brier Score} & \textbf{BSS} & \textbf{Контекст} \\
+\midrule
+Случайное угадывание & 0.250 & 0.00 & Базовая линия (всегда 50\%) \\
+Polymarket (prediction market) & $\sim$0.187 & $\sim$0.25 & Реальные деньги, мегаполис участников\footnote{\citep{clinton2024polymarket}} \\
+Metaculus-сообщество (AI-вопросы) & 0.182 & $\sim$0.27 & Краудсорсированные прогнозы [self-reported] \\
+Good Judgment Project (год 2) & $\sim$0.140 & $\sim$0.44 & Обученные суперпрогнозисты\footnote{\citep{tetlock2015superforecasting}} \\
+\textbf{Delphi Press v1.0 (цель)} & \textbf{$<$0.20} & \textbf{$>$0.20} & Уровень prediction market \\
+GPT-4.5 (ForecastBench, окт 2025) & 0.101 & $\sim$0.60 & Лучший LLM на сегодня [ForecastBench] \\
+\textbf{Delphi Press v2.0 (цель)} & \textbf{$<$0.12} & \textbf{$>$0.52} & Уровень обученных прогнозистов \\
+Суперпрогнозисты (ForecastBench) & 0.068--0.086 & 0.66--0.73 & Долгосрочный ориентир\footnote{\citep{tetlock2015superforecasting}; числа из ForecastBench} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Статус внедрения:} Пилотная оценка требует сбора ground truth, что предполагает автоматизацию запроса к Wayback Machine CDX API и парсинга RSS-снимков. Пилотный тест спланирован на объёме 50 prediction runs по 3 горизонтам, что даст примерно 150--350 пар событие-исход. Статистическая мощность при N=50 обеспечивает 95\%-й доверительный интервал ±0.03--0.05 вокруг BS. \textbf{Стоимость пилота: менее \$1} (только LLM-вызовы для граничных случаев TopicMatch; BERTScore и Wayback API бесплатны).
+
+
+\section{Композитная оценка}
+
+Так как Brier Score оценивает лишь калибровку вероятностей, а не качество самого предсказанного текста, для полной оценки качества введена взвешенная композитная метрика:
+
+\begin{equation}
+\text{CompositeScore} = 0.40 \times \text{TopicMatch} + 0.35 \times \text{SemanticSim} + 0.25 \times \text{StyleMatch}
+\label{eq:composite}
+\end{equation}
+
+Компоненты метрики описаны в таблице~\ref{tab:composite_components}:
+
+\begin{table}[h!]
+\centering
+\caption{Компоненты CompositeScore}
+\label{tab:composite_components}
+\begin{tabular}{llll}
+\toprule
+\textbf{Компонент} & \textbf{Диапазон} & \textbf{Вычисление} & \textbf{Вес} \\
+\midrule
+TopicMatch & $\{0.0, 0.5, 1.0\}$ & Тема совпадает с реальностью & 0.40 \\
+SemanticSim & $[0.0, 1.0]$ & BERTScore F1 vs реальный заголовок & 0.35 \\
+StyleMatch & $[0.0, 1.0]$ & LLM-as-judge оценка стилевого соответствия & 0.25 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{TopicMatch} "--- трёхступенчатый алгоритм с возрастающей стоимостью:
+
+\begin{enumerate}
+    \item \textbf{Keyword screening} (< 5 мс): извлечение ключевых слов из предсказанного заголовка, фильтрация кандидатов из ground truth.
+    \item \textbf{BERTScore} ($\sim$50 мс, локально): вычисление контекстного сходства через многоязычную модель \texttt{xlm-roberta-base} (для кроссъязычных пар).
+    \item \textbf{LLM-арбитр} (только для пограничных случаев $0.55 \leq F1 < 0.60$): ~10\% случаев, что экономит ~90\% LLM-вызовов.
+\end{enumerate}
+
+Пороговые значения:
+\begin{itemize}
+    \item $F1 \geq 0.78 \Rightarrow$ TopicMatch = 1.0 (полное совпадение)
+    \item $0.60 \leq F1 < 0.78 \Rightarrow$ TopicMatch = 0.5 (верная тема, но неточный фрейминг)
+    \item $0.55 \leq F1 < 0.60 \Rightarrow$ LLM-арбитр (пограничные случаи)
+    \item $F1 < 0.55 \Rightarrow$ TopicMatch = 0.0 (промах)
+\end{itemize}
+
+\textbf{SemanticSim} "--- F1-метрика BERTScore против лучшего совпадающего реального заголовка в день предсказания. Для монолингвальной оценки используются языкоспецифичные модели: \texttt{DeepPavlov/rubert-base-cased} для русского, \texttt{roberta-large} для английского.
+
+\textbf{StyleMatch} "--- оценка по шкале 1--5 (затем нормализуется на [0,1] делением на 5) через LLM-as-judge. Критически: для избежания self-enhancement bias используется \textbf{отличная модель} от генератора заголовков. В стеке Delphi Press это Claude Sonnet 4.6 в роли судьи (в то время как Stage 8 Generator может использовать другую модель).
+
+Интерпретация CompositeScore:
+\begin{itemize}
+    \item $\geq 0.70$ "--- отличный прогноз
+    \item $0.50$--$0.69$ "--- хороший
+    \item $0.30$--$0.49$ "--- частичное попадание
+    \item $< 0.30$ "--- промах
+\end{itemize}
+
+\textbf{Известные ограничения:} Пороги BERTScore (0.78, 0.60) откалиброваны на задачах перевода и суммаризации, но не валидированы специально для русскоязычных новостных заголовков длиной 5--15 слов. Рекомендуется ручная аннотация 20--30 примеров в начале пилота. Покрытие Wayback Machine неоднородно: ТАСС и РИА Новости имеют хорошее архивное покрытие, Коммерсант и Ведомости "--- частичное.
+
+
+\section{Walk-forward валидация inverse problem}
+
+Для доказательства того, что информированный консенсус бетторов Polymarket действительно даёт сигнал, применяется протокол walk-forward валидации с непересекающимися окнами. Это предотвращает look-ahead bias, при котором модель "видит" будущие данные.
+
+\textbf{Примечание о метрике.} В отличие от теоретического BSS из Раздела~1 (baseline = random 0.25), walk-forward BSS использует raw market price как baseline: $\bss_{wf} = 1 - \bs(\text{informed}) / \bs(\text{raw market})$.
+
+\textbf{Протокол:}
+\begin{itemize}
+    \item \textbf{Burn-in:} 180 дней исторических данных для обучения профилей (безопасный зазор перед тестом).
+    \item \textbf{Фолды:} 22 непересекающихся 60-дневных тестовых окна, с шагом 60 дней.
+    \item \textbf{Данные:} 435K разрешённых рынков, 470M торговых операций, сведённых в 82.6M временных агрегатов в parquet-файле с 30-дневными бакетами.
+    \item \textbf{Временная утечка:} Предыдущие реализации использовали предварительно агрегированные позиции, включающие торги, совершённые \textbf{после} временной точки отсечки T. Исправление: пересканирование 33 ГБ raw trades в 30-дневные частичные суммы, из которых позиции at-cutoff восстанавливаются SQL-фильтром \texttt{WHERE time\_bucket <= T/bucket\_size}.
+\end{itemize}
+
+\textbf{Инфраструктура:}
+
+Выбран DuckDB с потоковой обработкой и predicate pushdown на \texttt{time\_bucket} для избежания загрузки 470M торговых операций в оперативную память. Bucket-подход даёт 225$\times$ ускорение (15 мин на фолд $\to$ 4 сек) и снижает пик памяти с 7.4 ГБ (crash at fold 15) до 4.6 ГБ.
+
+Результаты валидации представлены в таблице~\ref{tab:walkforward_bss}:
+
+\begin{table}[h!]
+\centering
+\caption{Walk-forward BSS: 22 фолда с временными бакетами}
+\label{tab:walkforward_bss}
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Подмножество} & \textbf{Mean BSS} & \textbf{Median BSS} & \textbf{Fraction > 0} & \textbf{95\% CI} \\
+\midrule
+All 22 folds & +0.196 & +0.159 & 22/22 (100\%) & [+0.094, +0.297] \\
+Robust (folds 0--16, test $\geq$944) & +0.127 & +0.095 & 17/17 (100\%) & — \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Интерпретация:}
+
+\begin{enumerate}
+    \item \textbf{100\% положительных фолдов (22/22).} Информированный консенсус \textbf{всегда} улучшает сырую рыночную цену Polymarket, без исключений.
+
+    \item \textbf{Robust mean BSS = +0.127.} На подмножестве из 17 фолдов с надёжным объёмом тестовых рынков ($\geq 944$) улучшение Brier Score составляет 12.7\% относительно сырых цен.
+
+    \item \textbf{Инвертированная U-кривая.} BSS достигает пика при fold 9--11 (+0.21--+0.27) с оптимальным объёмом данных (~35K информированных бетторов), затем уменьшается по мере увеличения ликвидности рынка. Это соответствует литературе (Akey et al. 2025): информированные торговцы более значимы на тонких рынках.
+
+    \item \textbf{Стабильность яруса.} Метрика Jaccard overlap между множествами INFORMED бетторов в соседних фолдах = 0.613 (61\%). Превышает пороговое значение 60\%, подтверждая стабильность классификации яруса.
+
+    \item \textbf{Масштаб.} 1.74M профилированных кошельков, из них 348K в ярусе INFORMED "--- крупнейший published dataset бетторских профилей на Polymarket.
+\end{enumerate}
+
+\textbf{Варианты без extremizing.} Абляция (Phase 5 в CHANGELOG) показала, что простая accuracy-weighted consensus с Bayesian shrinkage (k=15) оптимальна. Экстремизация (Satopää et al. 2014) фактически \textbf{вредит} (-64\% BSS), вероятно потому, что информированные бетторы коррелированы (реагируют на те же рыночные сигналы), а не независимо информированы (частная информация).
+
+\textbf{Корреляция новостей и рынка.}
+
+Дополнительная валидация использует Spearman rank correlation и Granger causality test для проверки направления влияния новостного сигнала на цены:
+
+\begin{itemize}
+    \item \textbf{Spearman $\rho$:} между абсолютным изменением цены $|\Delta p|$ и количеством релевантных новостей (требует min 5 datapoints).
+    \item \textbf{Granger causality:} тестирует, предсказывает ли объём новостей изменения цены с лагом до 7 дней. ADF test проверяет стационарность; результат "--- (F-статистика, p-value, оптимальный лаг) или (None, None, None) при недостаточных данных.
+\end{itemize}
+
+Эти метрики вычисляются в \texttt{src/eval/correlation.py} и используются для диагностики, но не входят в основную Brier Score оценку.

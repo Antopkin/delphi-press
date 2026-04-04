@@ -1,0 +1,52 @@
+\section{Промпты агентов}
+\label{app:prompts}
+
+Ниже приведены полные тексты системных промптов всех агентов
+Дельфи-пайплайна. Промпты хранятся в директории
+\texttt{docs/prompts/} и передаются LLM-моделям через OpenRouter API.
+
+\subsection{Реалист (Realist)}
+\label{app:prompt_realist}
+Файл: \texttt{docs/prompts/realist.md} (397 строк).
+Аналитическая рамка: базовые ставки, исторические прецеденты,
+институциональная инерция (Tetlock 2005). Начальный вес: 0.22.
+
+\subsection{Геополитический стратег (Geostrateg)}
+\label{app:prompt_geostrateg}
+Файл: \texttt{docs/prompts/geostrateg.md} (459 строк).
+Аналитическая рамка: неореализм Уолца + конструктивизм,
+cui bono, деревья решений. Начальный вес: 0.20.
+
+\subsection{Экономический аналитик (Economist)}
+\label{app:prompt_economist}
+Файл: \texttt{docs/prompts/economist.md} (471 строка).
+Аналитическая рамка: follow the money, рациональный актор с бюджетными ограничениями,
+экономический календарь. Начальный вес: 0.20.
+
+\subsection{Медиа-эксперт (Media Expert)}
+\label{app:prompt_media_expert}
+Файл: \texttt{docs/prompts/media-expert.md} (471 строка).
+Аналитическая рамка: гейткипинг (White 1950), фрейминг (Entman 1993),
+6 критериев новостной ценности. Начальный вес: 0.18.
+
+\subsection{Адвокат дьявола (Devil's Advocate)}
+\label{app:prompt_devils_advocate}
+Файл: \texttt{docs/prompts/devils-advocate.md} (503 строки).
+Аналитические инструменты: pre-mortem, steelmanning, чёрные лебеди (Талеб).
+Цель --- не минимизация BS, а генерация контраргументов. Начальный вес: 0.20.
+
+\subsection{Медиатор (Mediator)}
+\label{app:prompt_mediator}
+Файл: \texttt{docs/prompts/mediator.md} (435 строк).
+Задача: классифицировать результаты R1 (consensus/disputes/gaps),
+сформулировать ключевые вопросы, анонимизировать позиции (Expert A-E).
+
+\subsection{Судья-арбитр (Judge)}
+\label{app:prompt_judge}
+Файл: \texttt{docs/prompts/judge.md} (639 строк).
+Алгоритм: weighted median + Platt scaling + headline selection + wild cards.
+Horizon-adaptive weights. Детерминистический (без LLM с v0.7.0).
+
+\bigskip
+\noindent\emph{Полные тексты промптов доступны в репозитории по указанным путям.
+Они слишком объёмны для включения в печатный документ (суммарно ${\sim}3400$ строк).}

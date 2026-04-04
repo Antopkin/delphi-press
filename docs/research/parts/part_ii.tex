@@ -1,0 +1,518 @@
+% PART II: Сбор данных (Stages 1-2)
+% Source: docs/03-collectors.md, docs/01-data-sources.md, docs/04-analysts.md
+
+\section{NewsScout: агрегация сигналов}
+
+Первый этап сбора информации в пайплайне Delphi Press основан на агенте~\texttt{NewsScout}, чья задача~--- собрать многоканальные сигналы из различных источников и сформировать унифицированный набор записей для последующей обработки.
+
+% Source: 03-collectors.md:477-489
+
+\subsection{Архитектура сбора}
+
+\texttt{NewsScout} реализует двухисточниковую стратегию:
+
+\begin{enumerate}
+    \item \textbf{RSS-агрегация}: параллельная загрузка 20--30 RSS-фидов из мировых, региональных и тематических источников
+    \begin{itemize}
+        \item Глобальные источники (Reuters, AP, BBC, Al Jazeera и др.) --- 10--15 фидов
+        \item Региональные (ТАСС, РИА для русскоязычных; CNN, NYT для англоязычных) --- 5--10
+        \item Тематические (финансы, политика, наука) --- 5--10
+    \end{itemize}
+
+    \item \textbf{Веб-поиск}: параллельное выполнение 3--5 поисковых запросов через API Exa/Jina MCP
+    \begin{itemize}
+        \item Общий запрос: \emph{major news events {target\_date} world}
+        \item Региональный: \emph{news {region\_of\_outlet} {target\_date}}
+        \item Тематический: \emph{scheduled events politics economy {target\_date}}
+        \item Outlet-specific: \emph{topics covered by {outlet} this week}
+        \item Трендовый: \emph{breaking news today {current\_date}} (для контекста)
+    \end{itemize}
+\end{enumerate}
+
+Оба источника обрабатываются параллельно с помощью \texttt{asyncio.gather()}. Если один источник недоступен (например, RSS-фид не отвечает в течение 30 секунд), пайплайн продолжает работу с другим, логируя ошибку. Критическое условие: если оба источника полностью недоступны, возвращается исключение.
+
+% Source: 03-collectors.md:542-601
+
+\subsection{Дедупликация и релевантность}
+
+После объединения результатов из обоих источников выполняется дедупликация по URL:
+
+\begin{itemize}
+    \item Для каждого сигнала вычисляется нормализованный URL (строчные буквы, удаление trailing slash)
+    \item При обнаружении дубля сохраняется сигнал с более высоким \texttt{relevance\_score}
+\end{itemize}
+
+Релевантность сигнала рассчитывается на основе:
+\begin{itemize}
+    \item Для RSS-сигналов: свежесть (дата публикации) и надёжность источника
+    \item Для веб-поиска: \texttt{score} из API поисковика (нормализуется в диапазон 0--1)
+\end{itemize}
+
+Опциональная LLM-классификация активируется для сигналов без категорий. Используется модель \texttt{openai/gpt-4o-mini} с пакетной обработкой (batch по 20 сигналов). Промпт требует классифицировать заголовки по доменам (политика, экономика, наука и т.д.) и извлечь именованные сущности (названия людей, организаций, мест).
+
+% Source: 03-collectors.md:53-129
+
+\subsection{Схема SignalRecord}
+
+Выход \texttt{NewsScout} --- список объектов \texttt{SignalRecord} (100--200 записей), определённых в \texttt{src/schemas/events.py}. Каждый сигнал содержит:
+
+\begin{table}[h!]
+\centering
+\caption{Поля SignalRecord}
+\label{tab:signal_record}
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Поле} & \textbf{Тип} & \textbf{Назначение} \\
+\hline
+\texttt{id} & str & Уникальный ID: \texttt{sig\_\{hash8\}} \\
+\texttt{title} & str & Заголовок (макс. 500 символов) \\
+\texttt{summary} & str & Краткое содержание (макс. 1000 символов) \\
+\texttt{url} & str & URL источника \\
+\texttt{source\_name} & str & Название источника (Reuters, ТАСС, BBC и т.д.) \\
+\texttt{source\_type} & Enum & RSS, WEB\_SEARCH, SOCIAL, WIRE \\
+\texttt{published\_at} & datetime | None & Дата/время публикации (UTC) \\
+\texttt{language} & str & ISO 639-1 код (ru, en, zh и т.д.) \\
+\texttt{categories} & list[str] & Теги/категории (politics, economy, science и т.д.) \\
+\texttt{entities} & list[str] & Именованные сущности (Trump, ЕЦБ, НАТО) \\
+\texttt{relevance\_score} & float & Оценка релевантности (0.0--1.0) \\
+\hline
+\end{tabular}
+\end{table}
+
+% Source: 03-collectors.md:744-756
+
+ID сигнала генерируется как SHA-256 хеш конкатенации URL и заголовка, обрезанный до первых 8 символов. Это обеспечивает детерминированность: один и тот же сигнал, встреченный дважды, получит одинаковый ID.
+
+% Source: 03-collectors.md:533-536, 594-599
+
+Завершающий этап --- сортировка по \texttt{relevance\_score} (убывающий порядок) и ограничение на 200 записей. Сигналы отсортированы от наиболее релевантных к наименее релевантным.
+
+---
+
+\section{EventCalendar: структурированные события}
+
+Второй источник информации в Stage 1 --- агент \texttt{EventCalendar}, который выявляет запланированные события на целевую дату пруи с использованием веб-поиска и структурирования через LLM.
+
+% Source: 03-collectors.md:787-830
+
+\subsection{Логика поиска событий}
+
+Процесс разбивается на пять этапов:
+
+\begin{enumerate}
+    \item \textbf{Формирование поисковых запросов} (5--8 запросов) по типам событий:
+    \begin{itemize}
+        \item Политика: \emph{political events scheduled {date}}, \emph{parliamentary sessions votes {date}}
+        \item Экономика: \emph{economic data releases {date}}, \emph{central bank meetings {date}}, \emph{earnings reports {date}}
+        \item Дипломатия: \emph{international summits meetings {date}}, \emph{UN sessions {date}}
+        \item Суды: \emph{major court hearings verdicts {date}}
+        \item Культура/спорт: \emph{major events conferences {date}}
+    \end{itemize}
+    Для русскоязычных СМИ часть запросов дублируется на русском.
+
+    \item \textbf{Параллельный веб-поиск}: выполнение всех запросов асинхронно через Exa/Jina API
+
+    \item \textbf{LLM-структурирование} (модель \texttt{openai/gpt-4o-mini}): извлечение из сырых результатов структурированных событий с полями title, description, event\_type, certainty, location, participants, potential\_impact
+
+    \item \textbf{Дедупликация}: fuzzy matching по заголовкам (ratio > 0.8 по Levenshtein), совпадение типа и даты события
+
+    \item \textbf{Оценка новостной значимости} (модель \texttt{anthropic/claude-sonnet-4}): ранжирование по \texttt{newsworthiness} с учётом вероятности освещения в выбранном издании и исключительности события
+\end{enumerate}
+
+% Source: 03-collectors.md:148-228
+
+\subsection{Типология и уверенность}
+
+Типы событий охватывают основные домены публичной жизни:
+
+\begin{equation}
+\text{EventType} \in \{\text{POLITICAL, ECONOMIC, DIPLOMATIC, JUDICIAL, MILITARY, CULTURAL, SCIENTIFIC, SPORTS, OTHER}\}
+\end{equation}
+
+Каждое событие сопровождается оценкой уверенности, которая отражает степень надёжности информации:
+
+\begin{table}[h!]
+\centering
+\caption{Уровни уверенности в наступлении события}
+\label{tab:event_certainty}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Уровень} & \textbf{Интерпретация} \\
+\hline
+CONFIRMED & Официально подтверждено (расписание на сайте, пресс-релиз) \\
+LIKELY & Высокая вероятность (по расписанию, анонсировано) \\
+POSSIBLE & Возможно (слухи, предварительные анонсы) \\
+SPECULATIVE & Спекулятивно (восстановлено из паттернов: ежемесячные отчёты) \\
+\hline
+\end{tabular}
+\end{table}
+
+% Source: 03-collectors.md:156-228
+
+\subsection{Схема ScheduledEvent}
+
+Выход \texttt{EventCalendar} --- список объектов \texttt{ScheduledEvent} (3--10 записей на типичный день, до 50 в день повышенной активности):
+
+\begin{table}[h!]
+\centering
+\caption{Поля ScheduledEvent}
+\label{tab:scheduled_event}
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Поле} & \textbf{Тип} & \textbf{Назначение} \\
+\hline
+\texttt{id} & str & Уникальный ID: \texttt{evt\_\{hash\}} \\
+\texttt{title} & str & Название события (макс. 300 символов) \\
+\texttt{description} & str & Подробное описание (макс. 500 символов) \\
+\texttt{event\_date} & date & Дата события (совпадает с target\_date) \\
+\texttt{event\_type} & EventType & Тип события (political, economic и т.д.) \\
+\texttt{certainty} & EventCertainty & Уровень уверенности (confirmed/likely/possible/speculative) \\
+\texttt{location} & str & Место проведения \\
+\texttt{participants} & list[str] & Ключевые участники/организации \\
+\texttt{potential\_impact} & str & Потенциальное влияние на новостную повестку \\
+\texttt{source\_url} & str & URL источника информации \\
+\texttt{newsworthiness} & float & Оценка новостной значимости (0.0--1.0) \\
+\hline
+\end{tabular}
+\end{table}
+
+Значение \texttt{newsworthiness} = 1.0 означает, что событие гарантированно попадёт в топе новостей выбранного издания.
+
+---
+
+\section{OutletHistorian: профиль издания}
+
+Третий источник данных в Stage 1 --- агент \texttt{OutletHistorian}, который анализирует стилевые характеристики и редакционную позицию целевого СМИ на основе исторических публикаций.
+
+% Source: 03-collectors.md:1021-1076
+
+\subsection{Методология анализа}
+
+Анализ разбивается на три параллельных LLM-вызова:
+
+\begin{enumerate}
+    \item \textbf{Анализ стиля заголовков} (HeadlineStyle) --- 30 последних заголовков издания
+    \item \textbf{Анализ стиля текстов} (WritingStyle) --- 10 первых абзацев статей
+    \item \textbf{Анализ редакционной позиции} (EditorialPosition) --- полный контекст 50--100 статей за 30 дней
+\end{enumerate}
+
+Все три вызова выполняются одновременно через \texttt{asyncio.gather()}, минимизируя общее время выполнения. Модель используется единая: \texttt{anthropic/claude-sonnet-4} (для высокой точности лингвистического анализа).
+
+Кеширование: если профиль для издания был создан менее 7 дней назад, он возвращается из кеша без переанализа. Это обосновано тем, что стилевые характеристики СМИ меняются медленно.
+
+% Source: 03-collectors.md:323-383
+
+\subsection{HeadlineStyle: метрики заголовков}
+
+Характеристики стиля заголовков с точки зрения формы и содержания:
+
+\begin{table}[h!]
+\centering
+\caption{Показатели HeadlineStyle}
+\label{tab:headline_style}
+\footnotesize
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Метрика} & \textbf{Тип} & \textbf{Описание} \\
+\hline
+\texttt{avg\_length\_chars} & int & Средняя длина заголовка (символы) \\
+\texttt{avg\_length\_words} & int & Средняя длина заголовка (слова) \\
+\texttt{uses\_colons} & bool & Двоеточие для разделения темы и деталя \\
+\texttt{uses\_quotes} & bool & Цитаты в заголовках \\
+\texttt{uses\_questions} & bool & Вопросительные заголовки \\
+\texttt{uses\_numbers} & bool & Частое использование цифр (5 причин...) \\
+\texttt{capitalization} & str & Стиль: sentence\_case, title\_case, all\_caps\_first\_word, lowercase \\
+\texttt{vocabulary\_register} & str & Регистр: formal, neutral, colloquial, technical, mixed \\
+\texttt{emotional\_tone} & str & Тон: neutral, alarming, optimistic, dramatic, ironic, dry \\
+\texttt{common\_patterns} & list[str] & 3+ повторяющихся паттерна (например, \{Name\}: statement...) \\
+\hline
+\end{tabular}
+\end{table}
+
+% Source: 03-collectors.md:386-422
+
+\subsection{WritingStyle: характеристики текстов}
+
+Стилевые характеристики основного содержания статей:
+
+\begin{table}[h!]
+\centering
+\caption{Показатели WritingStyle}
+\label{tab:writing_style}
+\footnotesize
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Поле} & \textbf{Тип} & \textbf{Описание} \\
+\hline
+\texttt{first\_paragraph\_style} & str & inverted\_pyramid, narrative, analytical, quote\_lead \\
+\texttt{avg\_first\_paragraph\_sentences} & int & Среднее число предложений в первом абзаце \\
+\texttt{avg\_first\_paragraph\_words} & int & Среднее число слов \\
+\texttt{attribution\_style} & str & source\_first, source\_last, inline \\
+\texttt{uses\_dateline} & bool & Наличие датлайна (МОСКВА, 2 апреля ---) \\
+\texttt{paragraph\_length} & str & short, medium, long \\
+\hline
+\end{tabular}
+\end{table}
+
+\textit{Inverted pyramid} (перевёрнутая пирамида) --- классический журналистский стиль, когда самая важная информация (кто-что-где-когда) размещена в первом абзаце.
+
+% Source: 03-collectors.md:425-472
+
+\subsection{EditorialPosition: редакционная позиция}
+
+Редакционная позиция и предпочтения издания определяют, какие темы получают приоритет и как они подаются:
+
+\begin{table}[h!]
+\centering
+\caption{Компоненты EditorialPosition}
+\label{tab:editorial_position}
+\footnotesize
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Поле} & \textbf{Тип} & \textbf{Содержание} \\
+\hline
+\texttt{tone} & ToneProfile & neutral, conservative, liberal, sensationalist, analytical, official, oppositional \\
+\texttt{focus\_topics} & list[str] & Приоритетные темы (внутренняя политика, экономика РФ и т.д.) \\
+\texttt{avoided\_topics} & list[str] & Обходимые стороной темы \\
+\texttt{framing\_tendencies} & list[str] & Типичные фреймы: pro\_government, market\_oriented, human\_interest, conflict\_frame \\
+\texttt{source\_preferences} & list[str] & Предпочтительные источники (официальные лица, МИД, анонимные) \\
+\texttt{stance\_on\_current\_topics} & dict & Позиция по ключевым темам (тема: позиция) \\
+\texttt{omissions} & list[str] & Систематически пропускаемые темы \\
+\hline
+\end{tabular}
+\end{table}
+
+% Source: 03-collectors.md:289-320
+
+\subsection{OutletProfile: итоговая структура}
+
+Полный профиль издания объединяет все три анализа:
+
+\begin{table}[h!]
+\centering
+\caption{Структура OutletProfile}
+\label{tab:outlet_profile}
+\footnotesize
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Поле} & \textbf{Тип} & \textbf{Назначение} \\
+\hline
+\texttt{outlet\_name} & str & Каноническое название издания \\
+\texttt{outlet\_url} & str & Основной URL издания \\
+\texttt{language} & str & ISO 639-1 код (ru, en и т.д.) \\
+\texttt{headline\_style} & HeadlineStyle & Объект с метриками заголовков \\
+\texttt{writing\_style} & WritingStyle & Объект с метриками текстов \\
+\texttt{editorial\_position} & EditorialPosition & Объект с редакционной позицией \\
+\texttt{sample\_headlines} & list[str] & 10--30 последних заголовков \\
+\texttt{sample\_first\_paragraphs} & list[str] & 5--10 примеров первых абзацев \\
+\texttt{analysis\_period\_days} & int & 30 (период анализа) \\
+\texttt{articles\_analyzed} & int & Количество проанализированных статей \\
+\texttt{analyzed\_at} & datetime & Timestamp проведения анализа \\
+\hline
+\end{tabular}
+\end{table}
+
+Профиль кешируется в SQLite таблице \texttt{outlet\_profiles} с ключом \texttt{outlet\_name} (нормализованное название) и TTL 7 дней.
+
+---
+
+\section{ForesightCollector: рынки предсказаний}
+
+Четвёртый источник информации (дополнительный, на Stage 1.5) --- агент \texttt{ForesightCollector}, собирающий данные из рынков предсказаний для обогащения контекста прогноза.
+
+% Основано на инженерной реализации и документации
+
+\subsection{Polymarket CLOB API}
+
+Основной источник данных --- \emph{Polymarket} (децентрализованная платформа предсказывающих рынков, построенная на блокчейне). Доступ осуществляется через HTTP REST API без требования аутентификации.
+
+\textbf{Ключевые параметры API}:
+\begin{itemize}
+    \item URL: \texttt{https://clob.polymarket.com}
+    \item Endpoints: \texttt{/markets}, \texttt{/prices}, \texttt{/trades}
+    \item Rate limit: ~200 запросов/10 секунд
+    \item Timeout: 10 секунд
+\end{itemize}
+
+Присоединение к рынкам выполняется через \texttt{conditionId} --- уникальный идентификатор условия события на блокчейне. Например, рынок «Will Trump win 2024 election?» может иметь conditionId = \texttt{0x1234...}. Этот ID используется как primary join key при агрегировании данных.
+
+% Основано на Phase 6 completed
+
+\subsection{Сбираемые метрики рынка}
+
+Для каждого релевантного рынка собираются следующие метрики:
+
+\begin{table}[h!]
+\centering
+\caption{Метрики Polymarket CLOB API}
+\label{tab:polymarket_metrics}
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Метрика} & \textbf{Источник} & \textbf{Назначение} \\
+\hline
+\texttt{conditionId} & markets endpoint & Уникальный идентификатор \\
+\texttt{question} & markets & Формулировка предсказания \\
+\texttt{volume} & prices & Объём торговли (всего) \\
+\texttt{open\_interest} & prices & Открытый интерес (активные позиции) \\
+\texttt{bid\_price} & prices & Лучшая цена покупки (YES) \\
+\texttt{ask\_price} & prices & Лучшая цена продажи (YES) \\
+\texttt{mid\_price} & computed & (bid + ask) / 2 \\
+\texttt{spread} & computed & ask - bid (индикатор ликвидности) \\
+\texttt{resolution\_date} & markets & Дата закрытия рынка \\
+\texttt{last\_updated} & prices & Timestamp последнего обновления \\
+\hline
+\end{tabular}
+\end{table}
+
+\textit{Spread} (разница между ценами покупки и продажи) служит индикатором ликвидности рынка: узкий spread указывает на активную торговлю и уверенность участников.
+
+% Основано на инженерной реализации
+
+\subsection{Graceful degradation}
+
+\textbf{Metaculus API} (альтернативный источник) в настоящее время недоступен из-за требования BENCHMARKING-уровня доступа (статус: запрошено 2026-03-29). Код пайплайна готов к интеграции, но на практике возвращает пустой список при попытке доступа.
+
+Если Polymarket API недоступен (HTTP 5xx, timeout, rate limit):
+\begin{enumerate}
+    \item Retry с exponential backoff (3 попытки, макс. 30 сек)
+    \item При повторных ошибках: логирование warning и возврат пустого списка `[]`
+    \item Pipeline продолжает работу без данных рынков (деградация качества, но не критично)
+\end{enumerate}
+
+Успешный API-вызов возвращает список рынков с метриками. Релевантность рынка определяется совпадением между question/description рынка и событиями из EventCalendar (косинусное сходство эмбеддингов или простое ключевое слово matching).
+
+---
+
+\section{Идентификация событий: HDBSCAN-кластеризация}
+
+Stage 2 пайплайна агломерирует 100--200 сигналов и 3--10 запланированных событий в 20 структурированных событийных нитей через плотностную кластеризацию.
+
+% Source: 04-analysts.md:785-836
+
+\subsection{Логика процесса}
+
+Процесс разбивается на следующие этапы:
+
+\begin{enumerate}
+    \item \textbf{Подготовка текстов}: конкатенация title + summary для каждого SignalRecord
+
+    \item \textbf{Эмбеддинг}: batch-эмбеддинг через LLM API (OpenAI embeddings или Voyage AI). Результат: матрица размером (N, 1536), где N = количество сигналов
+
+    \item \textbf{Кластеризация HDBSCAN}: плотностная кластеризация эмбеддингов в пространстве косинусного сходства
+
+    \item \textbf{LLM-лейблинг}: для каждого кластера генерируется название и summary через LLM
+
+    \item \textbf{Интеграция ScheduledEvent}: запланированные события привязываются к кластерам на основе семантического сходства
+
+    \item \textbf{Scoring}: расчёт \texttt{significance\_score} по многофакторной формуле
+
+    \item \textbf{Ранжирование}: отбор top-20 по significance\_score
+
+    \item \textbf{Trajectory Analysis}: для каждой нити анализируется текущее состояние, моментум, три сценария развития
+
+    \item \textbf{Cross-Impact Matrix}: оценка перекрёстных влияний между событийными нитями
+\end{enumerate}
+
+% Source: 04-analysts.md:804-818
+
+\subsection{Гиперпараметры HDBSCAN}
+
+\begin{table}[h!]
+\centering
+\caption{Гиперпараметры кластеризации}
+\label{tab:hdbscan_params}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Параметр} & \textbf{Значение} & \textbf{Интерпретация} \\
+\hline
+\texttt{min\_cluster\_size} & 3 & Минимальный размер кластера (события, упомянутые в 3+ сигналах) \\
+\texttt{min\_samples} & 2 & Минимальный размер neighbourhood для плотности \\
+\texttt{metric} & cosine & Метрика расстояния в пространстве эмбеддингов \\
+\hline
+\end{tabular}
+\end{table}
+
+\texttt{min\_cluster\_size} = 3 означает, что кластер формируется только если он содержит минимум 3 сигнала с близкими эмбеддингами (косинусное сходство). Это фильтрует шум (случайные совпадения одного-двух заголовков) и выделяет только события, получившие достаточное освещение в множественных источниках.
+
+% Source: 04-analysts.md:812-818
+
+\subsection{Формула значимости события}
+
+Значимость события рассчитывается как взвешенная сумма пяти компонент:
+
+\begin{equation}
+\text{significance\_score} = 0.30 \times \text{importance} + 0.25 \times \text{cluster\_size\_norm} + 0.20 \times \text{recency} + 0.15 \times \text{source\_diversity} + 0.10 \times \text{entity\_prominence}
+\label{eq:significance}
+\end{equation}
+
+Компоненты определяются следующим образом:
+
+\begin{enumerate}
+    \item \textbf{importance} (вес 0.30) --- оценка LLM медийной важности события в контексте выбранного издания (0.0--1.0). Высокое значение для событий, которые гарантированно будут в топе новостей.
+
+    \item \textbf{cluster\_size\_norm} (вес 0.25) --- нормализованный размер кластера. Если кластер содержит $k$ сигналов, а максимальный размер $k_{\max}$, то этот компонент = $k / k_{\max}$ (0.0--1.0). Большие кластеры указывают на высокую новостную активность.
+
+    \item \textbf{recency} (вес 0.20) --- свежесть сигналов в кластере. Сигналы, опубликованные в последние 24 часа, получают полный балл 1.0. Более старые сигналы штрафуются экспоненциально: $\exp(-t / \tau)$, где $t$ --- возраст (дни), $\tau = 3$ (временная постоянная).
+
+    \item \textbf{source\_diversity} (вес 0.15) --- количество уникальных источников в кластере, нормализованное: $\min(1.0, |\text{sources}| / 5)$. Событие, покрытое 5+ различными источниками, получает максимальный балл.
+
+    \item \textbf{entity\_prominence} (вес 0.10) --- число упоминаний высокопрофильных сущностей (главы государств, ЕЦБ, ООН и т.д.) в сигналах кластера, нормализованное к [0, 1]. Для типичного кластера этот компонент невелик, но может быть решающим для крупных политических событий.
+\end{enumerate}
+
+% Source: 04-analysts.md:769-836
+
+\subsection{Выход: EventThread[]}
+
+Результат кластеризации --- список объектов \texttt{EventThread} (до 20 записей), упорядоченный по \texttt{significance\_score}:
+
+\begin{table}[h!]
+\centering
+\caption{Поля EventThread}
+\label{tab:event_thread}
+\footnotesize
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Поле} & \textbf{Тип} & \textbf{Содержание} \\
+\hline
+\texttt{id} & str & Уникальный идентификатор нити \\
+\texttt{title} & str & Название события (сгенерировано LLM из кластера) \\
+\texttt{summary} & str & Summary событийной нити \\
+\texttt{signal\_ids} & list[str] & ID входящих сигналов \\
+\texttt{scheduled\_events} & list[str] & ID привязанных запланированных событий \\
+\texttt{cluster\_size} & int & Количество сигналов в кластере \\
+\texttt{significance\_score} & float & Итоговая значимость (0.0--1.0) \\
+\texttt{sources} & list[str] & Уникальные источники сигналов \\
+\texttt{entities} & list[str] & Агрегированные именованные сущности \\
+\texttt{published\_at} & datetime & Время публикации самого старого сигнала \\
+\texttt{last\_updated} & datetime & Время самого свежего сигнала \\
+\texttt{trajectory} & EventTrajectory | None & Анализ траектории (Stage 3) \\
+\hline
+\end{tabular}
+\end{table}
+
+Каждая EventThread представляет связанный набор новостей об одном событии или процессе, готовый для анализа на последующих стадиях пайплайна (Stage 3: тренд-анализ, Stage 4--5: Дельфи-прогнозирование).
+
+---
+
+\subsection{Обработка ошибок и граничные случаи}
+
+\begin{table}[h!]
+\centering
+\caption{Стратегии обработки ошибок в Stage 2}
+\label{tab:stage2_errors}
+\footnotesize
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Ситуация} & \textbf{Действие} \\
+\hline
+< 10 сигналов на входе & Вернуть как есть + warning; HDBSCAN может не сформировать кластеры \\
+Эмбеддинг API unavailable & Fallback: использовать простую текстовую дистанцию (Jaccard) \\
+0 кластеров найдено & Трактовать каждый сигнал как отдельный EventThread \\
+LLM не парсит JSON при лейблинге & Retry 1 раз; использовать generic title при неудаче \\
+\hline
+\end{tabular}
+\end{table}
+

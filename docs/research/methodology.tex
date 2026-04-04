@@ -1,0 +1,370 @@
+\documentclass[a4paper, 11pt]{article}
+
+% -- Encoding & language ----------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage[russian]{babel}
+
+% -- Maths ------------------------------------------------------------
+\usepackage{amsmath, amssymb, amsthm}
+
+% -- Layout -----------------------------------------------------------
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multicol}
+
+% -- Graphics & links -------------------------------------------------
+\usepackage{xcolor}
+\usepackage[colorlinks=true, linkcolor=blue!70!black, citecolor=green!50!black, urlcolor=blue!60!black]{hyperref}
+
+% -- Bibliography -----------------------------------------------------
+\usepackage[numbers]{natbib}
+
+% -- Appendix ---------------------------------------------------------
+\usepackage[toc,page]{appendix}
+
+% -- Verbatim for prompts ---------------------------------------------
+\usepackage{fancyvrb}
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  frame=single,
+  framesep=4pt,
+  xleftmargin=8pt,
+  xrightmargin=8pt,
+  inputencoding=utf8,
+  extendedchars=true,
+  literate={а}{{\cyra}}1 {б}{{\cyrb}}1 {в}{{\cyrv}}1 {г}{{\cyrg}}1
+           {д}{{\cyrd}}1 {е}{{\cyre}}1 {ж}{{\cyrzh}}1 {з}{{\cyrz}}1
+           {и}{{\cyri}}1 {й}{{\cyrishrt}}1 {к}{{\cyrk}}1 {л}{{\cyrl}}1
+           {м}{{\cyrm}}1 {н}{{\cyrn}}1 {о}{{\cyro}}1 {п}{{\cyrp}}1
+           {р}{{\cyrr}}1 {с}{{\cyrs}}1 {т}{{\cyrt}}1 {у}{{\cyru}}1
+           {ф}{{\cyrf}}1 {х}{{\cyrh}}1 {ц}{{\cyrc}}1 {ч}{{\cyrch}}1
+           {ш}{{\cyrsh}}1 {щ}{{\cyrshch}}1 {ъ}{{\cyrhrdsn}}1 {ы}{{\cyry}}1
+           {ь}{{\cyrsftsn}}1 {э}{{\cyrerev}}1 {ю}{{\cyryu}}1 {я}{{\cyrya}}1
+           {А}{{\CYRA}}1 {Б}{{\CYRB}}1 {В}{{\CYRV}}1 {Г}{{\CYRG}}1
+           {Д}{{\CYRD}}1 {Е}{{\CYRE}}1 {Ж}{{\CYRZH}}1 {З}{{\CYRZ}}1
+           {И}{{\CYRI}}1 {Й}{{\CYRISHRT}}1 {К}{{\CYRK}}1 {Л}{{\CYRL}}1
+           {М}{{\CYRM}}1 {Н}{{\CYRN}}1 {О}{{\CYRO}}1 {П}{{\CYRP}}1
+           {Р}{{\CYRR}}1 {С}{{\CYRS}}1 {Т}{{\CYRT}}1 {У}{{\CYRU}}1
+           {Ф}{{\CYRF}}1 {Х}{{\CYRH}}1 {Ц}{{\CYRC}}1 {Ч}{{\CYRCH}}1
+           {Ш}{{\CYRSH}}1 {Щ}{{\CYRSHCH}}1 {Ъ}{{\CYRHRDSN}}1 {Ы}{{\CYRY}}1
+           {Ь}{{\CYRSFTSN}}1 {Э}{{\CYREREV}}1 {Ю}{{\CYRYU}}1 {Я}{{\CYRYA}}1
+           {—}{{\textemdash}}1 {«}{{\guillemotleft}}1 {»}{{\guillemotright}}1,
+}
+
+% -- Theorem environments ---------------------------------------------
+\newtheorem{definition}{Определение}[section]
+\newtheorem{proposition}{Утверждение}[section]
+\newtheorem{remark}{Замечание}[section]
+
+% -- Custom commands --------------------------------------------------
+\newcommand{\bs}{\mathrm{BS}}
+\newcommand{\bss}{\mathrm{BSS}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+% =====================================================================
+\title{%
+  Delphi Press\\
+  Методология прогнозирования заголовков СМИ%
+}
+\author{Delphi Press --- внутренний документ команды}
+\date{Версия 0.9.5 \quad|\quad \today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Документ описывает полную методологию системы Delphi Press ---
+веб-продукта для прогнозирования заголовков СМИ.
+Мультиагентный Дельфи-пайплайн (5 персон, 2 раунда, 18 агентов, 9 стадий)
+обрабатывает данные информагенств и рынков предсказаний,
+генерируя стилизованные заголовки для конкретных изданий.
+
+Документ покрывает: архитектуру pipeline, метод Дельфи с 5 экспертными персонами,
+сбор и сжатие данных, обогащение сигналами Polymarket (informed consensus, BSS $+0.196$),
+LLM-инфраструктуру, систему оценки качества,
+а также dead ends и уроки из 6 месяцев разработки.
+
+Промпты всех агентов приведены в Приложении~B.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+% PARTS I + VII: System Overview + LLM Infrastructure
+% =====================================================================
+\input{parts/part_i_vii}
+
+\newpage
+% =====================================================================
+% PART II: Data Collection (Stages 1-2)
+% =====================================================================
+\input{parts/part_ii}
+
+\newpage
+% =====================================================================
+% PARTS III + IV: Analysis + Delphi Method (Stages 3-5)
+% =====================================================================
+\input{parts/part_iii_iv}
+
+\newpage
+% =====================================================================
+% PART V: Aggregation & Generation (Stages 6-9)
+% =====================================================================
+\input{parts/part_v}
+
+\newpage
+% =====================================================================
+% PART VI: Polymarket Signal Enrichment (existing content, as-is)
+% =====================================================================
+\input{parts/part_vi}
+
+\newpage
+% =====================================================================
+% PART VIII: Evaluation
+% =====================================================================
+\input{parts/part_viii}
+
+\newpage
+% =====================================================================
+% PART IX: Dead Ends & Lessons Learned
+% =====================================================================
+\input{parts/part_ix}
+
+% =====================================================================
+% PART X: Roadmap
+% =====================================================================
+
+\part*{X. Дорожная карта}
+
+\section{Ближайшие задачи}
+
+\begin{enumerate}
+  \item \textbf{Market Dashboard --- live data pipeline.}
+    Shell-cron refresh профилей (v0.9.3) уже работает.
+    Осталось: ARQ-based incremental rebuild + hot-reload в \texttt{MarketSignalService}.
+    Критерий: $\geq 10$ рынков с informed consensus.
+
+  \item \textbf{Pipeline Checkpoint \& Resume.}
+    Сериализация \texttt{PipelineContext} после каждой стадии
+    в \texttt{PipelineStep.output\_data} (поле существует, но не заполняется).
+    Resume: \texttt{POST /api/v1/predictions/\{id\}/resume}.
+    Оценка: ${\sim}200{-}300$ LOC, без миграции БД.
+
+  \item \textbf{Gemini Flash --- broken JSON.}
+    Light-пресет генерирует кривые JSON на ряде стадий.
+    Варианты: JSON repair middleware, prompt engineering,
+    замена на Claude Haiku 4.5.
+
+  \item \textbf{Event-level prediction storage.}
+    Сохранять \texttt{PredictedTimeline} в JSON/DB после каждого run.
+    Блокирует per-prediction market eval (сравнение Delphi BS vs.\ Polymarket BS для конкретных прогнозов).
+    Агрегатный market eval (направления B+C) уже реализован.
+
+  \item \textbf{Пилот ретроспективной оценки.}
+    Инфраструктура готова (Brier, Log Score, Composite Score, bootstrap CI, Wayback CDX).
+    Осталось: 50 runs $\times$ 3 горизонта $\to$ ${\sim}150{-}350$ пар.
+    Стоимость $< \$1$.
+\end{enumerate}
+
+\section{Backlog}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{clll}
+\toprule
+\textbf{\#} & \textbf{Задача} & \textbf{Приоритет} & \textbf{Зависимости} \\
+\midrule
+B.2  & Kalshi, OECD integration         & Низкий   & --- \\
+B.4  & Калибровка BERTScore порогов      & Средний  & После пилота eval \\
+B.5  & Platt scaling в Judge             & Средний  & Reliability $> 0.05$ \\
+B.6  & Per-persona weight update (Brier) & Средний  & Per-persona BS разброс $> 0.10$ \\
+B.9  & Правовая проверка licensing       & Средний  & До публичного деплоя \\
+B.10 & Event-level storage (JSON/DB)     & Высокий  & Блокирует market eval \\
+B.11 & HuggingFace dataset для N=500+    & Низкий   & --- \\
+\bottomrule
+\end{tabular}
+\caption{Backlog задач после production deploy\protect\footnotemark}
+\label{tab:backlog}
+\end{table}
+\footnotetext{Полный backlog содержит 10 задач; показаны 7 приоритетных.}
+
+% =====================================================================
+% APPENDICES
+% =====================================================================
+
+\begin{appendices}
+
+% -- Appendix A: Data Flow ---------------------------------------------
+\section{Data Flow: 9 стадий pipeline}
+\label{app:dataflow}
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{clp{3.5cm}lccl}
+\toprule
+\textbf{\#} & \textbf{Стадия} & \textbf{Агенты} & \textbf{Par?} & \textbf{min} & \textbf{Timeout} & \textbf{Output} \\
+\midrule
+1 & Collection      & NewsScout, EventCalendar, OutletHistorian, Foresight & Да & 2/4 & 600s & signals, events, profile \\
+2 & Event ID        & EventTrendAnalyzer      & Нет & ---  & 600s & 20 EventThread \\
+3 & Trajectory      & Geo, Econ, Media        & Да  & 2/3  & 600s & assessments \\
+4 & Delphi R1       & 5 персон                & Да  & 3/5  & 600s & R1 assessments \\
+5 & Delphi R2       & Mediator $\to$ 5 персон & Mix & 3/5  & 900s & synthesis + R2 \\
+6 & Consensus       & Judge                   & Нет & ---  & 300s & timeline + top-7 \\
+7 & Framing         & FramingAnalyzer         & Нет & ---  & 300s & 7 briefs \\
+8 & Generation      & StyleReplicator         & Нет & ---  & 300s & 14-21 headlines \\
+9 & Quality Gate    & QualityGate             & Нет & ---  & 300s & 5-7 final \\
+\bottomrule
+\end{tabular}
+\caption{Pipeline: стадии, агенты, параметры}
+\label{tab:pipeline_stages}
+\end{table}
+
+% -- Appendix B: Prompts (from subagent 7) ----------------------------
+\input{parts/appendix_b}
+
+% -- Appendix C: Known Gotchas ----------------------------------------
+\section{Известные архитектурные ограничения}
+\label{app:gotchas}
+
+\begin{enumerate}[nosep]
+  \item \texttt{Dict vs Pydantic}: слоты контекста типизированы как \texttt{Any};
+    потребители должны обрабатывать оба формата.
+  \item \texttt{max\_tokens=4096}: недостаточно для R1 Delphi (5-15 items $\times$ 200 tokens);
+    может обрезать (\texttt{finish\_reason="length"}).
+  \item \texttt{EventTrendAnalyzer} заполняет 3 слота:
+    логически Stage 2, но выдаёт trajectories (Stage 3).
+  \item Stage 5 \texttt{StageDefinition} списывает только mediator;
+    \texttt{\_run\_delphi\_r2()} содержит custom logic для 5 персон.
+  \item Round detection через \texttt{mediator\_synthesis}:
+    если медиатор упал, R2 персоны думают, что это R1.
+  \item \texttt{ForesightCollector} не вызывает LLM:
+    pure data agent, но conformant к \texttt{BaseAgent}.
+  \item \texttt{StyleReplicator}: выбор модели по языку издания;
+    если язык определён неверно --- неправильный task ID.
+  \item Single LLM provider (OpenRouter):
+    нет fallback на альтернативного провайдера.
+  \item Budget \$50 default:
+    один Opus call стоит \$5-15; два прогноза могут исчерпать бюджет.
+  \item Persona weights статичны:
+    Judge использует \texttt{initial\_weight} с horizon-поправками,
+    но Brier-обновление весов не реализовано (backlog B.6).
+  \item QualityGate REVISE$\to$drop:
+    revision не реализована; REVISE = немедленный drop (без попыток).
+\end{enumerate}
+
+\end{appendices}
+
+% =====================================================================
+% Bibliography (will be merged from all parts)
+% =====================================================================
+
+\begin{thebibliography}{99}
+
+\bibitem[Manski(2006)]{manski2006interpreting}
+Manski, C.~F. (2006).
+\newblock Interpreting the predictions of prediction markets.
+\newblock \emph{Economics Letters}, 91(3):425--429.
+
+\bibitem[Satop\"a\"a et~al.(2014)]{satopaa2014combining}
+Satop\"a\"a, V.~A., Baron, J., Foster, D.~P., Mellers, B.~A., Tetlock, P.~E., \& Ungar, L.~H. (2014).
+\newblock Combining multiple probability predictions using a simple logit model.
+\newblock \emph{International Journal of Forecasting}, 30(2):344--356.
+
+\bibitem[Ferro \& Fricker(2012)]{ferro2012sampling}
+Ferro, C.~A.~T. \& Fricker, T.~E. (2012).
+\newblock A bias-corrected decomposition of the Brier score.
+\newblock \emph{Quarterly Journal of the Royal Meteorological Society}, 138(668):1954--1960.
+
+\bibitem[Burnham \& Anderson(2002)]{burnham2002model}
+Burnham, K.~P. \& Anderson, D.~R. (2002).
+\newblock \emph{Model Selection and Multimodel Inference}.
+\newblock Springer, 2nd edition.
+
+\bibitem[Ross et~al.(2011)]{ross2011reduction}
+Ross, S., Gordon, G.~J., \& Bagnell, J.~A. (2011).
+\newblock A reduction of imitation learning and structured prediction to no-regret online learning.
+\newblock In \emph{AISTATS}, pages 627--635.
+
+\bibitem[Sun et~al.(2023)]{sun2023mega}
+Sun, X., Yang, S., \& Mangharam, R. (2023).
+\newblock {MEGA-DAgger}: Imitation learning with multiple imperfect experts using topology-based performance evaluation.
+\newblock \emph{arXiv preprint arXiv:2303.00638}.
+
+\bibitem[Xu et~al.(2022)]{xu2022dwbc}
+Xu, H., Zhan, X., Yin, H., \& Qin, H. (2022).
+\newblock Discriminator-weighted offline imitation learning from suboptimal demonstrations.
+\newblock In \emph{ICML}, pages 24725--24742.
+
+\bibitem[Karpoora~Sundara~Pandian \& Baheri(2025)]{densityratio2025}
+Karpoora~Sundara~Pandian, S. \& Baheri, A. (2025).
+\newblock Density-ratio weighted behavioral cloning: Learning control policies from corrupted datasets.
+\newblock \emph{arXiv preprint arXiv:2510.01479}.
+
+\bibitem[Brown et~al.(2019)]{brown2019irl}
+Brown, D.~S., Goo, W., Nagarajan, P., \& Niekum, S. (2019).
+\newblock Extrapolating beyond suboptimal demonstrations via inverse reinforcement learning from observations.
+\newblock In \emph{ICML}, pages 783--792.
+
+\bibitem[Beliaev \& Pedarsani(2025)]{irleed2024}
+Beliaev, M. \& Pedarsani, R. (2025).
+\newblock {IRLEED}: Inverse reinforcement learning by estimating expertise of demonstrators.
+\newblock In \emph{AAAI-25}, Vol.~39, pages 15532--15540.
+
+\bibitem[Shen et~al.(2026)]{dibm2025}
+Shen, W., Ma, J., Zhou, M., \& Meng, Z. (2026).
+\newblock Learning diverse skills for behavior models with mixture of experts.
+\newblock \emph{arXiv preprint arXiv:2601.12397}.
+
+\bibitem[{Attention-Based BC}(2024)]{attention_bc2024}
+Zhang, Y. et~al. (2024).
+\newblock An attention-based behavioral cloning approach for algorithmic trading.
+\newblock \emph{Applied Intelligence}, 54:15303--15324.
+
+\bibitem[Tiapkin et~al.(2024)]{tiapkin2024demo}
+Tiapkin, D., Belomestny, D., Calandriello, D., Moulines, E., Naumov, A., Perrault, P., Valko, M., \& M\'enard, P. (2024).
+\newblock Demonstration-regularized {RL}.
+\newblock In \emph{ICLR 2024}.
+
+\bibitem[Akey et~al.(2025)]{akey2025polymarket}
+Akey, P., Gr\'egoire, V., Harvie, C., \& Martineau, C. (2025).
+\newblock Who wins and who loses in prediction markets? Evidence from {Polymarket}.
+\newblock \emph{SSRN 6443103}.
+
+\bibitem[Mitts \& Ofir(2026)]{mitts2026informed}
+Mitts, J. \& Ofir, M. (2026).
+\newblock From Iran to Taylor Swift: Informed trading in prediction markets.
+\newblock \emph{Harvard Law Corporate Governance Forum}.
+
+\bibitem[Clinton \& Huang(2024)]{clinton2024polymarket}
+Clinton, J. \& Huang, T. (2024).
+\newblock Polymarket accuracy study.
+\newblock Vanderbilt University.
+
+\bibitem[B\"urgi et~al.(2025)]{burgi2025kalshi}
+B\"urgi, C., Deng, L., \& Whelan, K. (2025).
+\newblock Makers and takers: The economics of the Kalshi prediction market.
+\newblock \emph{CEPR Discussion Paper}.
+
+\bibitem[Wolfers \& Zitzewitz(2004)]{wolfers2004prediction}
+Wolfers, J. \& Zitzewitz, E. (2004).
+\newblock Prediction markets.
+\newblock \emph{Journal of Economic Perspectives}, 18(2):107--126.
+
+\bibitem[Tetlock \& Gardner(2015)]{tetlock2015superforecasting}
+Tetlock, P.~E. \& Gardner, D. (2015).
+\newblock \emph{Superforecasting: The Art and Science of Prediction}.
+\newblock Crown Publishers.
+
+\end{thebibliography}
+
+\end{document}

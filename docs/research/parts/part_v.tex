@@ -1,0 +1,397 @@
+% Part V: Агрегация и генерация (Stages 6-9)
+
+\section{Judge: агрегация и ранжирование}
+\label{sec:judge}
+
+Стадия~6 пайплайна реализует финальную агрегацию персональных прогнозов~\emph{Delphi ensemble} и выбор событий для генерации заголовков. Двухшаговый алгоритм:
+
+\subsection{Шаг 6a: Агрегация на уровне событий}
+
+\subsubsection{Парсинг оценок}
+
+Агент Judge принимает результаты раунда~2 (Round~2) либо раунда~1 (Round~1) в качестве fallback. Каждая оценка \verb|PersonaAssessment| содержит список прогнозов конкретной персоны с вероятностями.
+
+\subsubsection{Взвешенная медиана}
+
+Для каждого события (идентифицируемого \verb|event_thread_id|) агент вычисляет взвешенную медиану вероятностей пяти персон:
+\begin{itemize}
+  \item \textbf{REALIST}: базовый вес 0.22
+  \item \textbf{GEOSTRATEG}: базовый вес 0.20
+  \item \textbf{ECONOMIST}: базовый вес 0.20
+  \item \textbf{MEDIA\_EXPERT}: базовый вес 0.18
+  \item \textbf{DEVILS\_ADVOCATE}: базовый вес 0.20
+\end{itemize}
+
+\subsubsection{Horizon-адаптивные коррекции}
+
+Веса корректируются в зависимости от временного горизонта (расстояния до целевой даты):
+
+\begin{table}[h]
+  \centering
+  \caption{Horizon-адаптивные корректировки весов персон}
+  \label{tab:horizon-weights}
+  \begin{tabular}{|l|c|c|c|c|c|}
+    \hline
+    \textbf{Горизонт} & \textbf{REALIST} & \textbf{GEO} & \textbf{ECON} & \textbf{MEDIA} & \textbf{DEVIL} \\
+    \hline
+    \emph{Immediate} (0--2 дня) & $-0.02$ & $-0.02$ & $+0.02$ & $+0.03$ & $-0.01$ \\
+    \hline
+    \emph{Near} (3--4 дня) & $0.00$ & $0.00$ & $0.00$ & $0.00$ & $+0.02$ \\
+    \hline
+    \emph{Medium} (5+ дней) & $+0.03$ & $+0.02$ & $-0.01$ & $-0.02$ & $-0.02$ \\
+    \hline
+  \end{tabular}
+\end{table}
+
+Обоснование: для немедленных прогнозов важны циклы новостей (Media Expert) и календарные факторы (Economist); для дальних горизонтов -- структурные тренды (Realist, Geostrateg).
+
+\subsubsection{Инъекция рыночного сигнала}
+
+Если в контексте пайплайна присутствуют \emph{foresight signals} (Polymarket), агент выполняет нечёткое сопоставление события с рынками через метрику Jaccard:
+\begin{itemize}
+  \item Tier~1: точное совпадение (similarity $\geq 0.65$)
+  \item Tier~2: частичное совпадение (similarity $\geq 0.40$ и Jaccard $\geq 0.3$)
+\end{itemize}
+
+Если совпадение найдено, добавляется псевдо-персона <<Market>> с динамическим весом:
+\[
+w_{\text{market}} = 0.15 \times \max\!\bigl(0.5,\; \min(\log_{10}(V)/6,\; 1.5)\bigr) \times \frac{1}{1 + \text{vol}} \times \text{reliable} \times r_{\text{horizon}}
+\]
+
+где $V$ --- объём рынка, $r_{\text{horizon}}$ учитывает дни до закрытия рынка, $\text{reliable} = 0$ если распределение ненадёжно, иначе $1$.
+
+Market-сигнал инъектируется только при $p_{\text{market}} \geq 0.10$ (\texttt{MARKET\_MIN\_PROBABILITY}) для исключения шума от неликвидных рынков. Дополнительно применяется фильтр ликвидности: рынки с объёмом $< \$10{,}000$ (\texttt{MARKET\_MIN\_LIQUIDITY}) исключаются при построении индекса.
+
+\subsubsection{Калибровка: Platt Scaling с экстремизацией}
+
+После вычисления взвешенной медианы $p_{\text{raw}}$ применяется \emph{Platt scaling} с параметром экстремизации $a = 1.5$:
+\begin{equation}
+p_{\text{calibrated}} = \sigma(a \cdot \text{logit}(p_{\text{raw}}) + b)
+\label{eq:platt}
+\end{equation}
+
+где $\text{logit}(p) = \ln(p/(1-p))$, $\sigma(x) = 1/(1+e^{-x})$, $b = 0.0$.
+
+Экстремизация ($a > 1$) усиливает уверенные прогнозы и ослабляет неуверенные, повышая калибровку на реальных данных.
+
+\subsubsection{Уровни согласия}
+
+Разброс вероятностей $\text{spread} = \max(p_i) - \min(p_i)$ классифицируется как:
+\begin{itemize}
+  \item \textbf{CONSENSUS}: $\text{spread} < 0.15$ (тесное согласие)
+  \item \textbf{MAJORITY\_WITH\_DISSENT}: $0.15 \leq \text{spread} < 0.30$
+  \item \textbf{CONTESTED}: $\text{spread} \geq 0.30$ (глубокие разногласия)
+\end{itemize}
+
+При CONTESTED применяется штраф неопределённости ($\times 0.8$) к сырой вероятности.
+
+\subsubsection{Агрегация временных полей}
+
+Для каждого события агрегируются поля: \verb|predicted_date| (медиана по датам персон), \verb|uncertainty_days| (среднее), \verb|scenario_types| (объединение), \verb|causal_dependencies| (объединение). Выход: \verb|PredictedTimeline| с отсортированными по дате \verb|TimelineEntry|.
+
+\subsection{Шаг 6b: Отбор заголовков}
+
+\subsubsection{Оценка новостности}
+
+Для каждого события в timeline вычисляется headline score:
+\begin{equation}
+\text{score} = p_{\text{calib}} \times n \times (1 - s) \times r
+\label{eq:headline-score}
+\end{equation}
+
+где:
+\begin{itemize}
+  \item $p_{\text{calib}}$ — калиброванная вероятность события
+  \item $n$ — новостная ценность (среднее по персонам)
+  \item $s$ — коэффициент насыщенности (текущее заполнение 0.0)
+  \item $r$ — релевантность для издания (по умолчанию 1.0)
+\end{itemize}
+
+\subsubsection{Временная близость}
+
+Коэффициент temporal proximity штрафует события, далёкие от целевой даты:
+\[
+\text{temporal\_factor} = \max(0.5, 1.0 - 0.05 \cdot \text{days\_away})
+\]
+
+\subsubsection{Топ-7 + дикие карты}
+
+Отбираются 7 событий с наивысшим финальным score. Дополнительно добавляются до 2 <<дикие карты>> (black swan сценарии от Devil's Advocate) с новостной ценностью $\geq 0.7$. Вывод: \verb|RankedPrediction|[] с полями \verb|headline_score|, \verb|rank|, \verb|is_wild_card|.
+
+---
+
+\section{FramingAnalyzer: редакционный угол}
+\label{sec:framing}
+
+Стадия~7 анализирует, \emph{как конкретное издание подаст событие}. Один и тот же факт получает разные редакционные углы в зависимости от политики и стиля издания.
+
+\subsection{Девять стратегий фрейминга}
+
+\begin{table}[h]
+  \centering
+  \caption{Стратегии фрейминга в FramingAnalyzer}
+  \label{tab:framing-strategies}
+  \begin{tabular}{|l|l|}
+    \hline
+    \textbf{Стратегия} & \textbf{Пример} \\
+    \hline
+    \emph{THREAT} & Угроза для здоровья, безопасности, экономики \\
+    \hline
+    \emph{OPPORTUNITY} & Шанс, перспектива развития \\
+    \hline
+    \emph{CRISIS} & Острая проблема, обострение ситуации \\
+    \hline
+    \emph{ROUTINE} & Регулярное, периодическое событие \\
+    \hline
+    \emph{SENSATION} & Шокирующие подробности, неожиданный поворот \\
+    \hline
+    \emph{ANALYTICAL} & Глубокий анализ, контекст, причины \\
+    \hline
+    \emph{HUMAN\_INTEREST} & История людей, личные драмы \\
+    \hline
+    \emph{NEUTRAL\_REPORT} & Фактический отчёт без оценки \\
+    \hline
+    \emph{CONFLICT} & Столкновение позиций, дебаты \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\subsection{Структура FramingBrief}
+
+Для каждого \verb|RankedPrediction| генерируется \verb|FramingBrief| с полями:
+
+\begin{itemize}
+  \item \textbf{framing\_strategy}: одна из девяти стратегий
+  \item \textbf{angle}: конкретный угол подачи (1--2 предложения)
+  \item \textbf{emphasis\_points}: 2--5 элементов, которые издание подчеркнёт
+  \item \textbf{omission\_points}: 0--5 элементов, которые издание приглушит или опустит
+  \item \textbf{headline\_tone}: тревожный / нейтральный / оптимистичный / ироничный
+  \item \textbf{likely\_sources}: 1--5 источников, на которые сошлётся издание
+  \item \textbf{section}: раздел издания (Политика, Экономика, Главное и т.д.)
+  \item \textbf{news\_cycle\_hook}: привязка к текущему новостному циклу
+  \item \textbf{editorial\_alignment\_score}: насколько событие соответствует редакционной линии (0 -- совсем не в профиле, 1 -- идеально)
+\end{itemize}
+
+\subsection{Входные данные}
+
+Для анализа используется \verb|OutletProfile| с:
+\begin{itemize}
+  \item Редакционной позицией (editorial\_stance)
+  \item Типичными разделами (sections)
+  \item 10--20 примерами недавних заголовков (sample\_headlines)
+  \item Тональным профилем (tone\_profile: нейтральный, сенсационный, аналитический)
+  \item Типичными источниками (sourcing\_patterns)
+\end{itemize}
+
+Модель: Claude Sonnet (OpenRouter) с temperature 0.5 для консервативного reasoning.
+
+---
+
+\section{StyleReplicator: генерация заголовков}
+\label{sec:style-replicator}
+
+Стадия~8 генерирует 2--3 варианта заголовка и первого абзаца в стиле целевого издания.
+
+\subsection{Few-shot инъекция стиля}
+
+StyleReplicator получает из \verb|OutletProfile|:
+\begin{itemize}
+  \item 10--20 реальных заголовков издания (примеры для имитации)
+  \item 3--5 примеров первых абзацев (лидов)
+  \item Метрики стиля:
+    \begin{itemize}
+      \item avg\_headline\_length: средняя длина в символах
+      \item headline\_case: нижний / верхний / sentence case / title case
+      \item tone\_profile: нейтральный / острый / сенсационный / аналитический
+      \item quotes\_usage: частота использования кавычек
+      \item colon\_usage: частота двоеточия
+      \item avg\_lede\_length: средняя длина первого абзаца в словах
+    \end{itemize}
+\end{itemize}
+
+\subsection{Мультиязычность}
+
+Выбор модели зависит от языка издания:
+\begin{table}[h]
+  \centering
+  \caption{Выбор модели по языку издания}
+  \label{tab:language-models}
+  \begin{tabular}{|l|l|}
+    \hline
+    \textbf{Язык} & \textbf{Модель} \\
+    \hline
+    Русский & Claude Sonnet (OpenRouter) \\
+    \hline
+    Английский & Claude Sonnet (OpenRouter) \\
+    \hline
+    Другие & Claude Sonnet (OpenRouter) \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\subsection{Промпт структура}
+
+Системный промпт содержит идентичность (<<Ты -- автор заголовков для издания X>>), параметры стиля и примеры. Пользовательский промпт:
+\begin{itemize}
+  \item Событие и его вероятность
+  \item FramingBrief (стратегия, угол, тон, источники)
+  \item Запрос: сгенерировать 2--3 варианта с первым абзацем
+\end{itemize}
+
+Температура: 0.8 для творческого разнообразия. Выход: \verb|GeneratedHeadline|[] с полями \verb|headline|, \verb|first_paragraph|, \verb|headline_language|, \verb|length_deviation|.
+
+---
+
+\section{QualityGate: контроль качества}
+\label{sec:quality-gate}
+
+Стадия~9 — финальный фильтр. Три независимые проверки для каждого заголовка, принимающие решение: PASS / REJECT / REVISE / DEPRIORITIZE / MERGE.
+
+\subsection{Проверка 1: Фактическая правдоподобность}
+
+\subsubsection{Задача}
+
+Оценить внутреннюю непротиворечивость заголовка и первого абзаца, соответствие известным фактам. \emph{НЕ} оценивает, произойдёт ли событие.
+
+\subsubsection{Критерии}
+
+\begin{itemize}
+  \item Нет ли противоречий с общеизвестными фактами?
+  \item Корректны ли упомянутые даты, должности, названия?
+  \item Логически непротиворечив ли сценарий?
+  \item Не является ли событие физически / логически невозможным?
+  \item Не устарела ли предпосылка?
+\end{itemize}
+
+\subsubsection{Оценка (1--5)}
+
+\begin{table}[h]
+  \centering
+  \caption{Шкала фактической проверки}
+  \label{tab:factual-score}
+  \begin{tabular}{|c|l|}
+    \hline
+    \textbf{Балл} & \textbf{Интерпретация} \\
+    \hline
+    5 & Полностью правдоподобно, фактических противоречий не найдено \\
+    \hline
+    4 & Мелкие неточности, не влияющие на смысл \\
+    \hline
+    3 & Спорные утверждения, но принципиально не ошибочные \\
+    \hline
+    2 & Фактическая ошибка или серьёзное логическое противоречие \\
+    \hline
+    1 & Явно абсурдный или невозможный сценарий \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\textbf{Порог}: $\text{factual\_score} < 3$ $\to$ REJECT (проблема в прогнозе, а не в генерации).
+
+Модель: Claude Sonnet, temperature 0.2 (консервативно).
+
+\subsection{Проверка 2: Стилистическая аутентичность}
+
+\subsubsection{Задача}
+
+Оценить, насколько заголовок и первый абзац стилистически соответствуют целевому изданию.
+
+\subsubsection{Критерии}
+
+\begin{itemize}
+  \item Типична ли лексика для этого издания?
+  \item Соответствуют ли синтаксические конструкции?
+  \item Подходит ли длина заголовка?
+  \item Верный ли тон?
+  \item <<Smell test>>: похоже ли это на реальную публикацию этого издания?
+\end{itemize}
+
+\subsubsection{Оценка (1--5)}
+
+\begin{table}[h]
+  \centering
+  \caption{Шкала стилистической проверки}
+  \label{tab:style-score}
+  \begin{tabular}{|c|l|}
+    \hline
+    \textbf{Балл} & \textbf{Интерпретация} \\
+    \hline
+    5 & Неотличимо от настоящей публикации \\
+    \hline
+    4 & Стиль в целом верный, мелкие шероховатости \\
+    \hline
+    3 & Узнаваемый стиль, но с заметными отклонениями \\
+    \hline
+    2 & Стиль не соответствует изданию \\
+    \hline
+    1 & Совершенно не похоже на это издание \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\textbf{Порог}: $\text{style\_score} < 3$ $\to$ REVISE (одна попытка ревизии в StyleReplicator).
+
+Модель: Claude Sonnet (для всех языков), temperature 0.2.
+
+\subsection{Проверка 3: Дедупликация}
+
+\subsubsection{Внутренняя дедупликация}
+
+Вычисляются embeddings всех заголовков (text-embedding-3-small через OpenRouter). Если cosine similarity между двумя заголовками $> 0.85$, слабее по среднему score помечается дубликатом.
+
+\subsubsection{Внешняя дедупликация}
+
+Если cosine similarity заголовка с реальными заголовками из \verb|OutletProfile.sample_headlines| $> 0.80$, заголовок помечается как external duplicate.
+
+\subsection{Матрица решений}
+
+\begin{table}[h]
+  \centering
+  \caption{Логика гейта QualityGate}
+  \label{tab:gate-logic}
+  \begin{tabular}{|c|c|c|c|}
+    \hline
+    \textbf{factual} & \textbf{style} & \textbf{dup} & \textbf{Решение} \\
+    \hline
+    $\geq 3$ & $\geq 3$ & нет & \textbf{PASS} \\
+    \hline
+    $< 3$ & любой & любой & \textbf{REJECT} \\
+    \hline
+    $\geq 3$ & $< 3$ & нет & \textbf{REVISE} \\
+    \hline
+    $\geq 3$ & $\geq 3$ & внутр. & \textbf{MERGE} \\
+    \hline
+    $\geq 3$ & $\geq 3$ & внеш. & \textbf{DEPRIORITIZE} \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\subsection{Обработка решений}
+
+\begin{itemize}
+  \item \textbf{PASS}: заголовок добавляется в \verb|FinalPrediction|
+  \item \textbf{REJECT}: заголовок отклоняется (без повторных попыток)
+  \item \textbf{REVISE}: заголовок отправляется обратно в StyleReplicator с обратной связью (максимум 1 попытка), затем перепроверяется стиль
+  \item \textbf{MERGE}: дубликат не добавляется, более сильный вариант уже в списке
+  \item \textbf{DEPRIORITIZE}: заголовок добавляется в конец списка
+\end{itemize}
+
+\subsection{Выход}
+
+На входе: 14--21 вариант заголовков (2--3 на каждое из 7 событий).
+На выходе: 5--7 \verb|FinalPrediction| после фильтрации.
+
+Каждый \verb|FinalPrediction| содержит:
+\begin{itemize}
+  \item Основной заголовок и первый абзац
+  \item 1--2 альтернативных заголовка
+  \item Калиброванную вероятность события
+  \item Уровень согласия экспертов
+  \item Стратегию фрейминга
+  \item Язык заголовка
+  \item Флаг wild card
+\end{itemize}
+
+Параллельная обработка: до 5 заголовков проверяются одновременно с timeout 180 сек. При timeout применяется нейтральная оценка (score = 3, пропускает заголовок дальше).
+
+% end of Part V

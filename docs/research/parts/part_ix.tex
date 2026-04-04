@@ -1,0 +1,839 @@
+\section{API dead ends}
+
+\subsection{Case Study 1: Metaculus 403 API Deprecation and Tier Lock (v0.5.1)}
+
+\subsubsection*{Контекст}
+Metaculus служит источником структурированных прогнозов сообщества в stage 1 (ForesightCollector). Их API интегрирована в \texttt{src/data\_sources/foresight.py} с 2026-03-28. На production сервере v0.5.1 все запросы к Metaculus возвращали HTTP 403 Forbidden, но локально тесты проходили. Это свидетельствовало о скрытом breaking change в API.
+
+\subsubsection*{Что пробовали}
+В диагностическом скрипте (\texttt{tasks/research/metaculus\_api\_fix.md}) проверили несколько гипотез:
+\begin{enumerate}
+\item GET requests требуют авторизацию (было предположение: read-доступ свободный)
+\item Параметры изменили названия между версиями (`status` vs `statuses`)
+\item Endpoint \texttt{/api2/questions/} всё ещё работает как документировано
+\end{enumerate}
+
+\subsubsection*{Почему не сработало}
+Две причины одновременно:
+
+\textbf{(1) API v2 fully deprecated.} Примерно в Q3--Q4 2024 Metaculus перенёсли все endpoints с \texttt{/api2/*} на \texttt{/api/posts/*}. Документация не синхронизирована. Endpoint \texttt{/api2/questions/} остался работающим 10--15 месяцев, создав впечатление обратной совместимости. На самом деле, поддержка заканчивается.
+
+\textbf{(2) Все endpoints требуют авторизацию.} Историческая норма: GET-запросы к публичным API бесплатные без токена. Metaculus изменили политику --- даже чтение вопросов требует `Authorization: Token <token>` заголовок. Возможно, это было сделано для rate-limiting по пользователю.
+
+\subsubsection*{Что сделали}
+Fix реализован в v0.5.1 (коммит в CHANGELOG.md, стр. 15):
+
+\begin{enumerate}
+\item Конструктор MetaculusClient принимает опциональный параметр \texttt{token: str = ""}. Если указан, заголовок \texttt{Authorization: Token {token}} добавляется в каждый запрос.
+\item Endpoint изменён с \texttt{/api2/questions/} на \texttt{/api/posts/}.
+\item Параметры переименованы:
+    \begin{itemize}
+    \item `status` $\to$ `statuses`
+    \item \texttt{resolve\_time\_\_gt} $\to$ \texttt{scheduled\_resolve\_time\_\_gt}
+    \item \texttt{resolve\_time\_\_lt} $\to$ \texttt{scheduled\_resolve\_time\_\_lt}
+    \end{itemize}
+\item Парсинг ответа переписан. Новый формат:
+\begin{verbatim}
+post['question']['aggregations']['recency_weighted']['latest']['centers'][0]
+\end{verbatim}
+вместо старого:
+\begin{verbatim}
+post['community_prediction']['full']['q2']
+\end{verbatim}
+\item Токен генерируется на https://www.metaculus.com/aib/ (бесплатный, не истекает).
+\end{enumerate}
+
+v0.9.4 (CHANGELOG, стр. 83) Metaculus отключён в production (\texttt{\_fetch\_metaculus()} возвращает \texttt{[]} если client=None). Причина: access tier ограничен --- нам нужен BENCHMARKING tier для надёжного доступа.
+
+\subsubsection*{Урок}
+\textbf{Никогда не предполагай обратную совместимость третьего-сторонней API.} Даже если старый endpoint работает 10+ месяцев, это может быть legacy layer, а не guarantee.
+\begin{enumerate}
+\item Подписывайся на изменения API через официальные каналы (RSS, email newsletter, GitHub releases).
+\item При интеграции внешней API, сохраняй последнюю документацию локально (\texttt{tasks/research/metaculus\_api\_fix.md} служит reference).
+\item Зафиксируй rate limit --- Metaculus: 120 req/min (безопасно), без опубликованного лимита. Всегда консервативен.
+\item При auth-требовании, явно документируй, как получить credentials, и сделай их конфигурируемыми из окружения.
+\end{enumerate}
+
+---
+
+\subsection{Case Study 2: GDELT Cyrillic Query Crash (pre-v0.5.1, v0.9.4)}
+
+\subsubsection*{Контекст}
+ForesightCollector вызывает GDELT DOC 2.0 API с query вида \emph{``news forecast 2026-03-29 ТАСС''} для сбора статей по русским СМИ. На production сервере с v0.9.2 и v0.9.3 это вызывало JSON parse error: ElasticSearch backend за GDELT возвращал HTML вместо JSON.
+
+\subsubsection*{Что пробовали}
+В \texttt{tasks/research/gdelt\_api\_fix.md} и \texttt{tasks/research/gdelt\_api.md} проведён анализ:
+\begin{enumerate}
+\item GDELT query-язык поддерживает Unicode кириллицу?
+\item API имеет опции для фильтрации по языку источника?
+\item Как парсить 403 HTML-ответ, чтобы не падать?
+\item Есть ли более структурированный источник событий (не pure search API)?
+\end{enumerate}
+
+\subsubsection*{Почему не сработало}
+Три причины одновременно:
+
+\textbf{(1) Кириллица в query.} GDELT индексирует только английские переводы и метаданные. Когда ForesightCollector отправляет \texttt{query="news forecast 2026-03-29 ТАСС"}, ElasticSearch не может обработать кириллицу в текущей конфигурации. Вместо JSON error, API возвращает HTML-страницу (5xx error page).
+
+\textbf{(2) Будущие даты бессмысленны.} GDELT основан на rolling window ~ 3 месяца в прошлое. Query с датой 2026-03-29 (из futuer) не вернёт никаких статей. API не валидирует дату --- просто возвращает пустой результат (или ошибку).
+
+\textbf{(3) Отсутствие защиты от null в `articles`.} Когда API испытывает нагрузку, может вернуть \texttt{{"articles": null}} вместо \texttt{{"articles": []}}. Код \texttt{for article in data.get("articles", [])} упадёт с TypeError, потому что `None` не iterable.
+
+\subsubsection*{Что сделали}
+Fix реализован в два этапа: Content-Type guard + null-safe articles в pre-v0.5.1 (commit 987260c), Cyrillic stripping в v0.9.4 (commit 3658531):
+
+\begin{enumerate}
+\item \textbf{Content-Type проверка.} Перед парсингом JSON:
+\begin{verbatim}
+if "text/html" in response.headers.get("content-type", ""):
+    logger.warning("GDELT returned HTML: %s", response.text[:200])
+    return []
+\end{verbatim}
+
+\item \textbf{Null-safe articles.} Замена:
+\begin{verbatim}
+for article in (data.get("articles") or []):
+\end{verbatim}
+вместо \texttt{data.get("articles", [])}, потому что latter не защищает от `null`.
+
+\item \textbf{Английский query.} ForesightCollector теперь генерирует query на английском: `"news forecast"` вместо `"Новостной прогноз"`. Language-specific фильтрация делается через GDELT operators (ниже).
+
+\item \textbf{Language и country operators.} Документация в \texttt{tasks/research/gdelt\_api.md} (стр. 8--9) показывает:
+\begin{verbatim}
+sourcelang:russian + sourcecountry:RS
+\end{verbatim}
+(RS = FIPS код России, не ISO RU). Это фильтрует статьи по языку источника и стране издателя без кириллицы в query.
+\end{enumerate}
+
+\subsubsection*{Урок}
+\textbf{Никогда не доверяй charset-поддержке без явного тестирования.} Даже если API документация не упоминает ограничения, всегда проверяй граничные случаи (non-ASCII characters, future dates, null values).
+
+\begin{enumerate}
+\item Запрашиваемые языки обрабатывай через фильтр (e.g. `sourcelang:` operator), а не через query text.
+\item Проверяй `content-type` заголовок перед парсингом JSON --- это спасает от HTML error pages.
+\item Защищайся от null values: \texttt{(data.get("field") or [])} вместо \texttt{data.get("field", [])}.
+\item Rate limit на GDELT: ~1 req/sec, без опубликованного лимита. Добавь exponential backoff на 429.
+\end{enumerate}
+
+---
+
+\subsection{Case Study 3: Polymarket camelCase Parameter Mismatch (pre-v0.5.1)}
+
+\subsubsection*{Контекст}
+Polymarket Gamma API используется в ForesightCollector для fetch markets. Код в \texttt{src/data\_sources/foresight.py} (строка 165) отправлял:
+\begin{verbatim}
+GET /markets?order=volume_24hr
+\end{verbatim}
+
+На production это возвращало HTTP 422 Unprocessable Entity. Локально в dry-run не воспроизводилось (возможно, из-за кэша или другого контекста).
+
+\subsubsection*{Что пробовали}
+Live-запросы (2026-03-28) с разными вариантами параметра:
+\begin{enumerate}
+\item \texttt{order=volume\_24hr} (snake\_case, как документировано в algunos examples) $\to$ 422
+\item \texttt{order=volume24hr} (camelCase, как в других частях Polymarket API) $\to$ 200
+\item \texttt{order=volume} (generic, не специфично) $\to$ 200
+\end{enumerate}
+
+Вывод: параметр требует camelCase, но никаких доков не было.
+
+\subsubsection*{Почему не сработало}
+\textbf{Inconsistency между endpoints.} Polymarket имеет несколько API endpoints:
+\begin{itemize}
+\item \texttt{/markets} --- принимает camelCase (\texttt{volume24hr}, \texttt{liquidityNum}, \texttt{endDate})
+\item \texttt{/events} --- принимает snake\_case (\texttt{volume\_24h}, \texttt{liquidity\_num})
+\end{itemize}
+
+Это расхождение нигде не задокументировано. Разработчик (справедливо) предположил, что snake\_case универсален. На самом деле, \texttt{/markets} настаивает на camelCase.
+
+\subsubsection*{Что сделали}
+Fix реализован в pre-v0.5.1 (commit 987260c, 2026-03-28):
+
+Изменение в \texttt{src/data\_sources/foresight.py}:
+\begin{verbatim}
+# БЫЛО:
+"order": "volume_24hr"
+
+# СТАЛО:
+"order": "volume24hr"
+\end{verbatim}
+
+Документация в \texttt{tasks/research/polymarket\_gamma\_api\_fix.md} (стр. 26--46) содержит полный reference валидных параметров для \texttt{/markets} endpoint.
+
+\subsubsection*{Урок}
+\textbf{API inconsistency --- это bug в дизайне API, не вашего кода.} Однако, когда ты интегрируешь, нужно быть готов к такому.
+
+\begin{enumerate}
+\item Всегда тестируй все endpoints той же API live перед production deploy.
+\item Не полагайся на consistency между похожими endpoints --- каждый может иметь свою convention.
+\item Создай локальный reference документ для каждого внешнего API (как \texttt{tasks/research/}) с примерами.
+\item При 422 Unprocessable Entity, форматируй запрос как JSON и проверь каждый параметр через документацию.
+\end{enumerate}
+
+---
+
+\subsection{Case Study 4: Reuters RSS Feed Deprecation (v0.9.4)}
+
+\subsubsection*{Контекст}
+Исторически GLOBAL\_RSS\_FEEDS включал Reuters фиды:
+\begin{verbatim}
+https://feeds.reuters.com/reuters/...
+\end{verbatim}
+
+На production после 2026-03-28 эти URLs возвращали 404, не обновляясь. Pipeline падал на stage 1 при попытке fetch news signals через эти dead feeds.
+
+\subsubsection*{Что пробовали}
+Проверили несколько гипотез:
+\begin{enumerate}
+\item Reuters сменили хост (e.g. reuters.com/news vs feeds.reuters.com)?
+\item Feed требует авторизацию?
+\item Хост DNS разрешается, но HTTP 404 возвращается?
+\end{enumerate}
+
+Итог: \texttt{feeds.reuters.com} закрыт полностью (HTTPS SSL certificate expired, не поддерживается). Сервис закрыт с 2020 года.
+
+\subsubsection*{Почему не сработало}
+Reuters мигрировала на внутренний ReutersConnect API (требует авторизация, недоступна для public). Public RSS feeds больше не поддерживаются.
+
+\subsubsection*{Что сделали}
+Удалены все Reuters feeds из \texttt{src/agents/collectors/news\_scout.py} (GLOBAL\_RSS\_FEEDS). Альтернативные источники (BBC, AP, Bloomberg) остаются.
+
+\subsubsection*{Урок}
+\textbf{RSS feeds --- живые ресурсы. Периодически проверяй.} Крупные издатели могут закрыть public feeds в любой момент.
+
+\begin{enumerate}
+\item Добавь health-check для RSS feeds (попытайся fetch за последнюю неделю).
+\item Имей fallback источники --- Reuters закрыт, но BBC, AP, Bloomberg, свежие.
+\item Не полагайся на одного издателя для news signals.
+\item Отслеживай 404/410 в логах --- это сигнал, что feed мёртв.
+\end{enumerate}
+
+---
+
+\section{Архитектурные отказы}
+
+\subsection{Case Study 5: YandexGPT Stub (v0.8.0)}
+
+\subsubsection*{Контекст}
+v0.7.0 содержал условную логику для выбора LLM провайдера: если \texttt{OPENROUTER\_API\_KEY} отсутствует, fallback на YandexGPT (\texttt{ya\_gpt\_pro} или \texttt{ya\_gpt\_lite}). YandexGPT требует российский IP (или VPN) и YandexCloud аккаунт.
+
+\subsubsection*{Почему не сработало}
+\begin{enumerate}
+\item Production сервер в Yandex Cloud (213.165.220.144) имеет доступ к YandexGPT, но интеграция бросала \texttt{NotImplementedError} при каждом вызове (никогда не была реализована дальше stub'а).
+\item Приоритизация провайдера была жёсткая: если YandexGPT задан, OpenRouter не используется. Это создавало single point of failure.
+\item Документация prompts отсутствовала специфична для YandexGPT (модель имеет своё поведение JSON parsing).
+\item Обслуживание двух параллельных стеков (OpenRouter + YandexGPT) удваивает complexity.
+\end{enumerate}
+
+\subsubsection*{Что сделали}
+v0.8.0 (CHANGELOG, стр. 231): YandexGPT полностью удален. Три задачи, которые раньше использовали YandexGPT (\texttt{style\_generation}, \texttt{style\_generation\_ru}, \texttt{quality\_style}), переведены на OpenRouter с \texttt{anthropic/claude-sonnet-4}.
+
+\subsubsection*{Урок}
+\textbf{Не строй архитектуру на наличии двух провайдеров, если один из них не работает.} Single LLM provider (OpenRouter) лучше, чем fallback на неработающего second.
+
+\begin{enumerate}
+\item Выбери один primary провайдер и придерживайся.
+\item Если нужна redundancy, выбери два провайдера, оба fully tested и integrated.
+\item Не добавляй условную логику ``если API key отсутствует, используй другого провайдера'' --- это скрывает problems.
+\end{enumerate}
+
+---
+
+\subsection{Case Study 6: Non-Existent Preset Sonnet 4.6 (v0.9.4)}
+
+\subsubsection*{Контекст}
+v0.9.3 содержал 3 пресета в \texttt{src/config.py}:
+\begin{enumerate}
+\item Light (Gemini Flash)
+\item Standard (Claude Sonnet 4.6)
+\item Opus (Claude Opus 4.6)
+\end{enumerate}
+
+Standard пресет был фасадом для модели \texttt{claude-sonnet-4.6}, которой нет в OpenRouter pricing. Результат: при выборе Standard, pipeline падал на первом LLM call с ошибкой ``model not found''.
+
+\subsubsection*{Почему не сработало}
+\begin{enumerate}
+\item Confusion между версиями Sonnet. OpenRouter поддерживает \texttt{claude-3.5-sonnet}, но не \texttt{claude-sonnet-4.6} (и не существует в природе).
+\item Пресеты не были протестированы полностью (dry-run использовал флаги, не UI-выбор).
+\item Документация была неактуальна (старые имена моделей).
+\end{enumerate}
+
+\subsubsection*{Что сделали}
+v0.9.4 (CHANGELOG, стр. 85): Standard пресет удален. Оставлены 2 пресета: Light (Gemini 2.5 Flash) и Opus (Claude Opus 4.6). UI обновлена.
+
+\subsubsection*{Урок}
+\textbf{Валидируй model names до деплоя.} Если пресет ссылается на модель, проверь, что она существует в pricing.
+
+\begin{enumerate}
+\item Добавь CI/CD step, который тестирует каждый пресет с real API call.
+\item Держи актуальный список доступных моделей на каждом провайдере.
+\item Лучше иметь 1 пресет, который работает, чем 3, из которых 2 сломаны.
+\end{enumerate}
+
+---
+
+\subsection{Case Study 7: Dark Mode Complexity (v0.8.0)}
+
+\subsubsection*{Контекст}
+v0.7.0 и ранее содержали CSS для dark mode (Pico.css имеет встроенную поддержку). Было HTML-переключение `<button>` для toggle. Это добавило:
+\begin{enumerate}
+\item CSS сложность (duplication для light/dark палеток)
+\item JS сложность (localStorage для preference, system preference detection)
+\item Testing complexity (тестировать оба режима)
+\item User confusion (не все пользователи знают, что toggle существует)
+\end{enumerate}
+
+\subsubsection*{Почему не сработало}
+\begin{enumerate}
+\item Нет пользовательского спроса на dark mode (feedback не указывал на это).
+\item Дизайн был субоптимален --- цвета светлого режима были тщательно выбраны (OKLCH, контрастность, доступность). Dark mode версия была скопирована без адаптации.
+\item Maintenance burden: каждое изменение цвета требовало обновления двух палеток.
+\end{enumerate}
+
+\subsubsection*{Что сделали}
+v0.8.0 (CHANGELOG, стр. 231): Dark mode удален. Оставлена только светлая тема (OKLCH палетка, оптимизированная для контрастности и доступности).
+
+\subsubsection*{Урок}
+\textbf{Не добавляй features без спроса. YAGNI.} Даже если feature ``nice to have'', это не стоит complexity.
+
+\begin{enumerate}
+\item Собирай feedback перед добавлением UI features.
+\item Если feature не используется, удали её.
+\item Лучше одна хорошо-сделанная тема, чем две плохо-сделанные.
+\end{enumerate}
+
+---
+
+\subsection{Case Study 8: Миграция Pico.css на Tailwind CSS (v0.8.0)}
+
+\subsubsection*{Контекст}
+Начальная версия UI использовала Pico.css --- classless CSS-фреймворк (минимальная стилизация без классов). Для прототипов этого было достаточно: формы, таблицы и типографика выглядели приемлемо из коробки.
+
+\subsubsection*{Почему не сработало}
+С развитием продукта требования к UI выросли за пределы возможностей classless-фреймворка:
+\begin{enumerate}
+\item \textbf{OKLCH-палитра.} Pico.css работает на HSL/hex, не поддерживает OKLCH цветовое пространство, необходимое для perceptually uniform палитры дизайн-системы.
+\item \textbf{Кастомные компоненты.} Dashboard с прогнозами, карточки результатов, timeline --- ни один из этих элементов не покрывается classless CSS.
+\item \textbf{Responsive layout.} Pico.css предоставляет базовый responsive через media queries, но нет утилит для grid/flex раскладки dashboard'ов.
+\item \textbf{Анимации.} Переходы между состояниями (loading, success, error) требуют кастомного CSS, что полностью нивелирует преимущество ``zero-class'' подхода.
+\end{enumerate}
+
+\subsubsection*{Что сделали}
+v0.8.0 (CHANGELOG, стр. 231): полная миграция на Tailwind CSS v4 с PostCSS build pipeline (commit ae12705):
+
+\begin{enumerate}
+\item Tailwind CSS v4.2.2 с \texttt{@theme} config заменил Pico.css.
+\item Реализована дизайн-система Impeccable с 17 JS-referenced \texttt{fn-*} компонентами.
+\item Типографика: Newsreader (заголовки) / Source Sans 3 (body) / JetBrains Mono (код) через Google Fonts.
+\item PostCSS build: \texttt{input.css} $\to$ \texttt{tailwind.css} с watch mode для разработки.
+\end{enumerate}
+
+\subsubsection*{Урок}
+\textbf{Classless CSS-фреймворки --- ловушка для всего, что сложнее landing page.} Если UI потребует кастомных компонентов, утилитарный фреймворк нужно выбирать сразу.
+
+\begin{enumerate}
+\item Оценивай потолок UI-требований на старте проекта, а не по текущим потребностям.
+\item Стоимость миграции CSS растёт нелинейно с количеством шаблонов.
+\item Утилитарный фреймворк (Tailwind) масштабируется с проектом; classless --- нет.
+\end{enumerate}
+
+---
+
+\section{Критические баги}
+
+\subsection{Case Study 9: Temporal Leak in Walk-Forward Evaluation (v0.9.2)}
+
+\subsubsection*{Контекст}
+Phase 4 (v0.9.2) реализовала walk-forward evaluation для валидации informed consensus. Модель использовала pre-aggregated позиции бетторов (из старого JSON-датасета) за каждый рынок. При итерации по 22 фолдам walk-forward каждый фолд имеет temporal cutoff $T$ (``используй только данные до даты $T$'').
+
+Проблема: pre-aggregated позиции содержали трейды со средней датой $T + 30$ дней. Это means информационная утечка из будущего --- модель видит сигналы, которые не могла видеть реальная система в момент времени $T$.
+
+\subsubsection*{Что пробовали}
+\begin{enumerate}
+\item Проверить, что cutoff $T$ корректен? Да, cutoff применялась правильно.
+\item Проверить, что фолды не перекрываются? Да, non-overlapping 60-day windows.
+\item Где источник утечки? Traced в pre-aggregated \texttt{avg\_position} для каждого bettor-market пары.
+\end{enumerate}
+
+\subsubsection*{Почему не сработало}
+\textbf{Design issue.} Pre-aggregated positions были computed один раз на весь датасет:
+\begin{verbatim}
+avg_position = SUM(price $\times$ quantity) / SUM(quantity) for all trades
+\end{verbatim}
+
+Это глобальное среднее, без временного измерения. При walk-forward, код использовал то же самое среднее для всех фолдов, забывая, что медиана датирована будущим.
+
+\subsubsection*{Что сделали}
+v0.9.2 (CHANGELOG, стр. 119--122): Новый скрипт \texttt{scripts/duckdb\_build\_bucketed.py} переагрегирует 470M raw trades в bucketed parquet:
+
+\begin{enumerate}
+\item Временные бакеты: 30-дневные окна (e.g., 2024-01-01 до 2024-01-31).
+\item Для каждого (bettor, market, time\_bucket): сохрани \texttt{weighted\_price\_sum} и \texttt{total\_usd} (частичные суммы).
+\item Walk-forward теперь может вычислить: $\text{avg\_position\_as\_of\_T} = \frac{\sum \text{weighted\_price\_sum}}{\sum \text{total\_usd}}$ где $\text{time\_bucket} \le T$.
+\item Zero data loss: 470M trades $\to$ 2.4GB bucketed parquet с predicate pushdown.
+\end{enumerate}
+
+Result (CHANGELOG, стр. 127): 22/22 фолда $\text{BSS} > 0$ с robust mean $\text{BSS} = +0.127$.
+
+Анализ утечки (CHANGELOG, стр. 130): leaked $\text{BSS} = +0.092$ vs clean $\text{BSS} = +0.117$ на тех же фолдах. Leak добавлял шум, не сигнал.
+
+\subsubsection*{Урок}
+\textbf{Temporal cutoff требует временного измерения в данных, не глобальное агрегирование.} Это критично для любого walk-forward evaluation.
+
+\begin{enumerate}
+\item Никогда не используй pre-aggregated data для temporal validation.
+\item Bucketed/timestamped aggregates позволяют point-in-time queries: ``какое было среднее на 2024-01-15?''
+\item Всегда проверяй: есть ли trades/signals с датой > cutoff T? Если да, это leak.
+\item Unit test: add explicit check that \texttt{as\_of\_date} < cutoff date for all test data.
+\end{enumerate}
+
+---
+
+\subsection{Case Study 10: conditionId Mismatch (v0.9.3)}
+
+\subsubsection*{Контекст}
+Polymarket имеет дуальную структуру: каждый рынок имеет two IDs:
+\begin{itemize}
+\item `id` (numeric, e.g., 123456) --- локальный в Gamma API marketplace
+\item `conditionId` (CTF hex hash, e.g., 0x7e2a...) --- глобальный в CLOB и Data API
+\end{itemize}
+
+Phase 6 (v0.9.5, но bug был в v0.9.3) интегрировала Data API для fetch real trades. ForesightCollector пытается обогатить Gamma markets с informèd consensus signals из trade data.
+
+Проблема: \texttt{src/data\_sources/foresight.py} использовал \texttt{market.id} (numeric) как join key, а \texttt{src/inverse/loader.py} (который загружал исторические trades) использовал `conditionId` (hash). 99% сигналов молчал отпадал, потому что не было match'а.
+
+\subsubsection*{Что пробовали}
+\begin{enumerate}
+\item Посмотреть, что возвращает Polymarket API? Оба поля возвращаются.
+\item Какое поле используется в других частях кода? Нашли inconsistency.
+\item Добавить логирование для match rate? Обнаружили 0% matches.
+\end{enumerate}
+
+\subsubsection*{Почему не сработало}
+\textbf{Нет documentation in code comments.} Ни один из двух IDs не был задокументирован с пояснением, что один локальный, другой глобальный. Разработчик справедливо выбрал первый встреченный `id` поле.
+
+\subsubsection*{Что сделали}
+v0.9.3 (CHANGELOG, стр. 96--97):
+
+\begin{enumerate}
+\item \texttt{src/data\_sources/foresight.py}: extract `conditionId` вместо `id`.
+\item \texttt{src/agents/collectors/foresight\_collector.py}: use `conditionId` как join key для matching с trade data.
+\item Добавлены comments:
+\begin{verbatim}
+# conditionId is globally unique (CLOB + Data API)
+# id is local to Gamma API (marketplace-specific)
+# Always join on conditionId, not id.
+\end{verbatim}
+\end{enumerate}
+
+\subsubsection*{Урок}
+\textbf{Когда third-party API имеет несколько IDs, документируй purpose каждого.}
+
+\begin{enumerate}
+\item Add comment в код: ``// market.id: local (Gamma), market.conditionId: global (CLOB)''.
+\item Test: fetch market через оба endpoints, verify оба ID'а return.
+\item Unit test: join на wrong ID должен вернуть 0 matches (catch этот bug).
+\item Добавь assertion: \texttt{assert len(matches) > 0, "No markets matched! Check join keys."}
+\end{enumerate}
+
+---
+
+\subsection{Case Study 11: Date Serialization Crash (v0.9.5)}
+
+\subsubsection*{Контекст}
+v0.9.5 обновила timeline schemas (Phase 6). \texttt{predicted\_timeline} содержит \texttt{predicted\_date} и \texttt{target\_date} поля. Pipeline прошла all 9 stages успешно, но при попытке сохранить результат в SQLite, worker упал с:
+
+\begin{verbatim}
+TypeError: Object of type date is not JSON serializable
+\end{verbatim}
+
+Результат не был сохранён --- user смотрит на пустую страницу despite 40 минут computation (\$5--15 в cost).
+
+\subsubsection*{Что пробовали}
+\begin{enumerate}
+\item Проверить, что dates парсятся корректно? Да, они \texttt{datetime.date} объекты.
+\item Где serialization происходит? В worker при \texttt{model\_dump()} перед `INSERT`.
+\item Почему \texttt{model\_dump()} не обрабатывает date объекты? По дефолту, \texttt{model\_dump()} не имеет \texttt{mode="json"}, который преобразует non-JSON types.
+\end{enumerate}
+
+\subsubsection*{Почему не сработало}
+\textbf{Pydantic v2 breaking change.} В Pydantic v2, \texttt{model\_dump()} требует явный \texttt{mode="json"} для JSON serialization. По дефолту, это просто возвращает Python объекты. Тогда \texttt{json.dumps()} fails на `date` объектах.
+
+\subsubsection*{Что сделали}
+v0.9.5 (CHANGELOG, стр. 35--36):
+
+\begin{enumerate}
+\item Добавлены \texttt{@field\_serializer} decorators на schemas с date полями:
+\begin{verbatim}
+@field_serializer('predicted_date', 'target_date', 'generated_at')
+def serialize_dates(self, value):
+    if isinstance(value, date):
+        return value.isoformat()
+    return value
+\end{verbatim}
+
+\item Альтернативно: используй \texttt{model\_dump(mode="json")} везде, где нужна JSON serialization.
+\item Добавлены unit tests для timeline serialization.
+\end{enumerate}
+
+\subsubsection*{Урок}
+\textbf{Serialization должна быть unit-tested. Никогда не предполагай, что \texttt{model\_dump()} даст тебе JSON-ready dict.}
+
+\begin{enumerate}
+\item Add test: \texttt{model\_dump() $\to$ json.dumps() $\to$ json.loads()} round-trip.
+\item При добавлении новых fields типа date/datetime, immediately add serializer.
+\item Используй \texttt{model\_dump(mode="json")} в production code (более явно).
+\item Помни: Pydantic v2 требует explicit `mode` для JSON types.
+\end{enumerate}
+
+---
+
+\subsection{Case Study 12: PromptParseError Silently Dropped (v0.5.2--v0.9.4)}
+
+\subsubsection*{Контекст}
+v0.7.0 agent (EventTrendAnalyzer) отправляет JSON request на LLM. LLM (Gemini Flash) может вернуть truncated JSON (если finish\_reason=``length''). Код:
+
+\begin{verbatim}
+try:
+    data = json.loads(response.text)
+    return EventThreads.model_validate(data)
+except (json.JSONDecodeError, ValidationError):
+    return {}  # silent fallback
+\end{verbatim}
+
+Проблема: при invalid JSON, код возвращает \texttt{{}} (пустой dict). Downstream код ожидает `EventThreads` (которая имеет required fields), получает \texttt{{}} $\to$ ValidationError $\to$ assessment молчит падает, и timeline становится пустой.
+
+\subsubsection*{Что пробовали}
+\begin{enumerate}
+\item Логировать ошибку? Было, но WARNING уровень, который обрезался в production.
+\item Есть ли fallback logic? Да, но fallback неполный (возвращает {} вместо default EventThreads).
+\item Как это вообще прошло testing? Тесты использовали MockLLMClient, который всегда возвращает valid JSON.
+\end{enumerate}
+
+\subsubsection*{Почему не сработало}
+\textbf{Exception swallowing + incomplete fallback.} Catch-all `except` absorbs both JSON errors и Validation errors. Fallback \texttt{{}} не имеет структуры, которую ожидает downstream. Это как ``promise'' вернуть результат, но фактически вернуть None.
+
+\subsubsection*{Что сделали}
+v0.7.1 (CHANGELOG, стр. 275): Resilient event\_identification added.
+
+\begin{enumerate}
+\item Distinguish между JSON parse errors и validation errors:
+\begin{verbatim}
+try:
+    data = json.loads(response.text)
+    return EventThreads.model_validate(data)
+except json.JSONDecodeError as e:
+    logger.error("Truncated JSON: %s", response.text[:100])
+    # fallback to raw headlines?
+    return _fallback_event_threads(headlines)
+except ValidationError as e:
+    logger.error("Validation error: %s", e)
+    # return empty but structured default
+    return EventThreads(threads=[])
+\end{verbatim}
+
+\item Вместо silent drop, либо:
+  \begin{enumerate}
+  \item Re-raise exception для explicit retry
+  \item Return default объект (e.g., \texttt{EventThreads(threads=[])}) со структурой
+  \item Fallback to raw headlines (e.g., каждый headline = один thread)
+  \end{enumerate}
+\end{enumerate}
+
+\subsubsection*{Урок}
+\textbf{Never silently swallow exceptions. Either fail-fast или graceful fallback с logged reason.}
+
+\begin{enumerate}
+\item Distinguish error types: parse errors vs validation errors имеют разные fix strategies.
+\item Fallback value должен иметь корректную структуру (не \texttt{{}}, а \texttt{Model(field1=[], field2=None)}).
+\item Логируй exception content (e.g. \texttt{str(e)} или \texttt{e.json()}), не только error message.
+\item Unit test: add case where LLM returns truncated JSON, verify fallback works.
+\end{enumerate}
+
+---
+
+\subsection{Case Study 13: BudgetTracker Race Condition (v0.7.1)}
+
+\subsubsection*{Контекст}
+v0.7.0 реализовала budget tracking для ограничения LLM costs (\$50 default max). BudgetTracker:
+
+\begin{verbatim}
+async def check_budget(self, cost_usd: float):
+    if self.total_cost + cost_usd > self.max_budget:
+        raise BudgetExceededError(...)
+    self.total_cost += cost_usd
+\end{verbatim}
+
+Проблема: в async context с несколькими parallel agents, два агента могут одновременно вызвать \texttt{check\_budget()}. Race condition:
+\begin{enumerate}
+\item Agent 1 reads \texttt{self.total\_cost = 48}.
+\item Agent 2 reads \texttt{self.total\_cost = 48}.
+\item Agent 1 adds 1.5, writes \texttt{self.total\_cost = 49.5}.
+\item Agent 2 adds 1.5, writes \texttt{self.total\_cost = 50.0} (мог бы быть 51, что exceeds budget).
+\end{enumerate}
+
+Результат: budget check может быть bypassed.
+
+\subsubsection*{Что пробовали}
+\begin{enumerate}
+\item Запустить с parallel agents? Локально, single-threaded, не воспроизводилось.
+\item Добавить sleep между LLM calls? Случайно помогло в тесте, но не fix.
+\item Есть ли глобальный lock? Нет.
+\end{enumerate}
+
+\subsubsection*{Почему не сработало}
+\textbf{TOCTOU (Time-of-Check-Time-of-Use) race condition.} Check и Use не атомичны. В async Pythone, `await` может переключить контекст между check и write.
+
+\subsubsection*{Что сделали}
+v0.7.1 (CHANGELOG, стр. 263):
+
+\begin{verbatim}
+class BudgetTracker:
+    def __init__(self):
+        self._lock = asyncio.Lock()
+
+    async def check_budget(self, cost_usd: float):
+        async with self._lock:
+            if self.total_cost + cost_usd > self.max_budget:
+                raise BudgetExceededError(...)
+            self.total_cost += cost_usd
+\end{verbatim}
+
+Теперь check и write protected by lock. Не может быть race.
+
+\subsubsection*{Урок}
+\textbf{Shared state в async code требует synchronization primitives.}
+
+\begin{enumerate}
+\item Используй \texttt{asyncio.Lock()} для защиты read-modify-write операций.
+\item Никогда не предполагай, что single-threaded code safe в async context.
+\item Unit test: запусти с \texttt{asyncio.gather()} несколько concurrent calls, verify atomicity.
+\item Code review: флаг на любое \texttt{self.field = ...} в async function --- может быть race condition.
+\end{enumerate}
+
+---
+
+\subsection{Case Study 14: Timeout Cascade (v0.9.4)}
+
+\subsubsection*{Контекст}
+Дефолтный timeout агентов составлял 300 секунд. При работе с тяжёлыми промптами (Opus на сложных multi-agent медиациях) LLM-ответы регулярно превышали 300s. Результат: каскадный отказ --- таймаут одного агента вызывал падение всей стадии, а с ней терялась вся предыдущая работа pipeline.
+
+\subsubsection*{Что сделали}
+Дефолтный timeout поднят с 300s до 600s (commit c96ed67). Индивидуальные таймауты настроены per stage:
+
+\begin{enumerate}
+\item \texttt{outlet\_historian}: снижен до 300s (легковесная стадия, не требует длинных LLM-ответов).
+\item \texttt{delphi\_r2}: увеличен до 900s (сложная multi-agent медиация с 5 персонами, самый длинный промпт в pipeline).
+\item Остальные стадии: 600s (2x от наблюдаемого p95).
+\end{enumerate}
+
+\subsubsection*{Урок}
+\textbf{Дефолтные таймауты должны базироваться на 2x от наблюдаемого p95 latency, а не на оптимистичных средних.}
+
+\begin{enumerate}
+\item Мониторь реальные latency перед выставлением порогов.
+\item Настраивай таймауты per stage --- одна стадия может быть 10x тяжелее другой.
+\item Каскадный отказ от таймаута хуже, чем дополнительные 5 минут ожидания.
+\end{enumerate}
+
+---
+
+\subsection{Case Study 15: Эволюция max\_tokens (v0.5.1--v0.9.5)}
+
+\subsubsection*{Контекст}
+Параметр \texttt{max\_tokens} прошёл 4 итерации:
+\begin{enumerate}
+\item \textbf{4096} (начальное значение) --- обрезал выходы Delphi R1, где 5 персон генерируют по 200+ токенов каждая.
+\item \textbf{8192} --- всё ещё недостаточно для полных assessment'ов с обоснованиями.
+\item \textbf{16384} --- обнаружилось, что OpenRouter резервирует \texttt{max\_tokens} из кредитного баланса. Установка 16384 резервировала \$5+ за вызов, даже если фактический выход --- 2000 токенов.
+\item \textbf{unlimited} (текущее значение) --- cap снят полностью.
+\end{enumerate}
+
+\subsubsection*{Что сделали}
+Удалён cap \texttt{max\_tokens} полностью. Ключевое открытие --- механизм резервирования кредитов OpenRouter: при \texttt{max\_tokens=16384} система блокировала эквивалент полного output на балансе пользователя, создавая иллюзию высоких расходов и блокируя параллельные вызовы при низком балансе.
+
+\subsubsection*{Урок}
+\textbf{Модели ценообразования LLM API неочевидны.} Тестируй cost impact параметра \texttt{max\_tokens} до production deploy.
+
+\begin{enumerate}
+\item Проверяй, как провайдер обрабатывает \texttt{max\_tokens}: billing по фактическому output или по зарезервированному?
+\item Для OpenRouter: unlimited \texttt{max\_tokens} дешевле, чем высокий фиксированный cap.
+\item Документируй pricing gotchas для каждого LLM-провайдера в проектной wiki.
+\end{enumerate}
+
+---
+
+\subsection{Case Study 16: Инкрементальное сохранение pipeline (v0.9.5)}
+
+\subsubsection*{Контекст}
+Pipeline сохранял результаты только по полному завершению всех 9 стадий. Если QualityGate (stage 9) падал по таймауту после 40+ минут обработки, все результаты предыдущих стадий (\$5--15 в LLM costs) терялись безвозвратно. Пользователь видел пустую страницу.
+
+\subsubsection*{Что сделали}
+Реализовано per-stage инкрементальное сохранение (commit f4d0848):
+
+\begin{enumerate}
+\item Каждая завершённая стадия немедленно persists результат в \texttt{PipelineStep.output\_data}.
+\item При падении на стадии $N$, стадии $1 \ldots N{-}1$ уже сохранены и доступны пользователю.
+\item Worker при рестарте может продолжить с последней сохранённой стадии (checkpoint recovery).
+\end{enumerate}
+
+\subsubsection*{Урок}
+\textbf{Долгоживущие pipeline обязаны делать checkpoint после каждого дорогого шага. ``Всё или ничего'' неприемлемо, когда каждый шаг стоит доллары.}
+
+\begin{enumerate}
+\item Стоимость потерянной работы пропорциональна количеству стадий без checkpoint'ов.
+\item Checkpoint recovery позволяет retry с последней точки, экономя и время, и деньги.
+\item Паттерн: каждый stage записывает \texttt{output\_data} сразу после успешного завершения.
+\end{enumerate}
+
+---
+
+\section{Отложенные направления}
+
+\subsection{Case Study 17: Domain-Specific Brier Scores}
+
+\subsubsection*{Идея}
+Разные типы рынков имеют разные точность-характеристики. Например, crypto markets более волатильны, политические markets более точны. Можно ли compute per-domain Brier Score weights и используй их для adaptive extremizing?
+
+\subsubsection*{Почему отложено}
+\textbf{Data sparsity.} из 348K informed бетторов, только ~100 имеют >5 resolved bets в each domain (crypto, politics, sports, etc.). Brier Score на малом N имеет огромную дисперсию. При попытке stratify по domains, 99% бетторов drop out из-за недостаточного разрешения данных.
+
+Документация (docs/methodology-inverse-problem.md, стр. 398): ``Domain-specific BS --- data sparsity (1--3\% BSS gain, not worth effort)''
+
+\subsubsection*{Урок}
+\textbf{Не добавляй complexity для marginal gains на limited data.} 1--3\% улучшение требует 10x больше данных для статистической significance.
+
+---
+
+\subsection{Case Study 18: Bettor-Level News Correlation}
+
+\subsubsection*{Идея}
+Корреляция между news events (GDELT) и bettor positions. Гипотеза: informed бетторы быстро реагируют на breaking news, можно ли построить predictive model?
+
+\subsubsection*{Почему отложено}
+\textbf{Спекулятивная гипотеза требует специального pipeline.} Для отладки нужно:
+\begin{enumerate}
+\item GDELT API, которая работает (исправлена в v0.9.4, но limited к 3-месячному окну).
+\item RSS pipeline для индивидуальных outlet'ов (NewsScout есть, но не per-bettor).
+\item Temporal alignment: news timestamp vs trade timestamp (сложная временная модель).
+\item Validation: есть ли реальная correlation? Не known.
+\end{enumerate}
+
+Документация (docs/methodology-inverse-problem.md, стр. 399): ``Bettor-level корреляция с новостями --- требует GDELT/RSS pipeline, спекулятивная гипотеза''
+
+\subsubsection*{Урок}
+\textbf{Research hypotheses требуют pilot data перед full engineering.} Не начинай building без evidence, что ideá заслуживает effort.
+
+---
+
+\subsection{Case Study 19: Hierarchical Trader Belief Models}
+
+\subsubsection*{Идея}
+Bettor positions отражают их beliefs. Можно ли build hierarchical Bayesian model где бетторы cluster по beliefs, и используй это для better aggregate forecast?
+
+\subsubsection*{Почему отложено}
+\textbf{Pure research project, не engineering task.} Это требует:
+\begin{enumerate}
+\item Новых statistical methods (Bayesian hierarchical modeling).
+\item Publication-quality validation (peer review, reproducibility).
+\item Большого датасета для training (мы имеем Polymarket, но это single market type).
+\item Четкого определения ``belief'' в контексте prediction markets.
+\end{enumerate}
+
+Документация (docs/methodology-inverse-problem.md, стр. 400): ``Иерархические модели --- research project, не engineering task''
+
+\subsubsection*{Урок}
+\textbf{Distinguish между engineering (solve known problem) и research (formulate new problem).} Не заполняй product roadmap research ideas.
+
+---
+
+\subsection{Case Study 20: Kalshi API Integration}
+
+\subsubsection*{Идея}
+Kalshi --- второй major US prediction market (после Polymarket). Может ли Delphi интегрировать Kalshi для расширения охвата?
+
+\subsubsection*{Почему отложено}
+\textbf{US-only coverage, low ROI.} Kalshi имеет:
+\begin{enumerate}
+\item ~500 active markets (vs Polymarket ~5000+).
+\item Regional exposure (США только).
+\item Higher regulation (SEC oversight).
+\item No public bettor profiles (в отличие от Polymarket, который имеет on-chain transparency).
+\end{enumerate}
+
+Cost-benefit: интеграция требует ~3 дня (API integration, schema changes, tests). Результат: +200 рынков (low quality), 0 additional signals (no public bettors). Not worth.
+
+\subsubsection*{Урок}
+\textbf{Evaluate ROI перед adding new data source.} Не все APIs стоят интегрирования.
+
+---
+
+\subsection{Case Study 21: BigQuery for GDELT Historical Data}
+
+\subsubsection*{Идея}
+GDELT имеет полный historical dataset в BigQuery (2.65 TB/year). Можно ли использовать для batch retrospective testing?
+
+\subsubsection*{Почему отложено}
+\textbf{Cost-prohibitive at scale.} BigQuery pricing:
+\begin{enumerate}
+\item 1 TB free/месяц, затем \$6.25/TB.
+\item Unoptimized query: 311 GB scanned = \$1.94 per query.
+\item Optimized query с temporal decorators: 6.28 GB scanned = \$0.04 per query.
+\item Для 100-query batch retrospective: \$400--\$200 (depends on optimization).
+\end{enumerate}
+
+Alternative: 15-minute CSV polling (free, 2--5 MB per batch) + local DuckDB. Total cost: \$0. Speed: slower, но достаточна для production monitoring.
+
+Документация (\texttt{tasks/research/gdelt\_api.md}, стр. 43--47): ``BigQuery viable для retrospective, но для real-time --- используй CSV polling''
+
+\subsubsection*{Урок}
+\textbf{Evaluate cloud costs vs local alternatives. Free polling beats paid queries.}
+
+---
+
+\section*{Summary Table: Dead Ends and Lessons}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline
+\textbf{\#} & \textbf{Category} & \textbf{Case Study} & \textbf{Status} & \textbf{Version} & \textbf{Impact} \\
+\hline
+1 & \textbf{API} & Metaculus 403 & Fixed, Disabled & v0.5.1, v0.9.4 & Auth-required tier lock \\
+2 &  & GDELT Cyrillic & Fixed & pre-v0.5.1, v0.9.4 & HTML crashes prevented \\
+3 &  & Polymarket camelCase & Fixed & pre-v0.5.1 & 422 error resolved \\
+4 &  & Reuters RSS & Removed & v0.9.4 & 404 dead feed \\
+\hline
+5 & \textbf{Architecture} & YandexGPT & Removed & v0.8.0 & Consolidated to OpenRouter \\
+6 &  & Sonnet 4.6 & Removed & v0.9.4 & Non-existent model \\
+7 &  & Dark mode & Removed & v0.8.0 & Unmaintained feature \\
+8 &  & Pico.css $\to$ Tailwind & Migrated & v0.8.0 & Classless CSS limit \\
+\hline
+9 & \textbf{Critical Bugs} & Temporal leak & Fixed & v0.9.2 & BSS +0.092$\to$+0.127 \\
+10 &  & conditionId & Fixed & v0.9.3 & 99\% signal loss \\
+11 &  & Date serialization & Fixed & v0.9.5 & Complete data loss \\
+12 &  & PromptParseError & Fixed & v0.5.2--v0.9.4 & Silent assessment drop \\
+13 &  & BudgetTracker race & Fixed & v0.7.1 & Budget bypass \\
+14 &  & Timeout cascade & Fixed & v0.9.4 & Cascading stage failures \\
+15 &  & max\_tokens evolution & Fixed & v0.5.1--v0.9.5 & Credit reservation bloat \\
+16 &  & Incremental save & Fixed & v0.9.5 & \$5--15 result loss \\
+\hline
+17 & \textbf{Deferred} & Domain-specific BS & Deferred & --- & 1--3\% gain, high sparsity \\
+18 &  & Bettor-news correlation & Deferred & --- & Speculative hypothesis \\
+19 &  & Hierarchical beliefs & Deferred & --- & Pure research \\
+20 &  & Kalshi API & Deferred & --- & US-only, low ROI \\
+21 &  & BigQuery GDELT & Deferred & --- & Cost-prohibitive (\$0.04--\$1.94/query) \\
+\hline
+\end{tabular}
+\end{table}
+
+\noindent
+\textbf{Key Takeaways:}
+\begin{enumerate}
+\item \textbf{External APIs require continuous monitoring.} Breaking changes happen (Metaculus, Reuters). Subscribe to official channels.
+\item \textbf{Single-provider architecture better than unreliable fallbacks.} YandexGPT was removed, OpenRouter is sole LLM provider.
+\item \textbf{Serialization and temporal correctness are non-negotiable.} Date serialization crash and temporal leak both caused complete data loss / model degradation.
+\item \textbf{Distinguish engineering from research.} Hierarchical models are research; bettor signals engineering.
+\item \textbf{ROI analysis prevents feature creep.} Domain-specific BS, Kalshi, BigQuery: all deferred because cost > benefit.
+\end{enumerate}

@@ -1,0 +1,615 @@
+% ============================================================================
+% PART I: OVERVIEW AND ARCHITECTURE
+% ============================================================================
+
+\section{Что такое Delphi Press}
+
+\label{sec:overview}
+
+% Source: 00-overview.md:1-10, CLAUDE.md:1-15
+
+\emph{Delphi Press} — веб-продукт для автоматизированного прогнозирования заголовков средств массовой информации на заданную целевую дату. Система вводит пользователя в интерактивный мультиагентный пайплайн, который анализирует текущее состояние геополитических, экономических и медийных контекстов, а затем генерирует ранжированные предсказания заголовков с уровнями уверенности и обоснованиями.
+
+\subsection{Проблемная постановка}
+
+Исследователи-политологи и аналитики медиа сталкиваются с проблемой предсказания того, на какие события обратит внимание конкретное издание в конкретный день. Это требует:
+
+\begin{itemize}[nosep]
+\item Анализа текущих информационных потоков и планируемых событий
+\item Понимания редакционной позиции и стилевых предпочтений издания
+\item Моделирования вероятности события и его медийной значимости
+\item Генерации заголовков, стилистически соответствующих целевому СМИ
+\end{itemize}
+
+Ручной анализ требует дней работы. \emph{Delphi Press} автоматизирует весь процесс через специализированный \emph{ensemble forecasting} подход — мультиагентный конвейер, вдохновлённый методом Дельфи.
+
+\subsection{Два режима работы}
+
+Система поддерживает две архитектуры развёртывания, приспособленные к разным пользовательским сценариям:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Характеристика} & \textbf{Web UI} & \textbf{Claude Code} \\
+\hline
+Доступ & Веб-интерфейс & CLI (/predict в Claude Code) \\
+API-ключ & Пользователь вводит свой (OpenRouter) & Покрыто подпиской Code Max \\
+Стоимость прогноза & \$5–50 & \$0 \\
+Модельное разнообразие & Нет (все Opus 4.6 (в коде: пресет \texttt{full}), diversity через промпты) & Нет (все Opus 4.6) \\
+Автоматизация & REST API + расписание & Ручной запуск \\
+Персистентность & БД, история, аналитика & Markdown-отчёт \\
+\hline
+\end{tabular}
+\caption{Два режима Delphi Press. Оба разделяют промпты персон и Pydantic-схемы данных.}
+\label{tab:modes}
+\end{table}
+
+\subsection{Целевая аудитория и язык}
+
+Основная аудитория — исследователи-политологи, аналитики медиа, специалисты по молодёжной политике и стратегам госучреждений. Интерфейс разработан для нетехнических пользователей с интуитивной системой заполнения форм и визуализацией результатов.
+
+Язык интерфейса — русский. Анализ проводится на медиа на любом языке; результаты генерируются на языке целевого СМИ.
+
+\subsection{Технический стек}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{|l|l|c|}
+\hline
+\textbf{Слой} & \textbf{Технология} & \textbf{Версия} \\
+\hline
+Язык & Python & 3.12+ \\
+Backend & FastAPI + Uvicorn & 0.115+ \\
+Task Queue & ARQ (Redis) & 0.26+ \\
+База данных & SQLite + aiosqlite & — \\
+ORM & SQLAlchemy & 2.0+ \\
+Валидация & Pydantic & v2 \\
+LLM клиент & OpenAI SDK (OpenRouter) & 1.0+ \\
+HTTP клиент & httpx & 0.27+ \\
+Frontend & Tailwind CSS + Vanilla JS & 4.2.2 \\
+Шаблоны & Jinja2 & 3.1+ \\
+Развёртывание & Docker Compose & 2.0+ \\
+Шифрование & cryptography (Fernet) & 43+ \\
+Авторизация & PyJWT + bcrypt & — \\
+Тестирование & pytest + pytest-asyncio & — \\
+\hline
+\end{tabular}
+\caption{Технический стек Delphi Press v0.9.5.}
+\label{tab:tech_stack}
+\end{table}
+
+% Source: CLAUDE.md:10
+
+\textbf{Версия}: 0.9.5. \textbf{Покрытие тестами}: 1324 тестов. \textbf{Принцип архитектуры}: модульный монолит — единый Python-проект с чёткими границами между модулями, общающимися через прямые вызовы функций (не HTTP RPC).
+
+\subsection{Развёртывание: 4 контейнера Docker}
+
+Система развёртывается как четыре скоординированных контейнера:
+
+\begin{enumerate}[nosep]
+\item \texttt{app} (FastAPI/Uvicorn на порту 8000) — веб-интерфейс, REST API, SSE-потоки
+\item \texttt{worker} (ARQ на Redis) — асинхронное выполнение пайплайна прогнозирования
+\item \texttt{redis} (порт 6379) — брокер задач, pub/sub для SSE
+\item \texttt{nginx} (порты 80/443) — reverse proxy, SSL termination via Let's Encrypt
+\end{enumerate}
+
+\noindent Данные хранятся в SQLite-файле на диске (\texttt{/app/data/foresighting.db}). Архитектура выбрана для простоты развёртывания на одном VPS (Debian 12, 4 vCPU @ 20%, 8 GB RAM).
+
+
+\section{Архитектура pipeline}
+
+\label{sec:architecture}
+
+% Source: architecture.md:1-50, 00-overview.md:266-400
+
+\emph{Delphi Press} реализует девятистадийный \emph{sequential-parallel hybrid} конвейер: каждая стадия выполняется последовательно, но агенты внутри стадии могут работать параллельно (в зависимости от конфигурации). Контекст (состояние) передаётся через 16 типизированных слотов (\emph{PipelineContext}), заполняемых последовательно.
+
+\subsection{Обзор стадий}
+
+% Source: architecture.md:36-48
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{|c|l|l|c|c|c|}
+\hline
+\# & \textbf{Стадия} & \textbf{Агенты} & \textbf{Параллель} & \textbf{min\_successful} & \textbf{Timeout} \\
+\hline
+1 & COLLECTION & 4 агента & Да & 2/4 & 600s \\
+2 & EVENT\_IDENTIFICATION & EventTrendAnalyzer & Нет & — & 600s \\
+3 & TRAJECTORY & 3 аналитика & Да & 2/3 & 600s \\
+4 & DELPHI\_R1 & 5 персон & Да & 3/5 & 600s \\
+5 & DELPHI\_R2 & Медиатор+5 персон & Смешано & 3/5 & 900s \\
+6 & CONSENSUS & Judge & Нет & — & 300s \\
+7 & FRAMING & FramingAnalyzer & Нет & — & 300s \\
+8 & GENERATION & StyleReplicator & Нет & — & 300s \\
+9 & QUALITY\_GATE & QualityGate & Нет & — & 300s \\
+\hline
+\end{tabular}
+\caption{Девять стадий пайплайна Delphi Press. Стадия 5 имеет двухфазную логику: сначала Медиатор (последовательно), затем 5 персон (параллельно, min=3).}
+\label{tab:stages}
+\end{table}
+
+\subsection{Полная таблица агентов и LLM-задач}
+
+% Source: architecture.md:11-30
+
+\begin{table}[h]
+\centering
+\tiny
+\begin{tabular}{|l|l|c|l|l|}
+\hline
+\textbf{Агент} & \textbf{Стадия} & \textbf{LLM-задачи} & \textbf{Слоты контекста} & \textbf{Файл} \\
+\hline
+NewsScout & 1 & news\_scout\_search & signals & collectors/news\_scout.py \\
+EventCalendar & 1 & event\_calendar, event\_assessment & scheduled\_events & collectors/event\_calendar.py \\
+OutletHistorian & 1 & outlet\_historian & outlet\_profile & collectors/outlet\_historian.py \\
+ForesightCollector & 1 & (нет LLM) & foresight\_events, foresight\_signals & collectors/foresight\_collector.py \\
+EventTrendAnalyzer & 2 & event\_clustering, trajectory\_analysis, cross\_impact\_analysis & event\_threads, trajectories, cross\_impact\_matrix & analysts/event\_trend.py \\
+GeopoliticalAnalyst & 3 & geopolitical\_analysis & event\_threads[] & analysts/geopolitical.py \\
+EconomicAnalyst & 3 & economic\_analysis & event\_threads[] & analysts/economic.py \\
+MediaAnalyst & 3 & media\_analysis & event\_threads[] & analysts/media.py \\
+DelphiRealist & 4/5 & delphi\_r1\_realist, delphi\_r2\_realist & round1/2\_assessments & forecasters/personas.py \\
+DelphiGeostrateg & 4/5 & delphi\_r1\_geostrateg, delphi\_r2\_geostrateg & round1/2\_assessments & forecasters/personas.py \\
+DelphiEconomist & 4/5 & delphi\_r1\_economist, delphi\_r2\_economist & round1/2\_assessments & forecasters/personas.py \\
+DelphiMediaExpert & 4/5 & delphi\_r1\_media, delphi\_r2\_media & round1/2\_assessments & forecasters/personas.py \\
+DelphiDevilsAdvocate & 4/5 & delphi\_r1\_devils, delphi\_r2\_devils & round1/2\_assessments & forecasters/personas.py \\
+Mediator & 5 & mediator & mediator\_synthesis & forecasters/mediator.py \\
+Judge & 6 & (детерминированный) & predicted\_timeline, ranked\_predictions & forecasters/judge.py \\
+FramingAnalyzer & 7 & framing & framing\_briefs & generators/framing.py \\
+StyleReplicator & 8 & style\_generation, style\_generation\_ru, style\_generation\_en & generated\_headlines & generators/style\_replicator.py \\
+QualityGate & 9 & quality\_factcheck, quality\_style & final\_predictions & generators/quality\_gate.py \\
+\hline
+\end{tabular}
+\caption{18 агентов, 28 LLM-задач, распределение по стадиям и слотам контекста.}
+\label{tab:agents_full}
+\end{table}
+
+\subsection{Поток данных: примеры слотов}
+
+% Source: architecture.md:116-139
+
+Основные слоты \emph{PipelineContext}:
+
+\begin{itemize}[nosep]
+\item \textbf{signals}: List[SignalRecord] — сырые новости из RSS и поиска (100–200)
+\item \textbf{scheduled\_events}: List[ScheduledEvent] — политические/экономические события на target\_date
+\item \textbf{outlet\_profile}: OutletProfile — стилевой профиль издания с примерами заголовков
+\item \textbf{event\_threads}: List[EventThread] — top-20 кластеризованных событийных цепочек
+\item \textbf{trajectories}: List[EventTrajectory] — сценарные траектории (baseline, optimistic, pessimistic, black\_swan)
+\item \textbf{cross\_impact\_matrix}: CrossImpactMatrix — матрица перекрёстных влияний между событиями
+\item \textbf{round1\_assessments}: List[PersonaAssessment] — независимые оценки от 5 персон (раунд 1)
+\item \textbf{mediator\_synthesis}: MediatorSynthesis — консенсус, расхождения, ключевые вопросы
+\item \textbf{round2\_assessments}: List[PersonaAssessment] — пересмотренные оценки после медиации
+\item \textbf{ranked\_predictions}: List[RankedPrediction] — top-7 финальных событий, ранжированных по headline\_score
+\item \textbf{framing\_briefs}: List[FramingBrief] — анализ подачи каждого события
+\item \textbf{generated\_headlines}: List[GeneratedHeadline] — сгенерированные заголовки и абзацы (2–3 на событие)
+\item \textbf{final\_predictions}: List[FinalPrediction] — финальные прогнозы после факт-чека и дедупликации
+\end{itemize}
+
+\subsection{Прямолинейный пример потока}
+
+\begin{equation}
+\text{PredictionRequest} \xrightarrow{\text{Stage 1}} \text{signals, events, outlet\_profile}
+\end{equation}
+
+\begin{equation}
+\xrightarrow{\text{Stage 2}} \text{event\_threads, trajectories, cross\_impact\_matrix}
+\end{equation}
+
+\begin{equation}
+\xrightarrow{\text{Stages 3–5}} \text{round1/2\_assessments, mediator\_synthesis}
+\end{equation}
+
+\begin{equation}
+\xrightarrow{\text{Stages 6–9}} \text{ranked\_predictions} \to \text{framing\_briefs} \to \text{generated\_headlines} \to \text{final\_predictions}
+\end{equation}
+
+\begin{equation}
+\xrightarrow{\text{Response}} \text{PredictionResponse} \text{ с 7 заголовков, уверенностью, обоснованиями}
+\end{equation}
+
+\subsection{Производительность и стоимость}
+
+% Source: 00-overview.md:435-450, CLAUDE.md:10-11
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Стадия} & \textbf{LLM-вызовов} & \textbf{Основная модель} & \textbf{Стоимость} \\
+\hline
+1: Collection & ~5 & Gemini + Sonnet & \$1.50 \\
+2: Event Identification & ~25 & Gemini-flash & \$0.50 \\
+3: Trajectory & ~21 & Sonnet & \$3.00 \\
+4: Delphi R1 & 5 & Mix (5 моделей) & \$8.00 \\
+5a: Mediator & 1 & Opus & \$2.00 \\
+5b: Delphi R2 & 5 & Mix (5 моделей) & \$8.00 \\
+6: Judge & 1 & Opus & \$2.00 \\
+7: Framing & ~7 & Sonnet & \$2.00 \\
+8: Generation & ~21 & Sonnet & \$1.50 \\
+9: Quality Gate & ~14 & Sonnet & \$2.00 \\
+\hline
+\textbf{Итого} & \textbf{~105 вызовов} & & \textbf{~\$30.50} \\
+\hline
+\end{tabular}
+\caption{Бюджет LLM на один прогноз. Время выполнения: 15–20 минут на одном VPS.}
+\label{tab:cost_budget}
+\end{table}
+
+
+\section{Принципы проектирования}
+
+\label{sec:design_principles}
+
+% Source: 00-overview.md:26-35, 02-agents-core.md:10-16, CLAUDE.md:72-81
+
+\subsection{Модульный монолит, а не микросервисы}
+
+Система построена как \emph{unified codebase} с чёткой модульной структурой. Каждый модуль:
+
+\begin{itemize}[nosep]
+\item Живёт в отдельной директории (\texttt{src/agents/collectors/}, \texttt{src/agents/analysts/} и т. д.)
+\item Имеет определённый контракт: типизированный вход (Pydantic-модель), выход (\texttt{AgentResult})
+\item Реализуется и тестируется независимо
+\item Общается с другими модулями через прямые вызовы функций (внутри одного процесса)
+\end{itemize}
+
+\noindent Этот подход избегает сложности микросервисной архитектуры (сетевые задержки, согласованность состояния) при сохранении модульности и тестируемости.
+
+\subsection{\emph{Async everywhere} — асинхронная обработка I/O}
+
+% Source: CLAUDE.md:74
+
+Все операции ввода-вывода реализованы асинхронно:
+
+\begin{itemize}[nosep]
+\item \textbf{httpx} — асинхронный HTTP-клиент для RSS, web search, скрейпинга
+\item \textbf{aiosqlite} — асинхронный драйвер SQLite для БД-операций
+\item \textbf{ARQ} — асинхронная очередь задач на Redis
+\item \textbf{asyncio.gather()} — параллельное выполнение агентов внутри стадии
+\end{itemize}
+
+\noindent Вся вычислительная база от app-сервера до worker-процесса построена на \texttt{asyncio}, что позволяет эффективно обрабатывать множество параллельных прогнозов на одном VPS.
+
+\subsection{\emph{Fail-soft} с \texttt{min\_successful} логикой}
+
+Система не требует, чтобы \textit{все} агенты в стадии завершились успешно. Вместо этого определяется минимальное количество успешных агентов:
+
+\begin{itemize}[nosep]
+\item Stage 1 (Collection): min=2/4 агентов — система может продолжить даже если 2 коллектора отказали
+\item Stage 3 (Trajectory): min=2/3 аналитиков — достаточно 2 аспектов анализа
+\item Stage 4 (Delphi R1): min=3/5 персон — мнение 3 экспертов из 5 достаточно для устойчивого консенсуса
+\item Stage 5 (Delphi R2): min=3/5 (после медиации)
+\end{itemize}
+
+\noindent Это обеспечивает \emph{graceful degradation}: если primary-модель недоступна, \texttt{ModelRouter} переключается на fallback-модель через OpenRouter и продолжает работу.
+
+\subsection{Разнообразие через промпты и когнитивные смещения}
+
+% Source: router.py:224 "Diversity обеспечивается промптами и когнитивными смещениями, не моделями."
+
+В текущей реализации все 5 персон Дельфи используют \textbf{одну и ту же модель} (Claude Opus 4.6 через OpenRouter). Разнообразие ошибок обеспечивается не выбором разных LLM, а тремя механизмами:
+
+\begin{enumerate}[nosep]
+\item \textbf{Уникальные системные промпты} ($\sim$400--500 строк на персону) --- каждая персона получает свой аналитический фреймворк, фокус и стиль рассуждений
+\item \textbf{Когнитивные смещения} --- для каждой персоны определены \texttt{over\_predicts}, \texttt{under\_predicts} и \texttt{anchor\_type} (см. Часть~III)
+\item \textbf{Горизонт-адаптивные веса} --- Judge корректирует влияние каждой персоны в зависимости от горизонта прогнозирования (см. Часть~V)
+\end{enumerate}
+
+\noindent Модельное разнообразие (5 разных LLM) рассматривалось как альтернатива, но не реализовано --- см. Часть~IX (Dead Ends) для обоснования.
+
+\subsection{Pydantic v2 для валидации и структурированного вывода}
+
+% Source: CLAUDE.md:76-77
+
+Все входы и выходы агентов типизированы через Pydantic-модели (\texttt{src/schemas/*}):
+
+\begin{itemize}[nosep]
+\item \textbf{PredictionRequest} --- ввод пользователя (выход издания, целевая дата)
+\item \textbf{AgentResult} $\to$ выход каждого агента (данные, метрики, ошибки)
+\item \textbf{PipelineContext} $\to$ разделяемое состояние (16 слотов)
+\item \textbf{PersonaAssessment}, \textbf{RankedPrediction}, \textbf{FinalPrediction} $\to$ типизированные структуры результатов
+\end{itemize}
+
+\noindent \textbf{Structured Output}: LLM-ответы не парсятся как сырые строки. Вместо этого OpenRouter запрашивает JSON output, который затем валидируется через Pydantic с помощью \texttt{json\_mode=true}. Это снижает вероятность парсинга неверного формата.
+
+\subsection{Стоимость и бюджетный контроль}
+
+% Source: CLAUDE.md:11, architecture.md:236-239
+
+Каждый вызов LLM отслеживает:
+
+\begin{itemize}[nosep]
+\item Использованные токены (входные/выходные)
+\item Стоимость в USD (по таблице прайсинга OpenRouter)
+\item Модель и провайдер
+\item Время выполнения
+\end{itemize}
+
+\noindent Глобальный лимит: \textbf{\$50 USD на один прогноз} (настраивается). Если BudgetTracker обнаруживает, что предстоящий вызов превысит лимит, система выбрасывает \texttt{LLMBudgetExceededError} и прерывает пайплайн.
+
+
+% ============================================================================
+% PART VII: LLM INFRASTRUCTURE
+% ============================================================================
+
+\section{Интеграция с OpenRouter}
+
+\label{sec:openrouter}
+
+% Source: 07-llm-layer.md:1-30, architecture.md:230-231, CLAUDE.md:11
+
+\emph{Delphi Press} использует \emph{OpenRouter.ai} — унифицированный OpenAI-совместимый API для доступа к 200+ LLM-моделям (Claude, GPT-4, Gemini, Llama, DeepSeek и др.) через единый эндпоинт.
+
+\subsection{Архитектура провайдера}
+
+\begin{itemize}[nosep]
+\item \textbf{Base URL}: \texttt{https://openrouter.ai/api/v1}
+\item \textbf{Формат моделей}: \texttt{provider/model}, например \texttt{anthropic/claude-sonnet-4}, \texttt{openai/gpt-4o}
+\item \textbf{Клиент}: OpenAI Python SDK v1.0+ с переопределённым \texttt{base\_url}
+\item \textbf{Аутентификация}: API-ключ в заголовке \texttt{Authorization: Bearer sk-or-...}
+\end{itemize}
+
+\subsection{Таблица моделей и задач}
+
+% Source: architecture.md:54-114, 07-llm-layer.md:458-478
+
+Все 28 LLM-задач пайплайна настроены с primary и fallback моделями:
+
+\begin{table}[h]
+\centering
+\tiny
+\begin{tabular}{|l|l|l|l|c|c|}
+\hline
+\textbf{Task ID} & \textbf{Назначение} & \textbf{Primary Model} & \textbf{Fallback} & \textbf{Temp} & \textbf{JSON} \\
+\hline
+\multicolumn{6}{|c|}{\textbf{COLLECTORS (Stage 1)}} \\
+\hline
+news\_scout\_search & Формирование поисковых запросов & Gemini 3.1-flash-lite & Gemini 2.5-flash & 0.3 & Net \\
+event\_calendar & Поиск запланированных событий & Gemini 3.1-flash-lite & Gemini 2.5-flash & 0.3 & Da \\
+event\_assessment & Оценка значимости событий & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.4 & Da \\
+outlet\_historian & Анализ стиля издания & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.4 & Da \\
+\hline
+\multicolumn{6}{|c|}{\textbf{ANALYSTS (Stages 2–3)}} \\
+\hline
+event\_clustering & Кластеризация сигналов & Gemini 3.1-flash-lite & Gemini 2.5-flash & 0.2 & Da \\
+trajectory\_analysis & Сценарии развития событий & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.6 & Da \\
+cross\_impact\_analysis & Матрица перекрёстных влияний & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.4 & Da \\
+geopolitical\_analysis & Геополитический контекст & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.5 & Da \\
+economic\_analysis & Экономический контекст & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.5 & Da \\
+media\_analysis & Медийный контекст & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.5 & Da \\
+\hline
+\multicolumn{6}{|c|}{\textbf{DELPHI R1 (Stage 4)}} \\
+\hline
+delphi\_r1\_realist & Реалист & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.7 & Da \\
+delphi\_r1\_geostrateg & Геостратег & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.7 & Da \\
+delphi\_r1\_economist & Экономист & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.7 & Da \\
+delphi\_r1\_media & Медиа-эксперт & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.7 & Da \\
+delphi\_r1\_devils & Адвокат дьявола & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.9 & Da \\
+\hline
+\multicolumn{6}{|c|}{\textbf{MEDIATOR \& DELPHI R2 (Stage 5)}} \\
+\hline
+mediator & Синтез расхождений & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.5 & Da \\
+delphi\_r2\_* & Дельфи раунд 2 (пересмотр) & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.6 & Da \\
+\hline
+\multicolumn{6}{|c|}{\textbf{GENERATORS (Stages 6–9)}} \\
+\hline
+framing & Анализ фрейминга & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.5 & Da \\
+style\_generation & Генерация заголовков (мультиязык) & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.8 & Net \\
+style\_generation\_ru & Генерация заголовков (русский) & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.8 & Net \\
+style\_generation\_en & Генерация заголовков (английский) & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.8 & Net \\
+quality\_factcheck & Факт-чек & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.2 & Da \\
+quality\_style & Стилистическая проверка & Claude Opus 4.6 & Claude Sonnet 4.5 & 0.3 & Da \\
+\hline
+\end{tabular}
+\caption{28 LLM-задач с моделями и параметрами. JSON mode включён для структурированного вывода (схемы Pydantic).}
+\label{tab:task_models}
+\end{table}
+
+\subsection{JSON Mode для структурированного вывода}
+
+% Source: 07-llm-layer.md:90-104
+
+Большинство задач (24 из 28) используют JSON mode. Это означает:
+
+\begin{itemize}[nosep]
+\item OpenRouter просит модель вывести JSON
+\item Ответ парсится как \texttt{dict} и валидируется через Pydantic-модель
+\item Если парсинг или валидация не удаётся, агент возвращает \texttt{AgentResult(success=False)}
+\end{itemize}
+
+\noindent Это обеспечивает \emph{deterministic parsing} и снижает риск галлюцинаций в неправильном формате.
+
+
+
+\section{Retry, стоимость и бюджетный контроль}
+
+\label{sec:retry_budget}
+
+% Source: 07-llm-layer.md:366-445, 649-707
+
+\subsection{\emph{Exponential backoff} с jitter}
+
+% Source: 07-llm-layer.md:366-408
+
+При ошибке LLM-провайдера (HTTP 429, 500, 502, 503, 504) система выполняет повторный запрос с экспоненциальной задержкой:
+
+\begin{equation}
+\text{delay}_n = \min\left(\text{base} \cdot 2^n, \text{max\_delay}\right) + \text{jitter}
+\end{equation}
+
+где:
+\begin{itemize}[nosep]
+\item base = 1 сек (базовая задержка)
+\item max\_delay = 30 сек (потолок)
+\item jitter $\in$ [0, base/2] = [0, 0.5] сек (случайный разброс для избежания thundering herd)
+\item n = номер попытки (0, 1, 2, ...)
+\end{itemize}
+
+Например:
+\begin{itemize}[nosep]
+\item Попытка 0: сразу выполнить
+\item Попытка 1: ошибка $\to$ ждём $1 \cdot 2^0$ + jitter = 1--1.5 сек
+\item Попытка 2: ошибка $\to$ ждём $1 \cdot 2^1$ + jitter = 2--2.5 сек
+\item Попытка 3: ошибка $\to$ ждём $1 \cdot 2^2$ + jitter = 4--4.5 сек
+\item Попытка 4 (последняя): ошибка $\to$ всё, выбрасываем исключение
+\end{itemize}
+
+\subsection{Fallback-цепочка}
+
+% Source: 07-llm-layer.md:622-645
+
+При исчерпании всех retry-попыток для primary модели система переключается на fallback-модели по очереди:
+
+\begin{equation}
+\begin{aligned}
+&\text{Primary Model}\\
+&\quad \xrightarrow{\text{retry $\times$ max\_retries}} \text{Fallback[0]}\\
+&\quad \xrightarrow{\text{retry $\times$ max\_retries}} \text{Fallback[1]}\\
+&\quad \xrightarrow{\text{...}} \text{Fallback[n]}\\
+&\quad \xrightarrow{\text{all fail}} \text{raise LLMProviderError}
+\end{aligned}
+\end{equation}
+
+Пример для \texttt{delphi\_r1\_realist}:
+\begin{enumerate}[nosep]
+\item Попробовать Claude Opus 4.6 (primary) $\times$ 3 retry
+\item Если всё ещё ошибка $\to$ попробовать Claude Sonnet 4.5 (fallback) $\times$ 3 retry
+\item Если оба отказали $\to$ выбросить исключение, агент вернёт \texttt{AgentResult(success=False)}
+\end{enumerate}
+
+\subsection{HTTP 429 (Rate Limiting)}
+
+Если провайдер возвращает HTTP 429 с заголовком \texttt{Retry-After}, система уважает этот заголовок:
+
+\begin{equation}
+\text{delay} = \max(\text{Retry-After}, \text{exponential backoff})
+\end{equation}
+
+\subsection{Формула стоимости вызова}
+
+% Source: 07-llm-layer.md:316-327, CLAUDE.md:11
+
+Каждый LLM-вызов рассчитывает стоимость по формуле:
+
+\begin{equation}
+\text{cost\_usd} = \left(\frac{\text{tokens\_in}}{1{,}000{,}000} \times \text{price\_in}\right) + \left(\frac{\text{tokens\_out}}{1{,}000{,}000} \times \text{price\_out}\right)
+\label{eq:llm_cost}
+\end{equation}
+
+где:
+\begin{itemize}[nosep]
+\item \texttt{tokens\_in}, \texttt{tokens\_out} — переданные OpenRouter в \texttt{usage}
+\item \texttt{price\_in}, \texttt{price\_out} --- цены из таблицы \texttt{MODEL\_PRICING} (\$/1M токенов)
+\end{itemize}
+
+Пример: Claude Opus 4.6
+\begin{itemize}[nosep]
+\item Input: \$3 за 1М токенов
+\item Output: \$15 за 1М токенов
+\item Для 10k входных, 1k выходных: cost = (10k/1M $\times$ 3) + (1k/1M $\times$ 15) = 0.03 + 0.015 = \$0.045
+\end{itemize}
+
+\subsection{Бюджетный контроль}
+
+% Source: 07-llm-layer.md:649-707, architecture.md:236-239
+
+\emph{BudgetTracker} отслеживает расходы в рамках одного прогноза и блокирует вызовы, которые превысят лимит.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Параметр} & \textbf{Значение} \\
+\hline
+Лимит на прогноз & \$50 USD (по умолчанию, настраивается) \\
+Проверка перед вызовом & Если \texttt{estimated\_cost > remaining\_budget}, raise \texttt{LLMBudgetExceededError} \\
+Типичный прогноз & \$5–15 USD \\
+Максимальный прогноз & До \$50 USD (при многих событиях, долгих раундах) \\
+\hline
+\end{tabular}
+\caption{Бюджетный контроль на уровне провайдера.}
+\label{tab:budget}
+\end{table}
+
+Алгоритм:
+
+\begin{equation}
+\text{remaining} = \text{budget\_usd} - \sum_{i=1}^{n} \text{cost\_usd}_i
+\end{equation}
+
+\begin{equation}
+\text{if } \text{estimated\_cost} > \text{remaining} \text{ then } \text{raise BudgetExceededError}
+\end{equation}
+
+Оценка стоимости рассчитывается по количеству токенов в промпте:
+
+\begin{equation}
+\text{estimated\_tokens\_in} = \text{estimate\_messages\_tokens}(\text{messages})
+\end{equation}
+
+\begin{equation}
+\text{estimated\_cost} = \frac{\text{estimated\_tokens\_in}}{1{,}000{,}000} \times \text{price\_in} \times 1.2
+\end{equation}
+
+\noindent Коэффициент 1.2 добавляет буфер на выходные токены (обычно выход меньше входа, но разница варьируется).
+
+\subsection{Примеры и мониторинг}
+
+\emph{BudgetTracker} предоставляет методы для аналитики:
+
+\begin{itemize}[nosep]
+\item \texttt{summary\_by\_stage()}: расходы по стадиям пайплайна
+\item \texttt{summary\_by\_model()}: расходы по моделям
+\item \texttt{to\_records()}: все \texttt{CostRecord} для сохранения в БД
+\end{itemize}
+
+Пример логирования:
+
+\begin{verbatim}
+Стадия 1 (Collection): $1.50
+Стадия 2 (Event Identification): $0.50
+Стадия 3 (Trajectory): $3.00
+Стадия 4 (Delphi R1): $8.00
+Стадия 5 (Mediator + R2): $10.00
+Стадия 6 (Consensus): $2.00
+Стадия 7–9 (Framing + Generation + QG): $5.50
+-----------
+Итого: $30.50 USD
+\end{verbatim}
+
+
+\section{Список аббревиатур}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Аббревиатура} & \textbf{Расшифровка} \\
+\hline
+API & Application Programming Interface \\
+ARQ & Async Redis Queue \\
+CSS & Cascading Style Sheets \\
+Delphi & Метод экспертного консенсуса (делфийский метод) \\
+HTTP & HyperText Transfer Protocol \\
+JSON & JavaScript Object Notation \\
+JWT & JSON Web Token \\
+LLM & Large Language Model \\
+ORM & Object-Relational Mapping \\
+REST & Representational State Transfer \\
+RSS & Really Simple Syndication \\
+SQLite & SQL Lite (встроённая база данных) \\
+SSE & Server-Sent Events \\
+UUID & Universally Unique Identifier \\
+VPS & Virtual Private Server \\
+\hline
+\end{tabular}
+\caption{Ключевые аббревиатуры, используемые в тексте.}
+\label{tab:abbrev}
+\end{table}
+
+% End of Parts I + VII

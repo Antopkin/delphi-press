@@ -1,0 +1,905 @@
+\documentclass[a4paper, 11pt]{article}
+
+% ── Encoding & language ──────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage[russian]{babel}
+
+% ── Maths ────────────────────────────────────────────────────────────
+\usepackage{amsmath, amssymb, amsthm}
+
+% ── Layout ───────────────────────────────────────────────────────────
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+
+% ── Graphics & links ─────────────────────────────────────────────────
+\usepackage{xcolor}
+\usepackage[colorlinks=true, linkcolor=blue!70!black, citecolor=green!50!black, urlcolor=blue!60!black]{hyperref}
+
+% ── Bibliography ─────────────────────────────────────────────────────
+\usepackage[numbers]{natbib}
+
+
+% ── Theorem environments ─────────────────────────────────────────────
+\newtheorem{definition}{Определение}[section]
+\newtheorem{proposition}{Утверждение}[section]
+\newtheorem{remark}{Замечание}[section]
+
+% ── Custom commands ──────────────────────────────────────────────────
+\newcommand{\bs}{\mathrm{BS}}
+\newcommand{\bss}{\mathrm{BSS}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+% =====================================================================
+\title{%
+  Imitation Learning и Prediction Markets:\\
+  от Accuracy-Weighted Consensus\\
+  к Behaviour Cloning по трейдерам Polymarket%
+}
+\author{Delphi Press --- внутренний документ}
+\date{4 апреля 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Документ описывает текущий алгоритм извлечения <<informed consensus>> из данных Polymarket
+(accuracy-weighted aggregation + Bayesian shrinkage),
+показывает его формальную эквивалентность задаче \emph{weighted offline behaviour cloning}
+из множественных несовершенных экспертов,
+и анализирует литературу по multi-expert imitation learning
+применительно к prediction markets.
+
+Основной вывод: наш пайплайн уже реализует ядро weighted BC "---
+недостающие шаги --- это per-category gating (маршрутизация рынков к специалистам)
+и temporal trajectory modeling (учёт паттерна ставок во времени).
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Текущая система: Informed Consensus}
+\label{sec:current}
+% =====================================================================
+
+\subsection{Постановка задачи}
+
+Рыночная цена Polymarket формируется через CLOB (Central Limit Order Book) ---
+непрерывный аукцион, где цена есть результат встречи спроса и предложения.
+Хотя механизм отражает объёмы, он не является прямой средневзвешенной
+по точности прогнозов \citep{wolfers2004prediction}.
+Крупные спекулянты (шум) перевешивают мелких, но точных аналитиков;
+маркет-мейкеры выставляют ликвидность, не отражая убеждений
+\citep{manski2006interpreting}.
+
+\textbf{Цель:} построить \emph{informed consensus} --- взвешенный консенсус
+\emph{исторически точных} участников, отделённых от шума.
+
+\textbf{Разница} между informed consensus и рыночной ценой (dispersion) ---
+мера неопределённости.
+Если информированные думают иначе, чем рынок в целом, это ценный сигнал.
+
+% ----- Phase 1 --------------------------------------------------------
+\subsection{Фаза 1: офлайн профилирование}
+
+Источник: ${\sim}470$M ставок c Polymarket (HuggingFace dataset \texttt{SII-WANGZJ/Polymarket\_data}).
+
+\subsubsection{Агрегация позиций}
+
+Для каждого кошелька $i$ на каждом рынке $m$ собираются все ставки
+$(s_j, p_j, v_j)$, где $s_j \in \{\text{YES}, \text{NO}\}$,
+$p_j$ --- цена, $v_j$ --- объём.
+Implied YES probability:
+\[
+\tilde{p}_j = \begin{cases} p_j, & s_j = \text{YES}, \\ 1 - p_j, & s_j = \text{NO}. \end{cases}
+\]
+Volume-weighted position:
+\begin{equation}
+\label{eq:position}
+\mathrm{pos}_{im} = \frac{\sum_j \tilde{p}_j \cdot v_j}{\sum_j v_j}.
+\end{equation}
+
+\subsubsection{Brier Score}
+
+Для каждого кошелька $i$ с $n_i$ разрешённых рынков:
+\begin{equation}
+\label{eq:brier}
+\bs_i = \frac{1}{n_i} \sum_{m=1}^{n_i} \bigl(\mathrm{pos}_{im} - o_m\bigr)^2, \qquad
+o_m = \begin{cases} 1, & \text{YES resolved}, \\ 0, & \text{NO resolved}. \end{cases}
+\end{equation}
+
+Диапазон: $\bs \in [0, 1]$.
+$\bs = 0$ --- идеальный прогнозист, $\bs = 0.25$ --- случайный, $\bs = 1$ --- всегда неправ.
+
+\textbf{Фильтрация:} только кошельки с $n_i \geq 20$ разрешённых позиций (порог статистической надёжности, \citealt{satopaa2014combining}).
+
+\subsubsection{Bayesian shrinkage (Ferro \& Fricker, 2012)}
+\label{sec:shrinkage_bs}
+
+\textbf{Проблема:} при $n_i = 3$ Brier Score имеет огромную дисперсию.
+Кошелёк c 3 удачными ставками получает $\bs \approx 0$ и попадает в INFORMED --- \emph{lucky streak},
+а не реальная калиброванность.
+
+\textbf{Решение} --- регуляризация через Bayesian shrinkage \citep{ferro2012sampling}:
+\begin{equation}
+\label{eq:shrinkage}
+\boxed{
+\bs_i^{\mathrm{adj}} = \frac{n_i \cdot \bs_i^{\mathrm{raw}} + k \cdot \widetilde{\bs}}{n_i + k}
+}
+\end{equation}
+
+\begin{itemize}[nosep]
+  \item $n_i$ --- число разрешённых ставок кошелька $i$,
+  \item $\bs_i^{\mathrm{raw}}$ --- наблюдаемый Brier Score,
+  \item $\widetilde{\bs}$ --- медианный BS по всей популяции (${\approx}\,0.295$),
+  \item $k = 15$ --- сила приора (pseudo-observations).
+\end{itemize}
+
+\textbf{Интуиция:}
+\begin{itemize}[nosep]
+  \item При $n_i = 3$: $\bs^{\mathrm{adj}} \approx \frac{3 \cdot \bs + 15 \cdot 0.295}{18}$ ---
+    сильный shrinkage к медиане.
+  \item При $n_i = 100$: $\bs^{\mathrm{adj}} \approx \frac{100 \cdot \bs + 15 \cdot 0.295}{115} \approx \bs$ ---
+    минимальное влияние.
+  \item При $n_i \to \infty$: $\bs^{\mathrm{adj}} \to \bs^{\mathrm{raw}}$.
+\end{itemize}
+
+Это классический James--Stein shrinkage estimator.
+Форма \eqref{eq:shrinkage} эквивалентна апостериорному среднему
+при нормальном приоре $\bs \sim \mathcal{N}(\widetilde{\bs},\, \sigma^2/k)$.
+
+\subsubsection{Классификация по тирам}
+
+На основе процентильного ранга adjusted BS
+\citep{akey2025polymarket,mitts2026informed}:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{llrl}
+\toprule
+\textbf{Тир} & \textbf{Перцентиль} & \textbf{Кол-во} & \textbf{Интерпретация} \\
+\midrule
+INFORMED  & Top 20\% ($\bs \leq p_{20}$)        & 348\,519 & Исторически точные \\
+MODERATE  & 20--70-й перцентиль                   & 871\,299 & Средняя точность \\
+NOISE     & Bottom 30\% ($\bs \geq p_{70}$)       & 522\,780 & Спекулянты, шум \\
+\bottomrule
+\end{tabular}
+\caption{Классификация 1.74M профилированных кошельков (из 2.27M уникальных)}
+\label{tab:tiers}
+\end{table}
+
+\subsubsection{Recency weighting}
+
+Экспоненциальный decay с half-life $\tau = 90$ дней
+\citep{burgi2025kalshi}:
+\begin{equation}
+\label{eq:recency}
+r_i = \exp\!\Bigl(-\frac{\ln 2 \cdot \Delta t_i}{\tau}\Bigr),
+\end{equation}
+где $\Delta t_i$ --- число дней с последней ставки кошелька $i$.
+
+% ----- Phase 2 --------------------------------------------------------
+\subsection{Фаза 2: онлайн сигнал --- Informed Consensus}
+
+Для конкретного активного рынка $m$ с рыночной ценой $p_{\mathrm{raw}}$:
+
+\subsubsection{Шаг 1: фильтрация}
+
+Из всех трейдеров на рынке оставляем только $\mathcal{I}_m = \{i : \mathrm{tier}_i = \text{INFORMED}\}$.
+
+\subsubsection{Шаг 2: accuracy-weighted mean}
+
+Для каждого $i \in \mathcal{I}_m$ вычисляем вес:
+\begin{equation}
+\label{eq:weight}
+w_i = \underbrace{(1 - \bs_i^{\mathrm{adj}})}_{\text{точность}} \cdot
+      \underbrace{V_i}_{\text{объём на рынке}} \cdot
+      \underbrace{r_i}_{\text{recency}},
+\end{equation}
+
+где $V_i$ --- суммарный объём ставок кошелька $i$ на данном рынке.
+
+Взвешенный консенсус:
+\begin{equation}
+\label{eq:informed_raw}
+p_{\mathrm{inf}}^{\mathrm{raw}} = \frac{\sum_{i \in \mathcal{I}_m} w_i \cdot \mathrm{pos}_{im}}{\sum_{i \in \mathcal{I}_m} w_i}.
+\end{equation}
+
+\textbf{Логика весов:}
+\begin{itemize}[nosep]
+  \item $(1 - \bs_i)$ --- чем точнее трейдер, тем больше вес.
+    $\bs = 0.05 \Rightarrow w \propto 0.95$; $\bs = 0.20 \Rightarrow w \propto 0.80$.
+  \item $V_i$ --- skin in the game; крупная позиция = сильное убеждение.
+  \item $r_i$ --- недавние данные релевантнее.
+\end{itemize}
+
+\subsubsection{Шаг 3: shrinkage к рыночной цене}
+\label{sec:coverage_shrinkage}
+
+При малом числе INFORMED-трейдеров на рынке сигнал ненадёжен.
+Применяем линейное сжатие:
+\begin{equation}
+\label{eq:coverage}
+\mathrm{coverage} = \min\!\Bigl(1,\; \frac{|\mathcal{I}_m|}{N_{\mathrm{full}}}\Bigr), \qquad
+N_{\mathrm{full}} = 20,
+\end{equation}
+\begin{equation}
+\label{eq:informed_final}
+\boxed{
+p_{\mathrm{inf}} = \mathrm{coverage} \cdot p_{\mathrm{inf}}^{\mathrm{raw}} + (1 - \mathrm{coverage}) \cdot p_{\mathrm{raw}}
+}
+\end{equation}
+
+При $|\mathcal{I}_m| = 0$: $p_{\mathrm{inf}} = p_{\mathrm{raw}}$ (no harm).\\
+При $|\mathcal{I}_m| \geq 20$: $p_{\mathrm{inf}} = p_{\mathrm{inf}}^{\mathrm{raw}}$ (полное доверие).
+
+\subsubsection{Шаг 4: метрики сигнала}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Метрика} & \textbf{Формула} & \textbf{Интерпретация} \\
+\midrule
+dispersion  & $|p_{\mathrm{inf}} - p_{\mathrm{raw}}|$                        & Расхождение informed/market \\
+coverage    & $\min(1, |\mathcal{I}_m|/20)$                                   & Доля профилированных \\
+confidence  & $\mathrm{coverage} \times (1 - \overline{\bs}_{\mathcal{I}_m})$ & Надёжность сигнала \\
+\bottomrule
+\end{tabular}
+\caption{Метрики сигнала informed consensus}
+\label{tab:signal_metrics}
+\end{table}
+
+\subsubsection{Числовой пример}
+
+Рынок с $p_{\mathrm{raw}} = 0.55$, три INFORMED-трейдера:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Трейдер} & $\bs$ & \textbf{Позиция} & \textbf{Объём \$} & \textbf{Recency} & $w$ \\
+\midrule
+A & 0.10 & 0.80 & 100 & 1.0 & $(0.90)(100)(1.0) = 90.0$ \\
+B & 0.08 & 0.75 & 200 & 0.8 & $(0.92)(200)(0.8) = 147.2$ \\
+C & 0.15 & 0.70 & 50  & 0.9 & $(0.85)(50)(0.9) = 38.25$ \\
+\bottomrule
+\end{tabular}
+\caption{Числовой пример: accuracy-weighted consensus}
+\label{tab:example}
+\end{table}
+
+\[
+p_{\mathrm{inf}}^{\mathrm{raw}} = \frac{0.80 \cdot 90 + 0.75 \cdot 147.2 + 0.70 \cdot 38.25}{90 + 147.2 + 38.25}
+= \frac{72 + 110.4 + 26.78}{275.45} \approx 0.759
+\]
+\[
+\mathrm{coverage} = 3/20 = 0.15, \qquad
+p_{\mathrm{inf}} = 0.15 \times 0.759 + 0.85 \times 0.55 \approx 0.581
+\]
+
+Сигнал: рынок даёт 55\%, informed-трейдеры тянут вверх до 58.1\%,
+но coverage низкий --- доверие к сигналу ограничено.
+
+% ----- Extensions ─────────────────────────────────────────────────────
+\subsection{Расширения: extremizing и параметрика}
+
+\subsubsection{Extremizing (Satop\"a\"a et al., 2014)}
+
+Каждый трейдер видит подмножество информации.
+При агрегировании вероятность <<недо-экстремизируется>> (ближе к 50\%, чем реальная).
+Коррекция через log-odds:
+\begin{equation}
+\label{eq:extremize}
+p_{\mathrm{ext}} = \frac{(\mathrm{odds})^d}{1 + (\mathrm{odds})^d}, \qquad
+\mathrm{odds} = \frac{p}{1 - p}, \quad d \geq 1.
+\end{equation}
+
+$d > 1$ --- push away from 0.5.
+Adaptive $d$: $d = 1 + \kappa \cdot \sigma_{\mathrm{positions}}$, где $\kappa = 2.0$, $d \leq 2.0$.
+Высокое согласие ($\sigma \approx 0$) $\Rightarrow d \approx 1$ (не экстремизируем).
+Высокое разногласие $\Rightarrow d \to 2$ (независимые сигналы --- экстремизируем).
+
+\subsubsection{Параметрическая модель $\lambda$}
+
+Каждый трейдер верит, что время до события $T \sim \mathrm{Exp}(\lambda)$.
+Субъективная вероятность: $P(T \leq H) = 1 - e^{-\lambda H}$.
+По наблюдаемой позиции $p$ и горизонту рынка $H$ дней:
+\begin{equation}
+\label{eq:lambda}
+\hat{\lambda}_{\mathrm{MLE}} = \frac{1}{n} \sum_{m} \frac{-\ln(1 - \mathrm{pos}_m)}{H_m}.
+\end{equation}
+
+Для гибкости: Weibull($\lambda, k$) через scipy L-BFGS-B,
+selection по AICc \citep{burnham2002model}.
+
+Enriched signal \citep{clinton2024polymarket}: adaptive blend
+$(1-w)\cdot p_{\mathrm{inf}} + w \cdot p_{\mathrm{param}}$,
+$w = \mathrm{coverage} \times \mathrm{fit\_quality}$, $w \leq 0.40$.
+
+\subsection{Валидация}
+
+Walk-forward evaluation: 22 неперекрывающихся фолда по 60 дней,
+burn-in 180 дней для накопления профилей.
+$\bss = 1 - \bs(\text{informed}) / \bs(\text{raw market})$.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Конфигурация} & \textbf{Mean BSS} & \textbf{Median BSS} & \textbf{Positive} & \textbf{95\% CI} \\
+\midrule
+Informed consensus (все 22 фолда)  & $+0.196$ & $+0.159$ & 22/22 & $[+0.094,\; +0.297]$ \\
+Robust subset (фолды 0--16)        & $+0.127$ & ---      & 17/17 & --- \\
+\bottomrule
+\end{tabular}
+\caption{Walk-forward BSS. $p = 2.38 \times 10^{-7}$ (t-test, $H_0: \bss = 0$).}
+\label{tab:walkforward}
+\end{table}
+
+\textbf{22/22 фолда с $\bss > 0$.} Пик: $+0.273$ (fold~9).
+Robust subset (фолды 0--16, $\geq 944$ тестовых рынков каждый) даёт
+более консервативную оценку $+0.127$.
+
+\textbf{Ограничение:} единственная baseline --- raw market price.
+Сравнение с equal-weighted averaging и extremizing по
+\citealt{satopaa2014combining} без профилирования --- открытая задача.
+
+% =====================================================================
+\section{Формализация как Imitation Learning}
+\label{sec:il}
+% =====================================================================
+
+\subsection{MDP prediction market}
+
+Торговлю на prediction market можно формализовать как конечно-горизонтный MDP:
+
+\begin{definition}[Prediction Market MDP]
+\label{def:mdp}
+Кортеж $(\mathcal{S}, \mathcal{A}, P, R, H)$:
+\begin{itemize}[nosep]
+  \item \textbf{Состояние} $s_t = (p_t^{\mathrm{mkt}},\; \Delta t,\; \mathbf{x}_t,\; q_t)$,
+    где $p_t^{\mathrm{mkt}}$ --- текущая цена, $\Delta t$ --- время до разрешения,
+    $\mathbf{x}_t$ --- новостной контекст, $q_t$ --- текущая позиция трейдера.
+  \item \textbf{Действие} $a_t = (d_t, v_t)$:
+    $d_t \in \{\text{YES}, \text{NO}, \text{HOLD}\}$, $v_t \in [0, v_{\max}]$.
+  \item \textbf{Переход} $s_{t+1} = f(s_t, a_t, \xi_t)$ --- стохастический (зависит от других трейдеров).
+  \item \textbf{Награда} $R$: при разрешении --- profit/loss; промежуточная --- mark-to-market P\&L.
+  \item \textbf{Горизонт} $H$ --- дни до resolution (1--90 типично).
+\end{itemize}
+\end{definition}
+
+\begin{remark}
+Формализация упрощена: multi-agent interaction (действия трейдера
+влияют на цену для остальных), market impact и partial observability не учтены.
+MDP используется как концептуальная рамка, не как имплементируемая спецификация.
+\end{remark}
+
+\textbf{Траектория трейдера $i$:}
+$\tau_i = (s_0, a_0, s_1, a_1, \ldots, s_T, o_T)$, где $o_T$ --- outcome (YES/NO).
+Polymarket on-chain данные предоставляют всё это: timestamps, объёмы, направления, разрешения.
+
+\subsection{Behaviour Cloning: базовая идея}
+
+Behavior Cloning (BC) --- supervised learning по экспертным демонстрациям.
+Дана политика эксперта $\pi^*(a|s)$. Учим $\hat{\pi}(a|s)$:
+\begin{equation}
+\label{eq:bc}
+\hat{\pi} = \argmin_{\pi} \sum_{(s,a) \in \mathcal{D}} \ell\!\bigl(\pi(a|s),\; a\bigr),
+\end{equation}
+где $\mathcal{D}$ --- датасет пар state--action из экспертных траекторий.
+
+\textbf{Фундаментальная проблема BC:}
+compounding error --- ошибка $\varepsilon$ на шаге даёт $O(\varepsilon T^2)$ ошибку
+на всей траектории \citep{ross2011reduction}.
+DAgger \citep{ross2011reduction} снижает до $O(T)$, но требует
+интерактивных запросов к эксперту --- невозможно для Polymarket (данные офлайн).
+
+\textbf{Смягчающие факторы для prediction markets:}
+\begin{itemize}[nosep]
+  \item Каждый рынок --- отдельный <<эпизод>>. Compounding error не накапливается \emph{между} рынками.
+  \item Горизонт $T$ = 1--90 шагов (ежедневных) --- короткий.
+  \item Ошибка ограничена диапазоном $[0, 1]$ (вероятности), а не unbounded.
+\end{itemize}
+
+\subsection{Наш консенсус как аналог Weighted Offline BC}
+
+\begin{remark}
+Accuracy-weighted informed consensus \eqref{eq:informed_raw} \emph{структурно аналогичен}
+weighted offline behaviour cloning с loss weights пропорциональными $(1 - \bs_i)$.
+Это не формальная эквивалентность: BC в строгом смысле предполагает
+обучаемую политику $\pi(a|s)$, обобщающуюся на непредвиденные состояния.
+Наш метод --- pointwise averaging без обобщения.
+\end{remark}
+
+\textbf{Обоснование аналогии.}
+Рассмотрим <<policy>> трейдера $i$: $\pi_i(s) = \mathrm{pos}_i(s)$
+--- его позиция при состоянии $s$ (текущая цена + контекст).
+
+BC с MSE loss и per-expert weights:
+\[
+\hat{p}(s) = \argmin_{p} \sum_{i \in \mathcal{I}} w_i \cdot (p - \pi_i(s))^2.
+\]
+
+Оптимум --- взвешенное среднее:
+\[
+\hat{p}(s) = \frac{\sum_{i} w_i \cdot \pi_i(s)}{\sum_{i} w_i}
+= \frac{\sum_{i} w_i \cdot \mathrm{pos}_i}{\sum_{i} w_i}
+= p_{\mathrm{inf}}^{\mathrm{raw}}.
+\]
+
+Это в точности формула \eqref{eq:informed_raw}, что показывает структурное
+сходство с BC.
+
+\textbf{Связь с opinion pooling.}
+В литературе по агрегации мнений (Genest \& Zidek 1986, Cooke 1991)
+accuracy-weighted averaging известен как performance-based linear opinion pool.
+IL-фреймирование мотивирует расширения (Sec.~\ref{sec:improvements}),
+но не является строгой теоремой.
+
+Таким образом, \textbf{наш пайплайн реализует ядро, аналогичное weighted BC}:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{IL/BC термин} & \textbf{Наш аналог} \\
+\midrule
+Expert                        & INFORMED-трейдер ($\bs < p_{20}$) \\
+Expert trajectory $\tau_i$    & История ставок кошелька \\
+Policy $\pi_i(a|s)$           & Позиция трейдера при данной цене и контексте \\
+Behaviour Cloning             & Взвешенное усреднение позиций \\
+Loss weight                   & $(1 - \bs_i) \cdot V_i \cdot r_i$ \\
+Bayesian regularization       & Shrinkage BS (Eq.~\ref{eq:shrinkage}) + coverage shrinkage (Eq.~\ref{eq:coverage}) \\
+\bottomrule
+\end{tabular}
+\caption{Соответствие между IL-терминологией и текущей системой}
+\label{tab:mapping}
+\end{table}
+
+% =====================================================================
+\section{Литература: Multi-Expert Imitation Learning}
+\label{sec:literature}
+% =====================================================================
+
+\subsection{Ключевые методы}
+
+\subsubsection{DAgger и MEGA-DAgger}
+
+\textbf{DAgger} (Dataset Aggregation, \citealt{ross2011reduction}):
+итеративно собирает данные под распределением ученика,
+запрашивает у эксперта правильное действие, дообучает.
+Снижает ошибку с $O(\varepsilon T^2)$ до $O(T)$.
+
+\textbf{MEGA-DAgger} \citep{sun2023mega}:
+расширение для \emph{нескольких несовершенных} экспертов.
+Два механизма:
+\begin{enumerate}[nosep]
+  \item Safety-based filtering: отфильтровывает <<опасные>> демонстрации.
+  \item Scenario-specific evaluation: при конфликте экспертов выбирает
+    лучшего \emph{для данного состояния}.
+\end{enumerate}
+
+В experiments (автономные гонки) MEGA-DAgger превзошёл обоих экспертов,
+дав ${\sim}45$\% улучшение над Human-Gated DAgger.
+
+\textbf{Проблема:} требует интерактивных запросов --- невозможно для офлайн-данных Polymarket.
+
+\subsubsection{Discriminator-Weighted BC (DWBC)}
+
+\citet{xu2022dwbc} (ICML 2022): обучают дискриминатор <<эксперт vs.\ не-эксперт>>,
+используют его score как per-sample weight в BC loss.
+2--5$\times$ улучшение на offline benchmarks.
+
+\textbf{Связь с нами:} наша accuracy weight $(1 - \bs_i)$ ---
+это \emph{аналитический дискриминатор}, основанный на Brier Score.
+Проще и интерпретабельнее, чем обученная нейросеть.
+
+\subsubsection{Density-Ratio Weighted BC (2025)}
+
+\citet{densityratio2025}: маленький <<чистый>> референсный набор
+$\Rightarrow$ density ratio $\Rightarrow$ per-trajectory weights.
+Специально для <<грязных>> датасетов с шумовыми демонстрациями ---
+прямо наш случай (часть трейдеров --- noise).
+
+\subsubsection{IRL с ранжированными экспертами}
+
+\citet{brown2019irl}: inverse RL с ранжированными демонстраторами.
+Не нужно знать true reward function --- нужен только \emph{ранг} демонстраторов.
+Ранг индуцирует ограничения на восстанавливаемую reward function.
+
+\textbf{Связь:} у нас ранг = BSS.
+$\bss > 0.1$ = надёжный, $\bss \leq 0$ = шум.
+
+\textbf{IRLEED} (AAAI 2024, \citealt{irleed2024}):
+восстанавливает expertise level \emph{без prior knowledge},
+через Boltzmann rationality model: эксперты с низкой <<температурой>> делают
+более рациональные выборы.
+
+Informed-трейдеры --- высоко-EV ставки (низкая температура).
+Noise-трейдеры --- рассеянные ставки (высокая температура).
+
+\subsubsection{Mixture of Experts для Diverse BC}
+
+\textbf{Di-BM} \citep{dibm2025}: MoE-сеть, где каждый <<эксперт>> (head)
+ассоциирован с отдельным подраспределением наблюдений.
+Gating network маршрутизирует вход к подходящему эксперту.
+
+\textbf{Связь:} наша HDBSCAN-кластеризация (6 архетипов)
+уже реализует мягкую версию этого --- нехватает gating function,
+которая маршрутизирует \emph{рынок} к подходящему кластеру.
+
+\subsubsection{Attention-Based BC для трейдинга}
+
+\citet{attention_bc2024} (Applied Intelligence, 2024):
+LSTM + self-attention для stock trading.
+Ключевой результат: BC с attention \emph{значительно} превосходит RL
+в data efficiency для задач, где оптимальная траектория
+идентифицируема из исторических данных.
+
+\textbf{<<Positive trajectory filtering>>:}
+используют только прибыльные траектории.
+Аналог: использовать только ставки трейдеров с $\bss > 0.1$.
+
+% ----- Demonstration-Regularized RL ──────────────────────────────────
+\subsection{Статья 2310.17303: Demonstration-Regularized RL}
+
+\textbf{Важно:} статья по arXiv ID 2310.17303 --- это \emph{<<Demonstration-Regularized RL>>}
+(Tiapkin et al., ICLR 2024), а не <<Imitation Learning from a Single Expert on Prediction Markets>>.
+Это теоретическая ML-статья.
+
+\subsubsection{Основная идея}
+
+Двухфазная процедура:
+\begin{enumerate}[nosep]
+  \item \textbf{Offline:} behaviour cloning через MLE на $N_E$ экспертных траекторий
+    $\Rightarrow$ policy $\pi_{\mathrm{BC}}$.
+  \item \textbf{Online:} KL-регуляризированный MDP:
+    \[
+    \max_{\pi}\; V^{\pi}(r) - \lambda \cdot \mathrm{KL}(\pi_{\mathrm{traj}} \,\|\, \pi_{\mathrm{BC},\mathrm{traj}}).
+    \]
+\end{enumerate}
+
+\subsubsection{Ключевой результат}
+
+$N_E$ экспертных демонстраций снижают sample complexity ровно в $N_E$ раз:
+\begin{equation}
+\label{eq:demo_reg}
+\text{Sample complexity} = \widetilde{O}\!\biggl(\frac{\mathrm{Poly}(S, A, H)}{\varepsilon^2 \cdot N_E}\biggr).
+\end{equation}
+
+\textbf{Интерпретация:} каждая экспертная демонстрация стоит ровно
+одного онлайн-сэмпла. 100 исторических ставок трейдера = 100 online samples.
+
+\subsubsection{Расширение на множество экспертов}
+
+Статья рассматривает $N_E$ демонстраций от \emph{одного} эксперта.
+Расширение:
+
+\textbf{Подход A --- Weighted BC:}
+$\pi_{\mathrm{BC}}$ = mixture policy: MLE по $N_{E,k}$ демонстрациям от эксперта $k$
+с весами $w_k$ (expertise coefficients).
+Sample complexity:
+\[
+\widetilde{O}\!\biggl(\frac{\mathrm{Poly}(S,A,H)}{\varepsilon^2 \cdot \sum_k w_k N_{E,k}}\biggr).
+\]
+
+\textbf{Подход B --- Hierarchical KL:}
+Round-1 Delphi outputs = 5 поведенческих policy.
+Round-2 synthesis = KL-регуляризированная агрегация,
+$\pi_{\mathrm{anchor}}$ = weighted mixture of round-1 policies.
+
+% =====================================================================
+\section{Связь: BC $\leftrightarrow$ текущая система}
+\label{sec:bridge}
+% =====================================================================
+
+Полное соответствие элементов:
+
+\begin{longtable}{p{5.5cm}p{8cm}}
+\toprule
+\textbf{Компонент IL/BC} & \textbf{Реализация в Delphi Press} \\
+\midrule
+\endfirsthead
+\midrule
+\textbf{Компонент IL/BC} & \textbf{Реализация в Delphi Press} \\
+\midrule
+\endhead
+Expert $k$ & INFORMED-трейдер с $\bs_k^{\mathrm{adj}} \leq p_{20}$ \\[3pt]
+Expert trajectory $\tau_k$ & Полная история ставок кошелька: $(s_0^k, a_0^k, \ldots, s_T^k, o_T^k)$ \\[3pt]
+Policy $\pi_k(a|s)$ & Функция <<при данной рыночной цене и новостях, ставь X на Y>> \\[3pt]
+State $s$ & $(p_{\mathrm{mkt}}, \Delta t, \mathbf{x}_{\mathrm{news}}, q_k)$ \\[3pt]
+Action $a$ & $(\text{YES/NO}, \text{size})$ \\[3pt]
+Demonstration dataset $\mathcal{D}$ & 470M ставок из HuggingFace dataset \\[3pt]
+Expert quality discriminator & Brier Score $\bs_k^{\mathrm{adj}}$ (аналитический, не обученный) \\[3pt]
+Loss weight $w_k$ & $(1 - \bs_k) \cdot V_k \cdot r_k$ \\[3pt]
+Behaviour Cloning & Weighted mean позиций $p_{\mathrm{inf}}^{\mathrm{raw}}$ (Eq.~\ref{eq:informed_raw}) \\[3pt]
+Regularization & Двойной shrinkage: BS к медиане (\S\ref{sec:shrinkage_bs}) + consensus к $p_{\mathrm{raw}}$ (\S\ref{sec:coverage_shrinkage}) \\[3pt]
+Cluster-based gating (Di-BM) & HDBSCAN: 6 архетипов в \texttt{clustering.py} \\[3pt]
+Extremizing & Satop\"a\"a log-odds, adaptive $d$ \\[3pt]
+Positive trajectory filtering & Tier filtering: NOISE excluded \\[3pt]
+Clone validation & $\lambda$-клоны: train → predict positions → MAE → skill\_score \\[3pt]
+Online adaptation (DAgger) & \emph{Не реализовано} (данные офлайн) \\
+\bottomrule
+\end{longtable}
+
+% =====================================================================
+\section{Направления развития (Future Work)}
+\label{sec:improvements}
+% =====================================================================
+
+Ранжированы по \textbf{impact / effort}.
+\emph{Ни одно из предложений ниже не валидировано экспериментально ---
+это гипотезы для дальнейшего исследования.}
+
+\subsection{Per-category gating (маршрутизация к специалистам)}
+\label{sec:gating}
+
+\textbf{Сейчас:} все INFORMED-трейдеры усредняются одинаково для любого рынка.
+
+\textbf{Проблема:} трейдер с сильным track record на US elections может быть
+случайным на crypto-рынках. Naive averaging размывает сигнал.
+\citet{dibm2025} показывают, что averaging across heterogeneous strategies
+деградирует performance.
+
+\textbf{Предложение:}
+\begin{enumerate}[nosep]
+  \item Расширить профили: per-category BS (politics, crypto, sports, geopolitics).
+  \item Gating function: для нового рынка определить категорию $\Rightarrow$
+    брать только INFORMED-трейдеров с $\bs_{\mathrm{category}} \leq p_{20}$.
+  \item Fallback на общий пул при $<5$ category-specific informed.
+\end{enumerate}
+
+\textbf{Ограничение:} data sparsity --- per-category $n$ может быть слишком мал.
+Требуется проверка: для скольких кошельков $n_{\mathrm{category}} \geq 20$?
+
+\subsection{Positive trajectory filtering}
+
+\textbf{Сейчас:} берём все ставки INFORMED-трейдеров.
+
+\textbf{Проблема:} ставки в последние 24 часа до resolution ---
+это не <<информированный прогноз>>, а momentum-chasing.
+Микро-ставки ($< \$5$) --- шум, не conviction.
+
+\textbf{Предложение:}
+\begin{enumerate}[nosep]
+  \item Отфильтровать late-entry trades ($< 24$ч до resolution).
+  \item Отфильтровать микро-ставки ($v < \$5$).
+  \item Опционально: использовать только trades где трейдер в итоге был прав.
+\end{enumerate}
+
+\textbf{Ожидаемый эффект:} по аналогии с \citealt{attention_bc2024}:
+снижение шума при сокращении датасета на ${\sim}30{-}50$\%.
+
+\subsection{Temporal attention (учёт паттерна ставок)}
+
+\textbf{Сейчас:} используем только финальную позицию (volume-weighted mean).
+
+\textbf{Проблема:} теряем информацию о \emph{когда} трейдер ставил.
+Трейдер, который вошёл рано и удвоил позицию при подтверждении ---
+качественно другой (и более информативный) сигнал,
+чем трейдер, который вошёл поздно.
+
+\textbf{Предложение:}
+\begin{enumerate}[nosep]
+  \item Timing score (уже реализован, \texttt{profiler.py}):
+    volume-weighted mean of $(\text{bet\_time} - \text{open}) / (\text{close} - \text{open})$.
+  \item Добавить timing score в accuracy weight: early bets $\Rightarrow$ бонус.
+  \item Полноценный temporal model: LSTM/Transformer по sequence of (price, size, timestamp).
+\end{enumerate}
+
+Шаг 3 --- исследовательский проект.
+Шаги 1--2 --- инженерная задача на 1--2 дня.
+
+\subsection{KL-регуляризация round-2 Delphi}
+
+\textbf{Контекст} (\citealt{tiapkin2024demo}):
+round-2 Delphi-пайплайна = KL-regularized update от round-1.
+Формализация:
+\[
+\pi_{\mathrm{round2}} = \argmax_{\pi}\; V^{\pi}(r) - \lambda\,\mathrm{KL}(\pi \,\|\, \pi_{\mathrm{round1}}).
+\]
+
+Сейчас это implicit (промпт <<учти мнения коллег>>).
+Формализация сделает архитектуру теоретически обоснованной.
+
+% =====================================================================
+\section{Открытые вопросы для обсуждения}
+\label{sec:questions}
+% =====================================================================
+
+\begin{enumerate}
+  \item \textbf{Какую именно статью имел в виду Даня?}
+    arXiv 2310.17303 --- это <<Demonstration-Regularized RL>> (Tiapkin et al.),
+    а не статья про prediction markets.
+    Возможно, другой arXiv ID или неопубликованная работа.
+
+  \item \textbf{Полноценный BC vs.\ weighted averaging:}
+    стоит ли обучать нейросеть $\hat{\pi}(p|s, \theta)$
+    вместо аналитического weighted mean?
+    Pro: учтёт нелинейности и interactions.
+    Con: датасет может быть мал для deep BC (need $>10$K trajectories per state).
+
+  \item \textbf{Per-category vs.\ per-cluster:}
+    gating по категории рынка (politics, crypto) vs.\ по HDBSCAN-кластеру трейдеров?
+    Или двумерное: cluster $\times$ category?
+
+  \item \textbf{Online adaptation:}
+    можно ли реализовать <<pseudo-DAgger>> ---
+    после каждого разрешённого рынка обновлять профили online,
+    не дожидаясь batch-rebuild?
+\end{enumerate}
+
+% =====================================================================
+\section{Ограничения}
+\label{sec:limitations}
+% =====================================================================
+
+\begin{enumerate}
+  \item \textbf{Shrinkage параметр $k = 15$ --- ad hoc.}
+    Значение заимствовано из практики, но не обосновано
+    sensitivity analysis. Необходима сетка $k \in \{5, 10, 15, 20, 30\}$
+    с кросс-валидацией.
+
+  \item \textbf{Объём $V_i$ не нормирован.}
+    В формуле весов \eqref{eq:weight} ненормированный $V_i$
+    может доминировать над accuracy-компонентой $(1 - \bs_i)$.
+    Крупнейший трейдер с посредственным $\bs$ получит
+    непропорционально высокий вес.
+
+  \item \textbf{Survivorship bias.}
+    Порог $n_i \geq 20$ исключает 23\% кошельков.
+    Если исключённые систематически хуже или лучше,
+    выборка INFORMED смещена.
+
+  \item \textbf{Стационарность information edge.}
+    Профили строятся по всей истории; предполагается,
+    что точность трейдера стабильна. На практике
+    информационное преимущество деградирует.
+    Mitigation: recency weighting ($\tau = 90$ дней),
+    но формальный тест стационарности отсутствует.
+
+  \item \textbf{Shrinkage к рыночной цене.}
+    При низком coverage $p_{\mathrm{inf}} \to p_{\mathrm{raw}}$.
+    Рыночная цена как prior содержит шум noise-трейдеров;
+    принципиальное обоснование этого выбора отсутствует.
+
+  \item \textbf{Baselines ограничены.}
+    Единственная baseline --- raw market price.
+    Необходимо сравнение с equal-weighted averaging,
+    extremizing без профилирования и permutation test.
+
+  \item \textbf{MDP упрощён.}
+    Формализация (Опр.~\ref{def:mdp}) не учитывает
+    multi-agent interaction, market impact и partial observability.
+\end{enumerate}
+
+% =====================================================================
+\section{Заключение}
+\label{sec:conclusion}
+% =====================================================================
+
+Документ описывает пайплайн извлечения informed consensus
+из данных Polymarket: Brier Score профилирование $\to$
+Bayesian shrinkage $\to$ accuracy-weighted aggregation $\to$
+coverage shrinkage $\to$ extremizing.
+
+Walk-forward evaluation на 22 фолдах показывает $\bss = +0.196$
+(95\% CI $[+0.094,\; +0.297]$, $p = 2.38 \times 10^{-7}$) ---
+informed consensus систематически превосходит raw market price.
+
+Показана \emph{структурная аналогия} между accuracy-weighted
+consensus и weighted offline behaviour cloning из литературы
+по imitation learning.
+Эта аналогия мотивирует направления развития:
+per-category gating, temporal trajectory modeling
+и KL-регуляризацию раунда~2 Дельфи-пайплайна.
+
+Ключевые ограничения --- отсутствие альтернативных baselines,
+ad hoc параметры ($k = 15$, пороги 20\%/30\%),
+и survivorship bias --- намечают приоритеты для следующих итераций.
+
+% =====================================================================
+% Bibliography
+% =====================================================================
+\begin{thebibliography}{99}
+
+\bibitem[Manski(2006)]{manski2006interpreting}
+Manski, C.~F. (2006).
+\newblock Interpreting the predictions of prediction markets.
+\newblock \emph{Economics Letters}, 91(3):425--429.
+
+\bibitem[Satop\"a\"a et~al.(2014)]{satopaa2014combining}
+Satop\"a\"a, V.~A., Baron, J., Foster, D.~P., Mellers, B.~A., Tetlock, P.~E., \& Ungar, L.~H. (2014).
+\newblock Combining multiple probability predictions using a simple logit model.
+\newblock \emph{International Journal of Forecasting}, 30(2):344--356.
+
+\bibitem[Ferro \& Fricker(2012)]{ferro2012sampling}
+Ferro, C.~A.~T. \& Fricker, T.~E. (2012).
+\newblock A bias-corrected decomposition of the Brier score.
+\newblock \emph{Quarterly Journal of the Royal Meteorological Society}, 138(668):1954--1960.
+
+\bibitem[Burnham \& Anderson(2002)]{burnham2002model}
+Burnham, K.~P. \& Anderson, D.~R. (2002).
+\newblock \emph{Model Selection and Multimodel Inference}.
+\newblock Springer, 2nd edition.
+
+\bibitem[Ross et~al.(2011)]{ross2011reduction}
+Ross, S., Gordon, G.~J., \& Bagnell, J.~A. (2011).
+\newblock A reduction of imitation learning and structured prediction to no-regret online learning.
+\newblock In \emph{AISTATS}, pages 627--635.
+
+\bibitem[Sun et~al.(2023)]{sun2023mega}
+Sun, X., Yang, S., \& Mangharam, R. (2023).
+\newblock {MEGA-DAgger}: Imitation learning with multiple imperfect experts using topology-based performance evaluation.
+\newblock \emph{arXiv preprint arXiv:2303.00638}.
+
+\bibitem[Xu et~al.(2022)]{xu2022dwbc}
+Xu, H., Zhan, X., Yin, H., \& Qin, H. (2022).
+\newblock Discriminator-weighted offline imitation learning from suboptimal demonstrations.
+\newblock In \emph{ICML}, pages 24725--24742.
+
+\bibitem[Karpoora~Sundara~Pandian \& Baheri(2025)]{densityratio2025}
+Karpoora~Sundara~Pandian, S. \& Baheri, A. (2025).
+\newblock Density-ratio weighted behavioral cloning: Learning control policies from corrupted datasets.
+\newblock \emph{arXiv preprint arXiv:2510.01479}.
+
+\bibitem[Brown et~al.(2019)]{brown2019irl}
+Brown, D.~S., Goo, W., Nagarajan, P., \& Niekum, S. (2019).
+\newblock Extrapolating beyond suboptimal demonstrations via inverse reinforcement learning from observations.
+\newblock In \emph{ICML}, pages 783--792.
+
+\bibitem[Beliaev \& Pedarsani(2025)]{irleed2024}
+Beliaev, M. \& Pedarsani, R. (2025).
+\newblock {IRLEED}: Inverse reinforcement learning by estimating expertise of demonstrators.
+\newblock In \emph{AAAI-25}, Vol.~39, pages 15532--15540.
+
+\bibitem[Shen et~al.(2026)]{dibm2025}
+Shen, W., Ma, J., Zhou, M., \& Meng, Z. (2026).
+\newblock Learning diverse skills for behavior models with mixture of experts.
+\newblock \emph{arXiv preprint arXiv:2601.12397}.
+
+\bibitem[{Attention-Based BC}(2024)]{attention_bc2024}
+Zhang, Y. et~al. (2024).
+\newblock An attention-based behavioral cloning approach for algorithmic trading.
+\newblock \emph{Applied Intelligence}, 54:15303--15324.
+
+\bibitem[Tiapkin et~al.(2024)]{tiapkin2024demo}
+Tiapkin, D., Belomestny, D., Calandriello, D., Moulines, E., Naumov, A., Perrault, P., Valko, M., \& M\'enard, P. (2024).
+\newblock Demonstration-regularized {RL}.
+\newblock In \emph{ICLR 2024}.
+
+\bibitem[Akey et~al.(2025)]{akey2025polymarket}
+Akey, P., Gr\'egoire, V., Harvie, C., \& Martineau, C. (2025).
+\newblock Who wins and who loses in prediction markets? Evidence from {Polymarket}.
+\newblock \emph{SSRN 6443103}.
+
+\bibitem[Mitts \& Ofir(2026)]{mitts2026informed}
+Mitts, J. \& Ofir, M. (2026).
+\newblock From Iran to Taylor Swift: Informed trading in prediction markets.
+\newblock \emph{Harvard Law Corporate Governance Forum}.
+
+\bibitem[Clinton \& Huang(2024)]{clinton2024polymarket}
+Clinton, J. \& Huang, T. (2024).
+\newblock Polymarket accuracy study.
+\newblock Vanderbilt University.
+
+\bibitem[B\"urgi et~al.(2025)]{burgi2025kalshi}
+B\"urgi, C., Deng, L., \& Whelan, K. (2025).
+\newblock Makers and takers: The economics of the Kalshi prediction market.
+\newblock \emph{CEPR Discussion Paper}.
+
+\bibitem[Wolfers \& Zitzewitz(2004)]{wolfers2004prediction}
+Wolfers, J. \& Zitzewitz, E. (2004).
+\newblock Prediction markets.
+\newblock \emph{Journal of Economic Perspectives}, 18(2):107--126.
+
+\end{thebibliography}
+
+\end{document}

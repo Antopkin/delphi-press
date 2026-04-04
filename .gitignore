@@ -24,6 +24,14 @@ data/inverse/*
 *.log
 .DS_Store
 # Локальная академическая литература (80+ источников, 44 файла)
-research/
+/research/
+# LaTeX auxiliary files
+*.aux
+*.toc
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+docs/research/*.pdf
 # Снимок конфигурации сервера (локальный)
 docs/server-migration-snapshot.md
