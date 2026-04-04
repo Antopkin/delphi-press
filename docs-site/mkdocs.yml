@@ -84,6 +84,12 @@ nav:
     - LLM-инфраструктура: architecture/llm.md
   - Сбор данных:
     - Стадии 1-2: data-collection/stages-1-2.md
+    - Внешние API: data-collection/api-integrations.md
+  - Методология:
+    - Суп��рпрогнозисты: methodology/superforecasters.md
+    - Walk-forward валидация: methodology/walk-forward.md
+    - Imitation Learning: methodology/imitation-learning.md
+    - Фазы inverse module: methodology/inverse-phases.md
   - Метод Дельфи:
     - Анализ (стадия 3): delphi-method/analysis.md
     - Раунды Дельфи (стадии 4-5): delphi-method/delphi-rounds.md
@@ -106,6 +112,9 @@ nav:
     - База данных: infrastructure/database.md
     - Безопасность: infrastructure/security.md
     - Конфигурация: infrastructure/config.md
+    - Скрипты: infrastructure/scripts.md
+  - Разработка:
+    - Практики Claude Code: development/claude-code-practices.md
   - Приложения:
     - Data Flow: appendix/data-flow.md
     - Промпты агентов: appendix/prompts.md
