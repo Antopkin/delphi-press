@@ -1,16 +1,14 @@
-# Case Studies: Dead Ends & Lessons
+# Кейс-исследования: тупики и уроки
 
-This section documents 21 case studies from 6 months of Delphi Press development, organized by category: 4 API issues, 4 architectural failures, 8 critical bugs, and 5 deferred directions.
+В этом разделе документированы 21 кейс-исследование из 6 месяцев разработки Delphi Press, организованные по категориям: 4 проблемы API, 4 архитектурные ошибки, 8 критических багов и 5 отложенных направлений.
 
-## API Dead Ends
+## Проблемы API
 
-### Case Study 1: Metaculus 403 API Deprecation and Tier Lock (v0.5.1)
+### Кейс 1: Metaculus 403 Deprecation API и Tier Lock (v0.5.1)
 
-**Problem:** Metaculus serves as a source of structured community forecasts. On production server v0.5.1, all API requests returned HTTP 403 Forbidden, but tests passed locally.
+**Проблема:** Metaculus служит источником структурированных прогнозов сообщества. На production сервере v0.5.1 все API-запросы возвращали HTTP 403 Forbidden, но локально тесты проходили.
 
-**What was done:** Fixed endpoint migration from `/api2/questions/` to `/api/posts/`, added required `Authorization: Token` header, renamed parameters (`status` → `statuses`, `resolve_time__gt` → `scheduled_resolve_time__gt`), rewrote response parsing. Token generated at https://www.metaculus.com/aib/ (free, non-expiring).
-
-**Lesson learned:** Never assume backward compatibility in third-party APIs. Even if legacy endpoints work for 10+ months, they may be deprecated. Subscribe to official API channels, save documentation locally, fix rate limits conservatively (120 req/min for Metaculus), and make credentials configurable from environment.
+**Что сделано:** Исправлена миграция endpoint с `/api2/questions/` на `/api/posts/`, добавлен обязательный заголовок `Authorization: Token`, переименованы параметры (`status` → `statuses`, `resolve_time__gt` → `scheduled_resolve_time__gt`), переписан парсинг ответов. Токен сгенерирован на https://www.metaculus.com/aib/ (бесплатно, без срока действия).
 
 !!! tip "Урок"
     **Никогда не предполагай обратную совместимость внешней API**, даже если старый endpoint работает 10+ месяцев. Это может быть legacy layer, а не гарантия. 
@@ -23,13 +21,11 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 2: GDELT Cyrillic Query Crash (pre-v0.5.1, v0.9.4)
+### Кейс 2: GDELT Cyrillic Query Crash (pre-v0.5.1, v0.9.4)
 
-**Problem:** ForesightCollector called GDELT with Cyrillic queries like "news forecast 2026-03-29 ТАСС", causing JSON parse errors when ElasticSearch returned HTML instead of JSON.
+**Проблема:** ForesightCollector вызывал GDELT с запросами на кириллице вроде "news forecast 2026-03-29 ТАСС", вызывая JSON parse errors, когда ElasticSearch возвращал HTML вместо JSON.
 
-**What was done:** Added Content-Type header check before JSON parsing, implemented null-safe articles handling (`(data.get("articles") or [])`), switched to English queries, used GDELT language operators (`sourcelang:russian + sourcecountry:RS`).
-
-**Lesson learned:** Never trust charset support without explicit testing. Filter languages through operators rather than query text. Check Content-Type headers before parsing JSON. Protect against null values with `(field or [])` rather than `get(field, [])`. Rate limit GDELT at ~1 req/sec.
+**Что сделано:** Добавлена проверка заголовка Content-Type перед парсингом JSON, реализована null-safe обработка articles (`(data.get("articles") or [])`), переход на английские запросы, использованы языковые операторы GDELT (`sourcelang:russian + sourcecountry:RS`).
 
 !!! tip "Урок"
     **Никогда не доверяй charset-поддержке без явного тестирования**, даже если документация не упоминает ограничения.
@@ -42,13 +38,11 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 3: Polymarket camelCase Parameter Mismatch (pre-v0.5.1)
+### Кейс 3: Polymarket camelCase Parameter Mismatch (pre-v0.5.1)
 
-**Problem:** ForesightCollector sent `GET /markets?order=volume_24hr` (snake_case), receiving HTTP 422 Unprocessable Entity on production, though not reproducible locally.
+**Проблема:** ForesightCollector отправлял `GET /markets?order=volume_24hr` (snake_case), получая HTTP 422 Unprocessable Entity на production, хотя локально не воспроизводилось.
 
-**What was done:** Changed to `order=volume24hr` (camelCase). Discovered `/markets` endpoint requires camelCase while `/events` requires snake_case — undocumented inconsistency.
-
-**Lesson learned:** Always test all endpoints live before production deploy. Do not assume consistency between similar endpoints. Create local reference documentation for external APIs with examples. When receiving 422, check each parameter against docs.
+**Что сделано:** Изменено на `order=volume24hr` (camelCase). Обнаружено, что endpoint `/markets` требует camelCase, а `/events` требует snake_case — недокументированная несогласованность.
 
 !!! tip "Урок"
     **API inconsistency — это дизайн-баг, но при интеграции нужно быть готовым.** Polymarket `/markets` требует camelCase, а `/events` — snake_case.
@@ -61,13 +55,11 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 4: Reuters RSS Feed Deprecation (v0.9.4)
+### Кейс 4: Reuters RSS Feed Deprecation (v0.9.4)
 
-**Problem:** Historical GLOBAL_RSS_FEEDS included Reuters URLs returning 404. Pipeline failed at stage 1 when fetching news signals.
+**Проблема:** Исторический GLOBAL_RSS_FEEDS включал Reuters URLs, возвращающие 404. Pipeline завершался ошибкой на stage 1 при выборке сигналов новостей.
 
-**What was done:** Removed all Reuters feeds from `src/agents/collectors/news_scout.py`. Alternative sources (BBC, AP, Bloomberg) remain.
-
-**Lesson learned:** RSS feeds are live resources requiring periodic health checks. Large publishers may close public feeds without warning. Maintain fallback sources. Do not rely on single publisher. Track 404/410 errors in logs as signals of dead feeds.
+**Что сделано:** Удалены все Reuters feeds из `src/agents/collectors/news_scout.py`. Остаются альтернативные источники (BBC, AP, Bloomberg).
 
 !!! tip "Урок"
     **RSS feeds — живые ресурсы. Периодически проверяй их здоровье.**  Reuters (feeds.reuters.com) закрыт полностью с 2020 года.
@@ -80,15 +72,13 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-## Architectural Failures
+## Архитектурные ошибки
 
-### Case Study 5: YandexGPT Stub (v0.8.0)
+### Кейс 5: YandexGPT Stub (v0.8.0)
 
-**Problem:** v0.7.0 contained fallback logic to YandexGPT when OPENROUTER_API_KEY absent. Integration threw NotImplementedError on every call (never implemented beyond stub). Server had VPN access but single-provider fallback created single point of failure.
+**Проблема:** v0.7.0 содержала fallback логику на YandexGPT при отсутствии OPENROUTER_API_KEY. Интеграция бросала NotImplementedError при каждом вызове (никогда не реализована, только stub). Сервер имел VPN-доступ, но fallback на одного провайдера создавал single point of failure.
 
-**What was done:** Completely removed YandexGPT. Migrated three tasks (`style_generation`, `style_generation_ru`, `quality_style`) to OpenRouter with Claude Sonnet 4.6.
-
-**Lesson learned:** Do not architect fallback to unreliable second provider. Single well-tested provider beats two half-implemented ones. Choose one primary provider and stick with it. If redundancy needed, fully test both.
+**Что сделано:** Полностью удалён YandexGPT. Три задачи (`style_generation`, `style_generation_ru`, `quality_style`) мигрированы на OpenRouter с Claude Sonnet 4.6.
 
 !!! tip "Урок"
     **Не строй архитектуру на наличии двух провайдеров, если один не работает.** Single LLM provider лучше, чем fallback на неработающего second.
@@ -101,13 +91,11 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 6: Non-Existent Preset Sonnet 4.6 (v0.9.4)
+### Кейс 6: Non-Existent Preset Sonnet 4.6 (v0.9.4)
 
-**Problem:** v0.9.3 contained 3 presets: Light (Gemini Flash), Standard (Claude Sonnet 4.6), Opus (Claude Opus 4.6). Standard preset referenced non-existent model `claude-sonnet-4.6` (OpenRouter offers `claude-3.5-sonnet` only). Pipeline crashed on first LLM call with "model not found".
+**Проблема:** v0.9.3 содержала 3 пресета: Light (Gemini Flash), Standard (Claude Sonnet 4.6), Opus (Claude Opus 4.6). Пресет Standard ссылался на несуществующую модель `claude-sonnet-4.6` (OpenRouter предлагает только `claude-3.5-sonnet`). Pipeline падал при первом LLM-вызове с ошибкой "model not found".
 
-**What was done:** Removed Standard preset. Kept Light (Gemini 2.5 Flash) and Opus (Claude Opus 4.6). Updated UI.
-
-**Lesson learned:** Validate model names before deploy. Add CI/CD step testing each preset with real API calls. Maintain current list of available models per provider. Better 1 working preset than 3 broken ones.
+**Что сделано:** Удалён пресет Standard. Оставлены Light (Gemini 2.5 Flash) и Opus (Claude Opus 4.6). Обновлен UI.
 
 !!! tip "Урок"
     **Валидируй model names до production deploy.** Confusion между Sonnet версиями: есть `claude-3.5-sonnet`, но нет `claude-sonnet-4.6`.
@@ -120,13 +108,11 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 7: Dark Mode Complexity (v0.8.0)
+### Кейс 7: Dark Mode Complexity (v0.8.0)
 
-**Problem:** v0.7.0 implemented dark mode with toggle button, localStorage, and system preference detection. Added CSS duplication, JS complexity, testing burden, and user confusion (toggle not discoverable).
+**Проблема:** v0.7.0 реализовала dark mode с кнопкой переключения, localStorage, и обнаружением системных предпочтений. Добавила CSS дублирование, JS complexity, нагрузку на тестирование и user confusion (переключатель не discoverable).
 
-**What was done:** Removed dark mode completely. Kept light theme with OKLCH palette optimized for contrast and accessibility.
-
-**Lesson learned:** Do not add features without user request. YAGNI principle. Even "nice to have" features cost maintenance. Gather feedback before adding UI features. One well-done theme beats two poorly-done ones.
+**Что сделано:** Полностью удалён dark mode. Сохранена light тема с OKLCH палитрой, оптимизированной для контраста и доступности.
 
 !!! tip "Урок"
     **Не добавляй features без спроса. YAGNI.** Даже если feature кажется "nice to have", цена maintenance высока.
@@ -139,13 +125,11 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 8: Pico.css → Tailwind CSS Migration (v0.8.0)
+### Кейс 8: Pico.css → Tailwind CSS Migration (v0.8.0)
 
-**Problem:** Classless CSS (Pico.css) worked for prototypes but product grew beyond its limits: OKLCH color space unsupported, no custom components, limited responsive utilities, no animations.
+**Проблема:** Classless CSS (Pico.css) работала для прототипов, но продукт перерос её границы: OKLCH color space не поддерживается, нет кастомных компонентов, ограниченные responsive utilities, нет анимаций.
 
-**What was done:** Migrated to Tailwind CSS v4.2.2 with PostCSS build pipeline. Implemented Impeccable design system with 17 JS-referenced `fn-*` components. Used Newsreader/Source Sans 3/JetBrains Mono from Google Fonts.
-
-**Lesson learned:** Classless frameworks are trap for anything more complex than landing page. Evaluate UI ceiling at project start, not by current needs. Migration cost grows non-linearly with template count. Utility framework scales; classless doesn't.
+**Что сделано:** Мигрирована на Tailwind CSS v4.2.2 с PostCSS build pipeline. Реализована дизайн-система Impeccable с 17 JS-referenced `fn-*` компонентами. Использованы шрифты Newsreader/Source Sans 3/JetBrains Mono из Google Fonts.
 
 !!! tip "Урок"
     **Classless CSS-фреймворки — ловушка для всего, что сложнее landing page.** Требования выросли за потолок Pico.css: OKLCH-палитра, компоненты, анимации.
@@ -158,15 +142,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-## Critical Bugs
+## Критические баги
 
-### Case Study 9: Temporal Leak in Walk-Forward Evaluation (v0.9.2)
+### Кейс 9: Temporal Leak in Walk-Forward Evaluation (v0.9.2)
 
-**Problem:** Walk-forward validation used pre-aggregated bettor positions covering entire dataset. At cutoff $T$, positions contained average of trades dated $T + 30$ days. Information leak: model saw future signals.
+**Проблема:** Walk-forward validation использовала pre-aggregated bettor positions, охватывающие весь датасет. На cutoff $T$, позиции содержали average trades, датированные $T + 30$ дней. Information leak: модель видела будущие сигналы.
 
-**What was done:** Rewrote aggregation into 30-day bucketed parquet. Walk-forward now computes `avg_position_as_of_T` using only `time_bucket <= T`. DuckDB with predicate pushdown: 225× speedup, memory from 7.4 GB to 4.6 GB.
+**Что сделано:** Переписана агрегация в 30-day bucketed parquet. Walk-forward теперь вычисляет `avg_position_as_of_T`, используя только `time_bucket <= T`. DuckDB с predicate pushdown: 225× speedup, memory с 7.4 GB до 4.6 GB.
 
-**Result:** Leaked BSS +0.092 vs clean BSS +0.117 on same folds. Leak added noise, not signal.
+**Результат:** Leaked BSS +0.092 vs clean BSS +0.117 на тех же фолдах. Leak добавлял шум, не сигнал.
 
 !!! tip "Урок"
     **Temporal cutoff требует временного измерения в данных, не глобального агрегирования.** Это критично для walk-forward evaluation.
@@ -180,11 +164,11 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 10: conditionId Mismatch (v0.9.3)
+### Кейс 10: conditionId Mismatch (v0.9.3)
 
-**Problem:** Polymarket has dual IDs: `id` (numeric, local to Gamma API) and `conditionId` (CTF hex hash, global in CLOB + Data API). ForesightCollector joined on `id`, loader.py on `conditionId`. 99% signal loss due to no matches.
+**Проблема:** Polymarket имеет dual IDs: `id` (numeric, local для Gamma API) и `conditionId` (CTF hex hash, global в CLOB + Data API). ForesightCollector объединял по `id`, loader.py по `conditionId`. 99% потеря сигнала из-за отсутствия matches.
 
-**What was done:** Changed join key to `conditionId`. Added documentation comments explaining both IDs.
+**Что сделано:** Изменен join key на `conditionId`. Добавлены документирующие комментарии, объясняющие оба ID.
 
 !!! tip "Урок"
     **Когда third-party API имеет несколько IDs, документируй purpose каждого в code comments.**
@@ -198,11 +182,11 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 11: Date Serialization Crash (v0.9.5)
+### Кейс 11: Date Serialization Crash (v0.9.5)
 
-**Problem:** Timeline schemas added `predicted_date` and `target_date` fields. Pipeline completed 9 stages (40 min, \$5-15 cost), but worker crashed on save with `TypeError: Object of type date is not JSON serializable`. Result lost.
+**Проблема:** Timeline schemas добавили `predicted_date` и `target_date` fields. Pipeline завершила 9 stages (40 мин, $5-15 cost), но worker упал на save с `TypeError: Object of type date is not JSON serializable`. Результат потерян.
 
-**What was done:** Added `@field_serializer` decorators converting `datetime.date` to ISO format. Alternative: use `model_dump(mode="json")` explicitly.
+**Что сделано:** Добавлены декораторы `@field_serializer`, конвертирующие `datetime.date` в ISO format. Альтернатива: использовать `model_dump(mode="json")` явно.
 
 !!! tip "Урок"
     **Serialization должна быть unit-tested. Никогда не предполагай, что `model_dump()` даст JSON-ready dict.**
@@ -211,16 +195,16 @@ This section documents 21 case studies from 6 months of Delphi Press development
     - Add test: `model_dump() → json.dumps() → json.loads()` round-trip для каждого schema с date/datetime
     - При добавлении новых date/datetime fields, immediately add `@field_serializer`
     - Используй `model_dump(mode="json")` в production code (explicit, не default)
-    - Pipeline проходит 9 стадий за 40 мин, crash на save = полная потеря результата (\$5-15 cost)
+    - Pipeline проходит 9 стадий за 40 мин, crash на save = полная потеря результата ($5-15 cost)
     - Алтернатива: `model_dump(mode="json")` везде, но `@field_serializer` более локален
 
 ---
 
-### Case Study 12: PromptParseError Silently Dropped (v0.5.2–v0.9.4)
+### Кейс 12: PromptParseError Silently Dropped (v0.5.2–v0.9.4)
 
-**Problem:** EventTrendAnalyzer requests JSON from LLM (e.g., Gemini Flash). When LLM returns truncated JSON (`finish_reason="length"`), catch-all exception handler returned empty dict `{}`. Downstream expected `EventThreads` (required fields), got `{}` → ValidationError → silent assessment drop → empty timeline.
+**Проблема:** EventTrendAnalyzer запрашивает JSON у LLM (e.g., Gemini Flash). Когда LLM возвращает truncated JSON (`finish_reason="length"`), catch-all exception handler возвращал пустой dict `{}`. Downstream ожидал `EventThreads` (required fields), получал `{}` → ValidationError → silent assessment drop → пустая timeline.
 
-**What was done:** Distinguished JSON parse errors from validation errors. For parse errors: log and fallback to raw headlines. For validation errors: return structured default `EventThreads(threads=[])`.
+**Что сделано:** Различены JSON parse errors от validation errors. Для parse errors: логирование и fallback к raw headlines. Для validation errors: return structured default `EventThreads(threads=[])`.
 
 !!! tip "Урок"
     **Никогда не swallow exceptions молча. Either fail-fast или graceful fallback с logged reason.**
@@ -234,11 +218,11 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 13: BudgetTracker Race Condition (v0.7.1)
+### Кейс 13: BudgetTracker Race Condition (v0.7.1)
 
-**Problem:** BudgetTracker checked and incremented budget in async context without synchronization. Race condition: Agent 1 reads total_cost=48, Agent 2 reads 48, Agent 1 writes 49.5, Agent 2 writes 50.0 (could exceed max). Budget check bypassed.
+**Проблема:** BudgetTracker проверял и увеличивал budget в async контексте без синхронизации. Race condition: Agent 1 читает total_cost=48, Agent 2 читает 48, Agent 1 пишет 49.5, Agent 2 пишет 50.0 (может превышать max). Budget check bypassed.
 
-**What was done:** Wrapped check-and-update with `asyncio.Lock()`.
+**Что сделано:** Wrapped check-and-update с `asyncio.Lock()`.
 
 !!! tip "Урок"
     **Shared state в async code требует synchronization primitives (asyncio.Lock).**
@@ -252,11 +236,11 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 14: Timeout Cascade (v0.9.4)
+### Кейс 14: Timeout Cascade (v0.9.4)
 
-**Problem:** Default agent timeout 300 seconds. Heavy prompts (Opus multi-agent mediation) exceeded limits regularly. Cascading failure: one stage timeout dropped entire pipeline after 40+ minutes compute.
+**Проблема:** Default agent timeout 300 секунд. Heavy prompts (Opus multi-agent mediation) превышали лимиты регулярно. Каскадный отказ: один stage timeout дропал весь pipeline после 40+ минут compute.
 
-**What was done:** Raised default from 300s to 600s (2x p95 latency). Per-stage tuning: `outlet_historian` 300s (lightweight), `delphi_r2` 900s (complex multi-agent), others 600s.
+**Что сделано:** Поднят default с 300s на 600s (2x p95 latency). Per-stage tuning: `outlet_historian` 300s (lightweight), `delphi_r2` 900s (complex multi-agent), остальные 600s.
 
 !!! tip "Урок"
     **Дефолтные таймауты должны базироваться на 2× наблюдаемый p95 latency, а не на оптимистичных средних.**
@@ -269,11 +253,11 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 15: max_tokens Evolution (v0.5.1–v0.9.5)
+### Кейс 15: max_tokens Evolution (v0.5.1–v0.9.5)
 
-**Problem:** Parameter went through iterations: 4096 (truncated Delphi R1) → 8192 (still insufficient) → 16384 (OpenRouter reserved this from credit balance, blocking parallel calls) → unlimited (current). Setting 16384 reserved \$5+ per call despite 2000-token actual output.
+**Проблема:** Параметр прошёл итерации: 4096 (truncated Delphi R1) → 8192 (всё ещё недостаточно) → 16384 (OpenRouter зарезервировал эту сумму из баланса кредитов, блокируя parallel calls) → unlimited (текущее). Установка 16384 зарезервировала $5+ за call несмотря на 2000-token фактический output.
 
-**What was done:** Removed cap entirely. Discovered OpenRouter's credit reservation mechanism: `max_tokens` amount reserved upfront.
+**Что сделано:** Удален cap полностью. Обнаружен механизм credit reservation OpenRouter: сумма `max_tokens` зарезервирована заранее.
 
 !!! tip "Урок"
     **LLM API pricing модели неочевидны. Тестируй cost impact параметра `max_tokens` перед production deploy.**
@@ -282,15 +266,15 @@ This section documents 21 case studies from 6 months of Delphi Press development
     - Для OpenRouter: unlimited `max_tokens` дешевле, чем высокий фиксированный cap (credit reservation gotcha)
     - Документируй pricing gotchas для каждого LLM-провайдера в проектной wiki
     - Версия v0.9.4: `max_tokens` установлен как None (unlimited)
-    - Обнаружено: `max_tokens=16384` резервирует \$5+ за call, даже если фактический выход 2000 tokens
+    - Обнаружено: `max_tokens=16384` резервирует $5+ за call, даже если фактический выход 2000 tokens
 
 ---
 
-### Case Study 16: Incremental Checkpoint Saving (v0.9.5)
+### Кейс 16: Incremental Checkpoint Saving (v0.9.5)
 
-**Problem:** Pipeline saved results only on completion of all 9 stages. If stage 9 timeout after 40+ minutes, all results (\$5-15 cost) lost. User sees blank page despite massive compute.
+**Проблема:** Pipeline сохраняла результаты только при завершении всех 9 stages. Если stage 9 timeout после 40+ минут, все результаты ($5-15 cost) потеряны. User видит пустую страницу несмотря на массивное compute.
 
-**What was done:** Implemented per-stage incremental save. Each completed stage persists to `PipelineStep.output_data`. Worker can resume from last checkpoint.
+**Что сделано:** Реализовано per-stage incremental save. Каждый завершённый stage сохраняется в `PipelineStep.output_data`. Worker может resume с последнего checkpoint.
 
 !!! tip "Урок"
     **Долгоживущие pipeline обязаны делать checkpoint после каждого дорогого шага. "Всё или ничего" неприемлемо.**
@@ -299,17 +283,17 @@ This section documents 21 case studies from 6 months of Delphi Press development
     - Checkpoint recovery позволяет retry с последней точки, экономя и время, и деньги
     - Паттерн: каждый stage записывает `PipelineStep.output_data` сразу после успешного завершения
     - Версия v0.9.5: stage_callback в orchestrator сохраняет headlines после каждой стадии
-    - Если timeout на stage 8 (40 мин, \$5-15), пользователь всё равно видит draft headlines из stage 1-7
+    - Если timeout на stage 8 (40 мин, $5-15), пользователь всё равно видит draft headlines из stage 1-7
 
 ---
 
-## Deferred Directions
+## Отложенные направления
 
-### Case Study 17: Domain-Specific Brier Scores
+### Кейс 17: Domain-Specific Brier Scores
 
-**Idea:** Different market types (crypto, politics, sports) have different accuracy characteristics. Compute per-domain BS weights for adaptive extremizing.
+**Идея:** Различные типы рынков (crypto, politics, sports) имеют различные характеристики точности. Вычислить per-domain BS weights для adaptive extremizing.
 
-**Why deferred:** Data sparsity. Only ~100 of 348K informed bettors have >5 resolved bets per domain. BS on small N has huge variance. Stratifying drops 99% of bettors.
+**Почему отложено:** Спарсность данных. Только ~100 из 348K informed bettors имеют >5 resolved bets per domain. BS на малом N имеет огромную дисперсию. Stratification дропает 99% bettors.
 
 !!! tip "Урок"
     **Не добавляй complexity для marginal gains на limited data.** 1–3% улучшение требует 10× больше данных.
@@ -321,11 +305,11 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 18: Bettor-Level News Correlation
+### Кейс 18: Bettor-Level News Correlation
 
-**Idea:** Informed bettors react quickly to breaking news. Build predictive model of position changes vs GDELT signals.
+**Идея:** Informed bettors реагируют быстро на breaking news. Построить predictive model изменений позиций vs GDELT signals.
 
-**Why deferred:** Speculative hypothesis needs special pipeline: working GDELT API, per-outlet RSS, temporal alignment (complex time model), validation unclear.
+**Почему отложено:** Спекулятивная гипотеза требует специального pipeline: работающий GDELT API, per-outlet RSS, temporal alignment (complex time model), validation unclear.
 
 !!! tip "Урок"
     **Research hypotheses требуют pilot data перед full engineering effort.** Не начинай building без evidence.
@@ -337,14 +321,14 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 19: Hierarchical Trader Belief Models
+### Кейс 19: Hierarchical Trader Belief Models
 
-**Idea:** Build Bayesian hierarchical model of bettor beliefs for better aggregate forecast.
+**Идея:** Построить Bayesian hierarchical model bettor beliefs для лучшего aggregate forecast.
 
-**Why deferred:** Pure research project, not engineering task. Requires novel statistical methods, publication-quality validation, large dataset, clear "belief" definition.
+**Почему отложено:** Pure research project, не engineering task. Требует novel statistical methods, publication-quality validation, большой датасет, чёткое определение "belief".
 
 !!! tip "Урок"
-    **Distinguish между engineering (solve known problem) и research (formulate new problem).** Не заполняй product roadmap research ideas.
+    **Distinguish между engineering (решить известную задачу) и research (сформулировать новую задачу).** Не заполняй product roadmap research ideas.
 
     - Иерархические модели требуют новых statistical methods (Bayesian hierarchical modeling)
     - Publication-quality validation: peer review, reproducibility, novel methods
@@ -353,71 +337,71 @@ This section documents 21 case studies from 6 months of Delphi Press development
 
 ---
 
-### Case Study 20: Kalshi API Integration
+### Кейс 20: Kalshi API Integration
 
-**Idea:** Kalshi is second major US prediction market. Expand coverage?
+**Идея:** Kalshi — второй major US prediction market. Расширить coverage?
 
-**Why deferred:** US-only, low ROI. ~500 active markets (vs Polymarket ~5000+), no public bettor profiles, higher regulation. Integration cost 3 days, result +200 low-quality markets, 0 new signals.
+**Почему отложено:** US-only, низкий ROI. ~500 active markets (vs Polymarket ~5000+), нет публичных bettor profiles, выше regulation. Integration cost 3 дня, результат +200 low-quality markets, 0 новых signals.
 
 !!! tip "Урок"
     **Evaluate ROI перед adding new data source.** Не все API'ов стоят интегрирования.
 
     - Kalshi: ~500 active markets (vs Polymarket ~5000+)
     - US-only coverage, higher regulation, no public bettor profiles (vs Polymarket on-chain transparency)
-    - Integration cost: ~3 days (API, schema changes, tests)
+    - Integration cost: ~3 дня (API, schema changes, tests)
     - Result: +200 рынков (низкое качество), 0 новых signals
     - Cost-benefit: effort > benefit
 
 ---
 
-### Case Study 21: BigQuery for GDELT Historical Data
+### Кейс 21: BigQuery for GDELT Historical Data
 
-**Idea:** Use BigQuery's 2.65 TB/year GDELT dataset for batch retrospective testing.
+**Идея:** Использовать 2.65 TB/year GDELT dataset BigQuery для batch retrospective testing.
 
-**Why deferred:** Cost-prohibitive. Unoptimized query: \$1.94/query. Optimized: \$0.04/query. 100-query batch: \$200-\$400. Alternative: free 15-minute CSV polling + local DuckDB. Total cost \$0, speed acceptable for monitoring.
+**Почему отложено:** Cost-prohibitive. Unoptimized query: $1.94/query. Optimized: $0.04/query. 100-query batch: $200–$400. Альтернатива: бесплатный 15-minute CSV polling + local DuckDB. Total cost $0, speed приемлема для monitoring.
 
 !!! tip "Урок"
     **Evaluate cloud costs vs local alternatives. Free polling beats paid queries.** BigQuery viable для retrospective, но не для real-time.
 
-    - BigQuery pricing: \$6.25/TB (после 1 TB free/месяц)
-    - Unoptimized query: 311 GB scanned = \$1.94 per query
-    - Optimized query: 6.28 GB scanned = \$0.04 per query
-    - 100-query batch retrospective: \$200-\$400 (depends on optimization)
+    - BigQuery pricing: $6.25/TB (после 1 TB free/месяц)
+    - Unoptimized query: 311 GB scanned = $1.94 per query
+    - Optimized query: 6.28 GB scanned = $0.04 per query
+    - 100-query batch retrospective: $200–$400 (depends on optimization)
     - Alternative: 15-minute CSV polling (free, 2–5 MB per batch) + local DuckDB
-    - Total cost: \$0, speed: достаточна для production monitoring
+    - Total cost: $0, speed: достаточна для production monitoring
 
 ---
 
-## Summary Table
+## Итоговая таблица
 
-| # | Category | Case Study | Status | Version | Impact |
+| # | Категория | Кейс | Статус | Версия | Последствия |
 |---|---|---|---|---|---|
-| 1 | API | Metaculus 403 | Fixed, Disabled | v0.5.1, v0.9.4 | Auth-required tier lock |
-| 2 | | GDELT Cyrillic | Fixed | pre-v0.5.1, v0.9.4 | HTML crashes prevented |
-| 3 | | Polymarket camelCase | Fixed | pre-v0.5.1 | 422 error resolved |
-| 4 | | Reuters RSS | Removed | v0.9.4 | 404 dead feed |
-| 5 | Architecture | YandexGPT | Removed | v0.8.0 | Consolidated to OpenRouter |
-| 6 | | Sonnet 4.6 | Removed | v0.9.4 | Non-existent model |
-| 7 | | Dark mode | Removed | v0.8.0 | Unmaintained feature |
-| 8 | | Pico.css → Tailwind | Migrated | v0.8.0 | Classless CSS limit |
-| 9 | Critical Bugs | Temporal leak | Fixed | v0.9.2 | BSS +0.092→+0.127 |
-| 10 | | conditionId | Fixed | v0.9.3 | 99% signal loss |
-| 11 | | Date serialization | Fixed | v0.9.5 | Complete data loss |
-| 12 | | PromptParseError | Fixed | v0.5.2–v0.9.4 | Silent assessment drop |
-| 13 | | BudgetTracker race | Fixed | v0.7.1 | Budget bypass |
-| 14 | | Timeout cascade | Fixed | v0.9.4 | Cascading stage failures |
-| 15 | | max_tokens evolution | Fixed | v0.5.1–v0.9.5 | Credit reservation bloat |
-| 16 | | Incremental save | Fixed | v0.9.5 | \$5-15 result loss |
-| 17 | Deferred | Domain-specific BS | Deferred | — | 1–3% gain, high sparsity |
-| 18 | | Bettor-news correlation | Deferred | — | Speculative hypothesis |
-| 19 | | Hierarchical beliefs | Deferred | — | Pure research |
-| 20 | | Kalshi API | Deferred | — | US-only, low ROI |
-| 21 | | BigQuery GDELT | Deferred | — | Cost-prohibitive (\$0.04–\$1.94/query) |
+| 1 | API | Metaculus 403 | Исправлено, Отключено | v0.5.1, v0.9.4 | Tier lock с авторизацией |
+| 2 | | GDELT Cyrillic | Исправлено | pre-v0.5.1, v0.9.4 | HTML вместо JSON |
+| 3 | | Polymarket camelCase | Исправлено | pre-v0.5.1 | Ошибка 422 |
+| 4 | | Reuters RSS | Удалено | v0.9.4 | Мёртвый feed (404) |
+| 5 | Архитектура | YandexGPT | Удалено | v0.8.0 | Консолидация на OpenRouter |
+| 6 | | Sonnet 4.6 | Удалено | v0.9.4 | Несуществующая модель |
+| 7 | | Dark mode | Удалено | v0.8.0 | Неиспользуемая фича |
+| 8 | | Pico.css → Tailwind | Мигрировано | v0.8.0 | Потолок classless CSS |
+| 9 | Критические баги | Temporal leak | Исправлено | v0.9.2 | BSS +0.092→+0.127 |
+| 10 | | conditionId | Исправлено | v0.9.3 | 99% потеря сигнала |
+| 11 | | Date serialization | Исправлено | v0.9.5 | Полная потеря данных |
+| 12 | | PromptParseError | Исправлено | v0.5.2–v0.9.4 | Тихий пропуск оценок |
+| 13 | | BudgetTracker race | Исправлено | v0.7.1 | Обход лимита бюджета |
+| 14 | | Timeout cascade | Исправлено | v0.9.4 | Каскадный отказ стадий |
+| 15 | | max_tokens evolution | Исправлено | v0.5.1–v0.9.5 | Резервирование кредитов |
+| 16 | | Incremental save | Исправлено | v0.9.5 | Потеря результата (\$5-15) |
+| 17 | Отложено | Domain-specific BS | Отложено | — | 1–3% gain, мало данных |
+| 18 | | Bettor-news correlation | Отложено | — | Спекулятивная гипотеза |
+| 19 | | Hierarchical beliefs | Отложено | — | Чистый research |
+| 20 | | Kalshi API | Отложено | — | US-only, низкий ROI |
+| 21 | | BigQuery GDELT | Отложено | — | Дорого (\$0.04–\$1.94/запрос) |
 
-## Key Takeaways
+## Ключевые выводы
 
-1. **External APIs require continuous monitoring.** Breaking changes happen (Metaculus, Reuters). Subscribe to official channels.
-2. **Single-provider architecture better than unreliable fallbacks.** YandexGPT was removed, OpenRouter is sole LLM provider.
-3. **Serialization and temporal correctness are non-negotiable.** Date serialization crash and temporal leak both caused complete data loss/model degradation.
-4. **Distinguish engineering from research.** Hierarchical models are research; bettor signals are engineering.
-5. **ROI analysis prevents feature creep.** Domain-specific BS, Kalshi, BigQuery all deferred because cost > benefit.
+1. **Внешние API требуют непрерывного мониторинга.** Breaking changes происходят (Metaculus, Reuters). Подписывайся на официальные каналы.
+2. **Однопровайдерная архитектура лучше, чем ненадёжные fallbacks.** YandexGPT был удалён, OpenRouter — единственный LLM-провайдер.
+3. **Serialization и temporal correctness — непреложны.** Date serialization crash и temporal leak оба вызвали полную потерю данных/деградацию модели.
+4. **Различай engineering от research.** Иерархические модели — это research; bettor signals — это engineering.
+5. **ROI analysis предотвращает feature creep.** Domain-specific BS, Kalshi, BigQuery все отложены, потому что cost > benefit.

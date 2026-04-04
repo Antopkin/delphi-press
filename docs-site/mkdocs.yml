@@ -40,7 +40,7 @@ theme:
     repo: fontawesome/brands/github
 
 extra_css:
-  - https://unpkg.com/katex@0/dist/katex.min.css
+  - https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css
   - stylesheets/extra.css
 
 markdown_extensions:
@@ -65,8 +65,8 @@ markdown_extensions:
       permalink: true
 
 extra_javascript:
-  - https://unpkg.com/katex@0/dist/katex.min.js
-  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
+  - https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js
+  - https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js
   - js/katex-init.js
 
 extra:
@@ -113,8 +113,6 @@ nav:
     - Безопасность: infrastructure/security.md
     - Конфигурация: infrastructure/config.md
     - Скрипты: infrastructure/scripts.md
-  - Разработка:
-    - Практики Claude Code: development/claude-code-practices.md
   - Приложения:
     - Data Flow: appendix/data-flow.md
     - Промпты агентов: appendix/prompts.md
