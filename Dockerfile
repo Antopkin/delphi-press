@@ -38,7 +38,7 @@ FROM python:3.12-slim AS docs-builder
 WORKDIR /build
 COPY docs-site/ docs-site/
 RUN pip install --no-cache-dir mkdocs-material pymdown-extensions \
-    && mkdocs build -f docs-site/mkdocs.yml -d docs-site/site
+    && cd docs-site && mkdocs build
 
 # ── Stage 3: Runtime ─────────────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime
