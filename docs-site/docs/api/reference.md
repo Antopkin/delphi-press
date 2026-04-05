@@ -43,6 +43,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Ошибки:**
+
 - `409 Conflict` — Email уже зарегистрирован
 
 **Пример:**
@@ -78,6 +79,7 @@ curl -X POST https://delphi.antopkin.ru/api/v1/auth/register \
 ```
 
 **Ошибки:**
+
 - `401 Unauthorized` — Неверный email или пароль
 
 **Пример:**
@@ -173,6 +175,7 @@ curl -X GET https://delphi.antopkin.ru/api/v1/auth/me \
 | `key_source` | Источник API-ключа: `manual` (вручную в запросе), `user` (сохранённый в профиле), `server` (серверный) |
 
 **Ошибки:**
+
 - `400 Bad Request` — Неверный `preset` или некорректная дата
 - `401 Unauthorized` — API-ключ не предоставлен, не сохранён и нет серверного ключа
 - `409 Conflict` — Прогноз с такими параметрами уже существует
@@ -243,6 +246,7 @@ curl -X GET 'https://delphi.antopkin.ru/api/v1/predictions?status=completed&limi
 Полная информация о конкретном прогнозе, включая все заголовки и метрики пайплайна.
 
 **Path Parameters:**
+
 - `prediction_id` (string) — UUID прогноза
 
 **Response: 200 OK**
@@ -307,10 +311,12 @@ curl -X GET 'https://delphi.antopkin.ru/api/v1/predictions?status=completed&limi
 ```
 
 **Ошибки:**
+
 - `404 Not Found` — Прогноз не найден
 - `403 Forbidden` — Доступ запрещён (прогноз принадлежит другому аутентифицированному пользователю)
 
 **Доступность:**
+
 - Анонимные прогнозы (user_id = None) доступны всем
 - Личные прогнозы доступны только владельцу
 
@@ -426,6 +432,7 @@ with httpx.stream(
 ```
 
 **Ошибки:**
+
 - `400 Bad Request` — `q` короче 1 символа или длиннее 100
 
 **Пример:**
@@ -524,6 +531,7 @@ curl -X GET https://delphi.antopkin.ru/api/v1/keys \
 ```
 
 **Ошибки:**
+
 - `400 Bad Request` — API-ключ короче 10 символов
 - `409 Conflict` — Ключ для этого провайдера уже существует
 
@@ -546,11 +554,13 @@ curl -X POST https://delphi.antopkin.ru/api/v1/keys \
 Удалить сохранённый API-ключ. **Требует аутентификацию.**
 
 **Path Parameters:**
+
 - `key_id` (integer) — Числовой идентификатор ключа
 
 **Response: 204 No Content**
 
 **Ошибки:**
+
 - `404 Not Found` — Ключ не найден или принадлежит другому пользователю
 
 **Пример:**
@@ -566,6 +576,7 @@ curl -X DELETE https://delphi.antopkin.ru/api/v1/keys/1 \
 Проверить валидность сохранённого API-ключа, отправив тестовый запрос к OpenRouter.
 
 **Path Parameters:**
+
 - `key_id` (integer) — Числовой идентификатор ключа
 
 **Response: 200 OK**
@@ -595,6 +606,7 @@ curl -X DELETE https://delphi.antopkin.ru/api/v1/keys/1 \
 | `Ошибка подключения: ...` | Сетевая ошибка при подключении к OpenRouter |
 
 **Ошибки:**
+
 - `404 Not Found` — Ключ не найден
 
 **Пример:**
@@ -878,6 +890,7 @@ for headline in result["headlines"][:3]:
 API использует семантическое версионирование (SemVer). Текущая версия: **v1** (endpoint: `/api/v1`).
 
 Планы будущих версий:
+
 - **v2**: GraphQL поддержка, улучшенная фильтрация, webhook-события
 - **v3**: Интеграции с внешними аналитическими платформами
 

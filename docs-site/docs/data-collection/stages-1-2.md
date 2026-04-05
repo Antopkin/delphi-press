@@ -24,6 +24,7 @@
 ### NewsScout: Сбор новостных сигналов
 
 **Входные данные:**
+
 - Целевое издание (`context.outlet`)
 - Целевая дата (`context.target_date`)
 
@@ -105,6 +106,7 @@
 ### EventCalendar: Поиск запланированных событий
 
 **Входные данные:**
+
 - Целевая дата (`context.target_date`)
 - Целевое издание (`context.outlet`)
 
@@ -158,6 +160,7 @@
 ### OutletHistorian: Профилирование издания
 
 **Входные данные:**
+
 - Целевое издание (`context.outlet`)
 
 **Процесс:**
@@ -213,6 +216,7 @@
 ### ForesightCollector: Форсайт-данные
 
 **Входные данные:**
+
 - Целевое издание (`context.outlet`)
 - Целевая дата (`context.target_date`)
 
@@ -238,16 +242,19 @@
    - Выход: `list[dict]` → foresight_signals
 
 **Грейсфул деградация:**
+
 - Каждый API вызывается в `asyncio.gather(..., return_exceptions=True)`
 - Если один API падает, агент продолжает с остальными
 - Лог: какие источники дали данные (`sources_used: list[str]`)
 
 **Маппинг Polymarket:**
+
 - condition_id (CTF hash) → используется как market_id (совпадает с inverse profiles)
 - Если условие доступно: price_history → compute_market_metrics
 - Если inverse profiles загружены: live trades (Data API) → compute_informed_signal
 
 **Ограничения выхода:**
+
 - `MAX_FORESIGHT_EVENTS = 30`
 - `MAX_FORESIGHT_SIGNALS = 100`
 
@@ -311,6 +318,7 @@ labels = kmeans.fit_predict(embeddings)
 ```
 
 **Обработка noise-кластера (-1):**
+
 - Если в noise-кластере < 5 сигналов → отбросить
 - Если >= 5 → создать pseudo-кластер
 

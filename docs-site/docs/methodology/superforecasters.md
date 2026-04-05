@@ -81,12 +81,14 @@ $$\mathrm{BS}_i = \frac{1}{n_i} \sum_{m=1}^{n_i} \bigl(\mathrm{pos}_{im} - o_m\b
 $$\boxed{\mathrm{BS}_i^{\mathrm{adj}} = \frac{n_i \cdot \mathrm{BS}_i^{\mathrm{raw}} + k \cdot \widetilde{\mathrm{BS}}}{n_i + k}}$$
 
 где:
+
 - $n_i$ — число разрешённых ставок
 - $\mathrm{BS}_i^{\mathrm{raw}}$ — наблюдаемый Brier Score
 - $\widetilde{\mathrm{BS}}$ — медиана BS по популяции (~0.295)
 - $k = 15$ — сила приора (pseudo-observations)
 
 **Интуиция:**
+
 - При $n_i = 3$: сильное сжатие к медиане
 - При $n_i = 100$: минимальное влияние приора
 - При $n_i \to \infty$: $\mathrm{BS}^{\mathrm{adj}} \to \mathrm{BS}^{\mathrm{raw}}$
@@ -119,10 +121,12 @@ $$\boxed{\mathrm{BS}_i^{\mathrm{adj}} = \frac{n_i \cdot \mathrm{BS}_i^{\mathrm{r
 $$r_i = \exp\!\Bigl(-\frac{\ln 2 \cdot \Delta t_i}{\tau}\Bigr)$$
 
 где:
+
 - $\Delta t_i$ — число дней с последней ставки кошелька $i$
 - $\tau = 90$ — half-life (дней)
 
 **Интуиция:**
+
 - $\Delta t = 0$ (только что ставил) → $r_i = 1.0$
 - $\Delta t = 90$ → $r_i = 0.5$
 - $\Delta t = 180$ → $r_i = 0.25$
@@ -152,6 +156,7 @@ $$w_i = \underbrace{(1 - \mathrm{BS}_i)}_{\text{точность}} \cdot \underb
 $$p_{\mathrm{inf}}^{\mathrm{raw}} = \frac{\sum_{i \in \mathcal{I}_m} w_i \cdot \mathrm{pos}_{im}}{\sum_{i \in \mathcal{I}_m} w_i}$$
 
 **Логика весов:**
+
 - $(1 - \mathrm{BS}_i)$ — более точные трейдеры получают больший вес. BS = 0.05 ⇒ вес ∝ 0.95; BS = 0.20 ⇒ вес ∝ 0.80
 - $V_i$ — skin in the game; крупная позиция = сильное убеждение
 - $r_i$ — недавние данные релевантнее
@@ -165,6 +170,7 @@ $$\mathrm{coverage} = \min\!\Bigl(1,\; \frac{|\mathcal{I}_m|}{20}\Bigr)$$
 $$\boxed{p_{\mathrm{inf}} = \mathrm{coverage} \cdot p_{\mathrm{inf}}^{\mathrm{raw}} + (1 - \mathrm{coverage}) \cdot p_{\mathrm{raw}}}$$
 
 **Интерпретация:**
+
 - $|\mathcal{I}_m| = 0$ → $p_{\mathrm{inf}} = p_{\mathrm{raw}}$ (нет вреда)
 - $|\mathcal{I}_m| = 20$ → $p_{\mathrm{inf}} = p_{\mathrm{inf}}^{\mathrm{raw}}$ (полное доверие)
 - $|\mathcal{I}_m| = 10$ → $p_{\mathrm{inf}} = 0.5 \cdot p_{\mathrm{inf}}^{\mathrm{raw}} + 0.5 \cdot p_{\mathrm{raw}}$ (50/50 blend)
@@ -220,6 +226,7 @@ profiles, summary = load_profiles(
 ```
 
 **Результат:**
+
 - `profiles`: dict[user_id] → BettorProfile
 - `summary`: ProfileSummary с статистикой
 
@@ -292,6 +299,7 @@ $$P(T \leq H) = 1 - \exp\bigl(-(λH)^k\bigr)$$
 $$\min_{\lambda, k} \sum_{m} (\mathrm{pos}_m - (1 - \exp(-(λH_m)^k)))^2$$
 
 с границами:
+
 - $\lambda \in [10^{-6}, 100]$
 - $k \in [0.1, 10]$
 
@@ -335,6 +343,7 @@ $$p_{\mathrm{ext}} = \frac{\mathrm{odds}^d}{1 + \mathrm{odds}^d}, \qquad \mathrm
 $$d = 1.0 + k_{\mathrm{scale}} \cdot \sigma(\{\mathrm{pos}_i\}_{i \in \mathcal{I}_m}), \quad d \leq d_{\max}$$
 
 где:
+
 - $\sigma(\{\mathrm{pos}_i\})$ — стандартное отклонение позиций информированных трейдеров
 - $k_{\mathrm{scale}} = 2.0$ — масштабирующий коэффициент
 - $d_{\max} = 2.0$ — верхний лимит
@@ -376,6 +385,7 @@ $$w_{\mathrm{parametric}}^{\mathrm{gated}} = w_{\mathrm{parametric}} \times \mat
 $$p_{\mathrm{enriched}} = (1 - w) \cdot p_{\mathrm{inf}} + w \cdot p_{\mathrm{parametric}}$$
 
 где:
+
 - $p_{\mathrm{parametric}}$ — взвешенное среднее предсказаний λ/Weibull от информированных трейдеров
 - $w$ — адаптивный вес, корректируемый gate и качеством фита
 
@@ -384,6 +394,7 @@ $$p_{\mathrm{enriched}} = (1 - w) \cdot p_{\mathrm{inf}} + w \cdot p_{\mathrm{pa
 $$w = \min(w_{\max}, \mathrm{coverage\_ratio} \times \mathrm{fit\_quality}) \times \mathrm{gate}$$
 
 где:
+
 - $\mathrm{coverage\_ratio} = \frac{n_{\mathrm{parametric\_fits}}}{n_{\mathrm{informed}}}$ — доля трейдеров с параметрическим фитом
 - $\mathrm{fit\_quality} = \min(1, \frac{\overline{n_{\text{obs}}}}{50})$ — нормализованное среднее число наблюдений (saturates at 50)
 - $w_{\max} = 0.40$ — cap (не давим на informed signal)
@@ -764,6 +775,7 @@ $$w_{\mathrm{market}} = 0.15 \times \mathrm{liquidity} \times \mathrm{volatility
 
 !!! warning "Требование к данным"
     Профилирование требует:
+
     - Минимум ~470M ставок для статистической надёжности
     - Полная история разрешённых рынков
     - Метаданные: time_bucket (для avoid look-ahead bias), resolution outcomes
@@ -839,6 +851,7 @@ else:
 ## Дальнейшее развитие
 
 Уже реализовано (фазы 1–4):
+
 - Bayesian shrinkage для BS (k=15, Ferro & Fricker)
 - Параметрическая модель λ (Exp + Weibull MLE)
 - HDBSCAN кластеризация стратегий (6 архетипов)
@@ -846,6 +859,7 @@ else:
 - Walk-forward evaluation (22 фолда, BSS +0.196)
 
 Отложено (требуют дополнительных данных или исследования):
+
 - Domain-specific BS (низкий прирост: 1–3% BSS)
 - Bettor-level корреляция с новостями (требует GDELT/RSS pipeline)
 - Иерархические модели (research project, не engineering)

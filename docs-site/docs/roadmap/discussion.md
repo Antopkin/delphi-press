@@ -234,12 +234,14 @@ Tetlock's Good Judgment Project (4 года, $20M IARPA)[^7]:
 **Статус валидации: Частично подтверждён**
 
 **Подтверждающие источники:**
+
 - Simon (1955): aspiration levels адаптируются динамически, rules меняются при несовпадении с результатом
 - Klein RPD (1993): уровень RPD может меняться в зависимости от cognitive load (Level 1→2 при новизне, Level 2→3 при time pressure)
 - Chen et al. (2024): мотивация меняется phase-to-phase (ideology → rationality после исхода)
 - Behavioral entropy (Shannon): если энтропия торговых действий меняется со временем, это сигнал смены rules
 
 **НЕ подтверждено:**
+
 - Гипотеза "мета-правила смен идентифицируемы" остаётся открытой. Нет published paper, который бы:
   - Выделил инвариантные мета-правила (rules about rules)
   - Показал, что смена rules predictable из prior data
@@ -258,17 +260,20 @@ Tetlock's Good Judgment Project (4 года, $20M IARPA)[^7]:
 **Статус валидации: Частично подтверждён (число завышено)**
 
 **Подтверждающие источники:**
+
 - Kyle (1985), DSSW (1990), Barber & Odean (2013), Barberis & Thaler (2003) — все независимо выделяют ~6–8 базовых типов
 - Kahneman & Tversky (1979) + Barberis & Thaler (2003) — four-fold pattern × two preferences = 8 комбинаций
 - Tetlock GJP — выделяет суперпрогнозистов как отдельный cluster (r=0.65 stability)
 - Chen et al. (2024) — показывает, что один трейдер может быть в 2+ modes (political vs rational) → multi-role model needed
 
 **Что не подтверждено:**
+
 - arXiv:2505.21662 (2025) экспериментально доказывает: 15 descriptive types (из литературы), но только 5–6 classifiable supertypes. 
 - Различие: описательные архетипы (что наблюдаем в литературе) vs классифицируемые (что можно выделить из торговых данных)
 - 20–30 = произвольное число, завышено. Реальная convergence = 6–8 canonical + 2–3 domain-specific.
 
 **Рекомендация**: 
+
 - Start с 8 канонических (табл. 4.2 ниже)
 - Reserve capacity для domain specialists (политика, крипто, спорт) = 3 доп.
 - LLM role = extraction из литературы (разово) + intrepretation кластеров (Phase 8 edge cases), не массовая классификация
@@ -284,6 +289,7 @@ Tetlock's Good Judgment Project (4 года, $20M IARPA)[^7]:
 **Статус валидации: НЕ подтверждён в предложенной форме**
 
 **Контраргументы:**
+
 - arXiv:2505.21662 (2025): на числовых торговых признаках (features like volatility, turnover, win rate) supervised ML (SVM/DNN) превосходит LLM по accuracy (91–99% vs ~60–70% для LLM на same data)
 - TradingAgents (2024): LLM полезен для стратегического reasoning, но не для classification из микро-данных
 - Barber & Odean (2013) + Bürgi et al. (2025): features (PGR, maker_fraction, pl_ratio) = экономически интерпретируемы и сильнее, чем LLM-текст на raw trades
@@ -294,6 +300,7 @@ Tetlock's Good Judgment Project (4 года, $20M IARPA)[^7]:
 3. **Edge cases**: ~340K амбигуозных кошельков (low-volume, mixed signals) → LLM soft scores + label propagation (Phase 8)
 
 **Производство система:**
+
 - Nansen (smart money labels), ChainCatcher (strategy detection), PANews (profile analysis) — ВСЕ используют **supervised ML**, не LLM для classification
 - После классификации → LLM explanation/narrative (optional)
 
@@ -308,11 +315,13 @@ Tetlock's Good Judgment Project (4 года, $20M IARPA)[^7]:
 **Статус валидации: Частично подтверждён (форма не оптимальна)**
 
 **Что работает:**
+
 - DSPy (ICLR 2024): LLM pipelines ARE computational graphs. Learning weights на фиксированной топологии = 56pp improvement (GPT-3.5 25.2% → 81.6% GSM8K)
 - Bayesian networks (bnlearn): Hill-Climbing может выучить DAG структуру на 6–10 переменных, interpretable output
 - Текущий pipeline `src/inverse/` = уже computational graph
 
 **Что НЕ работает как предложено:**
+
 - Evolving topology (NEAT): одна оценка = $30, 100 топологий × 10 поколений = $30K (как quoted в тезисе 4)
 - TensorNEAT (2025) = GPU-accelerated, но стоимость остаётся высокой (>$5K за meaningful search)
 - "Local perturbations" (add/remove nodes) = неуправляемо на больших графах (exponential state space)
@@ -333,6 +342,7 @@ Tetlock's Good Judgment Project (4 года, $20M IARPA)[^7]:
 **Статус валидации: ПОДТВЕРЖДЕН**
 
 **Прямые доказательства:**
+
 - Kahneman & Tversky (1979): fourfold pattern → different risk attitudes → different valuations (risk-averse vs risk-seeking оценивают rare events по-разному)
 - Barberis & Thaler (2003): disposition effect → недооценивание losses (люди ждут recovery) → mispricing
 - Barber & Odean (2013): overconfident traders → overtrading → momentum-chasing → underreaction на fundamental news
@@ -340,6 +350,7 @@ Tetlock's Good Judgment Project (4 года, $20M IARPA)[^7]:
 - Mitts & Ofir (2026): 71.8% одной стороны на election → structural bias measurable
 
 **Инструментально:**
+
 - Market-Archetype Performance Matrix: для каждой пары (Market Category, Archetype) вычислить:
   - Portfolio return of archetype on category (e.g., Information Traders on Politics)
   - Deviation от market consensus (если архетип переоценивает, их consensus отличается в одну сторону)
@@ -358,6 +369,7 @@ Tetlock's Good Judgment Project (4 года, $20M IARPA)[^7]:
 **Статус валидации: ПОДТВЕРЖДЕН, но нюанс**
 
 **Что подтверждено:**
+
 - Tetlock GJP (2015): r=0.65 year-to-year correlation, 70% retention → skill real (not random variance)
 - DSSW (1990): но NOISE traders могут зарабатывать через risk premium (структурный доход, не везение)
 
@@ -367,11 +379,13 @@ Tetlock's Good Judgment Project (4 года, $20M IARPA)[^7]:
 3. **H₀₃**: Краткосрочная удача (luck persistence < 1 года) → time series correlation test
 
 **Текущее состояние в `src/inverse/`:** 
+
 - BayesianShrinkage with k=15 → адрессует H₀₁ (partially)
 - Walk-forward validation с переоценкой параметров → адрессует H₀₃ (partially)
 - Не адрессует H₀₂: нет явного теста на risk premium vs edge
 
 **Что добавить:**
+
 - **Phase 10**: Permutation test на инвестиции: shuffle архетипы-рынок assignment, переcompute BSS. Если real BSS >> permuted distribution → skill.
 - **Phase 10**: Risk-adjusted metrics per archetype: Sharpe ratio, max drawdown, profit factor (wins/losses) → distinguish edge от risk premium
 

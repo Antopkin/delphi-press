@@ -37,6 +37,7 @@ $$\mathrm{pos}_{im} = \frac{\sum_j \tilde{p}_j \cdot v_j}{\sum_j v_j}$$
 $$\mathrm{BS}_i = \frac{1}{n_i} \sum_{m=1}^{n_i} \bigl(\mathrm{pos}_{im} - o_m\bigr)^2, \qquad o_m = \begin{cases} 1, & \text{YES resolved}, \\ 0, & \text{NO resolved}. \end{cases}$$
 
 **Диапазон:** $\mathrm{BS} \in [0, 1]$.
+
 - $\mathrm{BS} = 0$ — идеальный прогнозист
 - $\mathrm{BS} = 0.25$ — случайный
 - $\mathrm{BS} = 1$ — всегда неправ
@@ -52,12 +53,14 @@ $$\mathrm{BS}_i = \frac{1}{n_i} \sum_{m=1}^{n_i} \bigl(\mathrm{pos}_{im} - o_m\b
 $$\boxed{\mathrm{BS}_i^{\mathrm{adj}} = \frac{n_i \cdot \mathrm{BS}_i^{\mathrm{raw}} + k \cdot \widetilde{\mathrm{BS}}}{n_i + k}}$$
 
 где:
+
 - $n_i$ — число разрешённых ставок кошелька $i$
 - $\mathrm{BS}_i^{\mathrm{raw}}$ — наблюдаемый Brier Score
 - $\widetilde{\mathrm{BS}}$ — медианный BS по всей популяции на текущем датасете (~0.295)
 - $k = 15$ — сила приора (pseudo-observations)
 
 **Интуиция:**
+
 - При $n_i = 3$: сильный shrinkage к медиане
 - При $n_i = 100$: минимальное влияние приора
 - При $n_i \to \infty$: $\mathrm{BS}^{\mathrm{adj}} \to \mathrm{BS}^{\mathrm{raw}}$
@@ -107,6 +110,7 @@ $$w_i = \underbrace{(1 - \mathrm{BS}_i^{\mathrm{adj}})}_{\text{точность}
 $$p_{\mathrm{inf}}^{\mathrm{raw}} = \frac{\sum_{i \in \mathcal{I}_m} w_i \cdot \mathrm{pos}_{im}}{\sum_{i \in \mathcal{I}_m} w_i}$$
 
 **Логика весов:**
+
 - $(1 - \mathrm{BS}_i)$ — чем точнее трейдер, тем больше вес. $\mathrm{BS} = 0.05 \Rightarrow w \propto 0.95$; $\mathrm{BS} = 0.20 \Rightarrow w \propto 0.80$.
 - $V_i$ — skin in the game; крупная позиция = сильное убеждение.
 - $r_i$ — недавние данные релевантнее.
@@ -157,6 +161,7 @@ $$\mathrm{coverage} = 3/20 = 0.15, \qquad p_{\mathrm{inf}} = 0.15 \times 0.759 +
 $$p_{\mathrm{ext}} = \frac{(\mathrm{odds})^d}{1 + (\mathrm{odds})^d}, \qquad \mathrm{odds} = \frac{p}{1 - p}, \quad d \geq 1$$
 
 $d > 1$ — push away from 0.5. Adaptive $d$: $d = 1 + \kappa \cdot \sigma_{\mathrm{positions}}$, где $\kappa = 2.0$, $d \leq 2.0$.
+
 - Высокое согласие ($\sigma \approx 0$) ⇒ $d \approx 1$ (не экстремизируем)
 - Высокое разногласие ⇒ $d \to 2$ (независимые сигналы — экстремизируем)
 
@@ -208,6 +213,7 @@ $$\mathrm{BSS} = 1 - \mathrm{BS}(\text{informed}) / \mathrm{BS}(\text{raw market
 Торговлю на prediction market можно формализовать как конечно-горизонтный MDP:
 
 **Состояние:** $s_t = (p_t^{\mathrm{mkt}}, \Delta t, \mathbf{x}_t, q_t)$, где
+
 - $p_t^{\mathrm{mkt}}$ — текущая цена
 - $\Delta t$ — время до разрешения
 - $\mathbf{x}_t$ — новостной контекст
@@ -235,6 +241,7 @@ $$\hat{\pi} = \argmin_{\pi} \sum_{(s,a) \in \mathcal{D}} \ell(\pi(a|s), a)$$
 **Фундаментальная проблема BC:** compounding error — ошибка $\varepsilon$ на шаге даёт $O(\varepsilon T^2)$ ошибку на всей траектории. DAgger снижает до $O(T)$, но требует интерактивных запросов к эксперту — невозможно для Polymarket (данные офлайн).
 
 **Смягчающие факторы для prediction markets:**
+
 - Каждый рынок — отдельный «эпизод». Compounding error не накапливается между рынками.
 - Горизонт $T$ = 1–90 шагов (ежедневных) — короткий.
 - Ошибка ограничена диапазоном $[0, 1]$ (вероятности).

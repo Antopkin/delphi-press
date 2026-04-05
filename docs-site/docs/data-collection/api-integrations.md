@@ -55,11 +55,13 @@ graph TD
 **Содержимое:** 20 предустановленных изданий (tier-1 агентства + tier-2 качественные издания).
 
 **Характеристики:**
+
 - Загружается в памяти на старте приложения
 - Индексы для быстрого поиска: по точному названию и по нормализованному (lowercase)
 - Поддерживает fuzzy matching через `rapidfuzz` для опечаток (e.g., "ТАСЬ" → "ТАСС")
 
 **Методы:**
+
 - `get_outlet_by_name(name: str) → OutletInfo | None` — точное/case-insensitive совпадение
 - `search_outlets(query: str, limit: int) → list[OutletInfo]` — fuzzy поиск с рангированием
 
@@ -70,6 +72,7 @@ graph TD
 **Назначение:** запоминать результаты дорогостоящих поисков (Wikidata + RSS) для будущих запросов.
 
 **Хранилище:**
+
 - Таблица `outlets` с полями:
   - `id` (Primary Key)
   - `name` — исходное название
@@ -81,6 +84,7 @@ graph TD
   - `last_analyzed_at` — timestamp последнего обновления
 
 **TTL (Time-To-Live):** 30 дней
+
 - При извлечении из БД проверяется возраст (`datetime.now() - last_analyzed_at`)
 - Если > 30 дней → игнорируется, переходим на Слой 3 для переанализа
 
@@ -113,6 +117,7 @@ LIMIT 5
 ```
 
 **Возвращаемые данные:**
+
 - **itemLabel** → нормализованное название издания
 - **website** → URL веб-сайта (e.g., `https://example.ru/`)
 - **languageLabel** → язык (e.g., "Russian", "English")
@@ -123,6 +128,7 @@ LIMIT 5
 **Рейт-лимит:** ~100 req/min (мягкий, без 429)
 
 **Обработка ошибок:**
+
 - Timeout → логируем warning, возвращаем `None`
 - Пустой результат → логируем info, возвращаем `None`
 - JSON error → логируем exception, возвращаем `None`
@@ -134,12 +140,14 @@ LIMIT 5
 **Двухпроходная стратегия:**
 
 **Проход 1: HTML `<link>` теги**
+
 - Загружаем HTTP GET homepage издания
 - Парсим HTML regex'ом для тегов: `<link rel="alternate" type="application/rss+xml|atom+xml|feed+json" href="...">`
 - Извлекаем `href` и нормализуем URLs (поддержка относительных путей через `urljoin`)
 - Если найдены → возвращаем дедублицированный список
 
 **Проход 2: Path probing (параллельный)**
+
 - Только если Проход 1 ничего не вернул
 - Пробуем common feed paths:
   - `/feed`, `/feed.xml`, `/rss.xml`, `/atom.xml`, `/rss/`, `/feeds/posts/default`, и др. (всего 11 path'ов)
@@ -161,6 +169,7 @@ LIMIT 5
 **Назначение:** кэшировать полные профили изданий (`OutletProfile`) между запусками для быстрого доступа при анализе множественных событий.
 
 **Параметры:**
+
 - **Хранилище:** Redis (ключи вида `outlet_profile:{outlet_name}`)
 - **TTL:** 7 дней по умолчанию (настраивается)
 - **Сохранение:** JSON-сериализация через Pydantic `model_dump_json()`
@@ -184,6 +193,7 @@ await cache.put("ТАСС", profile_object)
 **Эндпоинт:** `GET /api/v1/outlets?q=<query>&limit=<limit>`
 
 **Параметры:**
+
 - `q` — поисковой запрос (min 1, max 100 символов)
 - `limit` — макс результатов (default 10, max 50)
 
@@ -246,18 +256,22 @@ else:
 ### Обработка ошибок
 
 **Сценарий:** Wikidata не нашёл издание, но RSS autodiscovery было успешным
+
 - Возвращаем `OutletInfo` только с RSS фидами, без веб-сайта
 - Логируем info-уровневое сообщение
 
 **Сценарий:** Wikidata вернул результат, но RSS autodiscovery упал (timeout/404)
+
 - Возвращаем `OutletInfo` с веб-сайтом, но с пустым списком RSS фидов
 - Логируем warning
 
 **Сценарий:** DB кэш сломан (corrupted JSON)
+
 - Логируем warning, игнорируем запись, переходим на Слой 3
 - При повторном кэшировании перезаписываем
 
 **Сценарий:** Redis недоступен (profile cache)
+
 - Graceful degradation — продолжаем работу без профиль-кэша
 - Логируем warning, не бросаем исключение
 
@@ -301,6 +315,7 @@ GET https://www.metaculus.com/api/posts/
 ```
 
 **Параметры:**
+
 - `statuses` — `open`, `closed`, `resolved`, `upcoming`
 - `forecast_type` — `binary`, `continuous`, `multiple_choice`
 - `scheduled_resolve_time__gt` — ISO 8601 (начало диапазона)
@@ -355,6 +370,7 @@ GET https://www.metaculus.com/api2/questions/{id}/
 ```
 
 **Ключевые поля:**
+
 - `centers[0]` — **медиана вероятности** (q2) — основной сигнал для `ScheduledEvent.certainty`
 - `interval_lower_bounds[0]` — 25-й процентиль (q1)
 - `interval_upper_bounds[0]` — 75-й процентиль (q3)
@@ -398,6 +414,7 @@ GET https://gamma-api.polymarket.com/public-search
 ```
 
 **Параметры `/markets`:**
+
 - `active` — `true`, `false`
 - `closed` — `true`, `false`
 - `limit` — макс. 1000
@@ -457,6 +474,7 @@ GET https://clob.polymarket.com/price
 ```
 
 **Параметры `prices-history`:**
+
 - `market` — **CLOB token ID** (из `clobTokenIds[0]` с Gamma API, не `id` рынка!)
 - `interval` — `1h`, `6h`, `1d`, `1w`, `1m`, `all`, `max`
 - `startTs` — Unix timestamp (альтернатива `interval`)
@@ -495,6 +513,7 @@ GET https://data-api.polymarket.com/trades
 ```
 
 **Параметры:**
+
 - `market` — `conditionId` (из Gamma API, не обычный `id`!)
 - `limit` — макс. 10000
 - `takerOnly` — `true`, `false`
@@ -583,6 +602,7 @@ repeat3:"sanctions"           # Слово повторяется 3+ раза
 **Полный список тем GKG:** `http://data.gdeltproject.org/api/v2/guides/LOOKUP-GKGTHEMES.TXT`
 
 Примеры для Delphi Press:
+
 - `ECON_CENTRAL_BANK` — центральные банки
 - `MILITARY_CONFLICT` — военные конфликты
 - `GOV_ELECTIONS` — выборы
@@ -608,6 +628,7 @@ repeat3:"sanctions"           # Слово повторяется 3+ раза
 ```
 
 **Важно:**
+
 - `language` — англоязычное имя (`English`, `Russian`), не ISO код
 - `sourcecountry` — FIPS (US, RS, UA, GB), не ISO 3166
 
@@ -803,6 +824,7 @@ class APIClient:
 ```
 
 **TTL по платформам:**
+
 - Metaculus: 30 мин (вероятности обновляются редко)
 - Polymarket: 15 мин (цены волатильны)
 - GDELT: 15 мин (индекс обновляется каждые 15 мин)

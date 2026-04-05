@@ -107,6 +107,7 @@ fold_idx,cutoff_ts,n_test_markets,bss_raw_market,bss_informed,bss_improvement
 ```
 
 Каждая строка — фолд с:
+
 - `cutoff_ts` — Unix timestamp границы обучения/теста
 - `n_test_markets` — количество разрешённых рынков в тестовом окне
 - `bss_raw_market` — Brier Skill Score сырых цен
@@ -381,6 +382,7 @@ data/inverse/hf_cache/
 ```
 
 Каждый файл содержит:
+
 - `wallet` — адрес торговца
 - `time_bucket` — Unix timestamp начала 30-дневного периода
 - `weighted_price_sum` — Σ(price × size) в бакете
@@ -550,6 +552,7 @@ uv run python scripts/download_profiles.py
 **Входные данные:**
 
 Скрипт автоматически определяет:
+
 - GitHub repo: `Antopkin/delphi-press`
 - Release tag: `data-v1` (переопределяется в скрипте)
 - Файлы: `bettor_profiles.parquet` + `bettor_profiles_summary.json`
@@ -743,6 +746,7 @@ curl -fsSL https://raw.githubusercontent.com/Antopkin/delphi-press/main/scripts/
 **Входные данные:**
 
 Скрипт автоматически:
+
 - Устанавливает Docker
 - Клонирует `https://github.com/Antopkin/delphi-press.git` в `$HOME/apps/delphi-press`
 - Генерирует `SECRET_KEY`, `REDIS_PASSWORD`, `FERNET_KEY` в `.env`

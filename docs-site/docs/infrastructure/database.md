@@ -81,6 +81,7 @@ async def lifespan(app: FastAPI):
 | `is_public` | `BOOLEAN` | default=0 | Видна ли витрина (Web UI) |
 
 **Индексы:**
+
 - `(status, created_at)` — для быстрого получения последних прогнозов по статусу
 - `(outlet_normalized, target_date)` — для дедупликации (предотвратить двойные прогнозы)
 
@@ -112,6 +113,7 @@ predictions ──→ pipeline_steps (1 prediction has many steps, cascade delet
 | `created_at` | `DATETIME` | NOT NULL | Timestamp создания |
 
 **Индексы:**
+
 - `(prediction_id, rank)` — быстрое получение headlines в порядке сортировки
 
 **Примечание:**
@@ -141,6 +143,7 @@ predictions ──→ pipeline_steps (1 prediction has many steps, cascade delet
 | `error_message` | `TEXT` | nullable | Исключение / traceback при FAILED |
 
 **Индексы:**
+
 - `(prediction_id, step_order)` — получение шагов в порядке выполнения
 - `(agent_name)` — анализ производительности по конкретному агенту
 
@@ -168,6 +171,7 @@ predictions ──→ pipeline_steps (1 prediction has many steps, cascade delet
 | `created_at` | `DATETIME` | NOT NULL | Timestamp создания |
 
 **Индексы:**
+
 - `(country)` — фильтр по стране
 - `(language)` — фильтр по языку
 - `(normalized_name)` — поиск по имени (unique constraint)
@@ -207,6 +211,7 @@ users ──→ predictions (1 user has many predictions)
 | `last_used_at` | `DATETIME` | nullable | Последнее использование |
 
 **Constraints:**
+
 - `UNIQUE(user_id, provider)` — один ключ на провайдера на пользователя
 
 **Безопасность:**
@@ -255,6 +260,7 @@ feed_sources ──→ outlets (many feeds per outlet, cascade delete)
 | `created_at` | `DATETIME` | NOT NULL, INDEX | Timestamp сбора (UTC) |
 
 **Индексы:**
+
 - `(source_outlet, published_at)` — быстрое получение статей по изданию за дату
 - `(published_at)` — для retention cleanup
 - `(created_at)` — для очистки старых записей

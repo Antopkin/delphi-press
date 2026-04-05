@@ -24,6 +24,7 @@
 | `/settings` | GET | Необходимо | Управление API-ключами (таблица + форма добавления) |
 
 **\* Нет аутентификации требуется, но проверяется право доступа:**
+
 - Если `prediction.user_id is None` → доступно всем (анонимные прогнозы)
 - Если `user is None` → доступно (обратная совместимость)
 - Если `prediction.user_id != user.id` → 403 Forbidden (доступ только владельцу)
@@ -82,6 +83,7 @@
 #### `/` — Главная (`index.html`)
 
 Структура:
+
 - **Hero section:** "Что напишут СМИ завтра?" + описание
 - **How it works:** 3-шаговая схема (1. Выберите СМИ → 2. Укажите дату → 3. Получите прогноз)
 - **Prediction form:**
@@ -104,6 +106,7 @@
 **Новое в v0.9.6:** CSS-счётчики для серифных номеров, мерцающая анимация активного шага, группировка этапов по фазам.
 
 Структура:
+
 - **Hero header:**
   - Подзаголовок: "Формируем прогноз" (small, primary, uppercase, fade-in-up)
   - h1: название издания (4xl/5xl responsive, fade-in-up с delay)
@@ -116,6 +119,7 @@
 - **Two-column layout (`grid-cols-1 lg:grid-cols-[1fr_320px]`):**
 
   **Левая колонка: Step list**
+
   - Container: `bg-surface-1 border border-border rounded-lg p-6`
   - `<ul id="step-list" class="fn-timeline" data-stagger>`
   - **Три фазы:**
@@ -140,6 +144,7 @@
     - Состояния: `fn-step--pending` (○) → `fn-step--active` (мерцание shimmer) → `fn-step--done` (● с scale-in)
 
   **Правая колонка (desktop `hidden lg:block`):**
+
   - `sticky top-6` — прикрепляется к верху при скролле
   - `#narrative-area`: `bg-surface-1 border border-border rounded-lg p-6` (hidden по умолчанию)
     - h3: "Сейчас происходит" (xs, semibold, uppercase)
@@ -160,6 +165,7 @@
   - Кнопка "Попробовать снова" (ссылка на `/`)
 
 **Логика переходов:**
+
 - Если прогноз уже завершён → 302 redirect на `/results/{id}`
 - Если ещё в процессе → показать прогресс-страницу
 
@@ -182,6 +188,7 @@
 ```
 
 **Анимации:**
+
 - `animate-fade-in-up [animation-delay:100ms]` — cascade для header элементов
 - `.fn-step--active`: `background: linear-gradient(shimmer)` + `animation: shimmer 2.5s` — мерцание через active step
 - `.fn-step--done .fn-step-icon::before`: `animation: scale-in 300ms` — появление checkmark-точки
@@ -196,6 +203,7 @@
 **Новое в v0.9.6:** Единообразный стиль всех headline cards (без первой-карточки особой), metadata reorganization, reasoning как blockquote.
 
 Структура:
+
 - **Header:**
   - h1: "Прогноз для {{ prediction.outlet_name }}" (4xl/5xl, fade-in-up)
   - Meta chips (flex flex-wrap gap-2):
@@ -257,6 +265,7 @@
 Дашборд скрыт из основной навигации (доступен по прямой ссылке).
 
 Структура:
+
 - **Hero section:**
   - h1: "Сигналы prediction markets" (text-2xl)
   - Описание: "Informed consensus vs рыночная цена. Анализ основан на профилировании участников Polymarket по точности их исторических прогнозов."
@@ -309,16 +318,19 @@
   - "Данные обновляются каждые 15 минут. Informed consensus вычисляется на основе точности (Brier Score) исторических прогнозов трейдеров. Это исследовательский инструмент, не финансовая рекомендация."
 
 **Кэширование:**
+
 - TTL 15 минут (`_CACHE_TTL = 900`)
 - Кэш в памяти MarketSignalService (`self._cache: tuple[float, list[MarketCard]]`)
 - Персистентное хранилище: Parquet профилей бетторов (загружается при startup)
 
 **API-интеграция:**
+
 - `PolymarketClient.fetch_markets()` — Gamma API (активные рынки)
 - `PolymarketClient.fetch_trades_batch(condition_ids)` — Data API (сделки для каждого рынка)
 - `compute_informed_signal()` — вычисление informed consensus по профилям
 
 **Загрузка на `/` и `/results`:**
+
 - Если market_service инициализирован и есть headlines: поиск relевантных рынков
 - Нечёткое совпадение (fuzzy_match_to_market) между текстом заголовков и вопросами Polymarket
 - Максимум 5 рынков на страницу результатов
@@ -338,11 +350,13 @@ is_public: Mapped[bool] = mapped_column(
 ```
 
 Использование:
+
 - На `/` (главная): таблица "Примеры прогнозов" (`repo.get_showcase(limit=5)`)
 - На `/results/{id}` (если matched_markets, может быть использовано для сравнения)
 - API: `PredictionRepository.get_showcase()` — выбирает `is_public = True` в порядке убывания `created_at`
 
 Как прогноз становится публичным:
+
 - Вручную — администратор устанавливает `is_public = True` в БД (v0.9.6 нет UI для этого)
 - Или в будущем — API флаг при создании (требует расширения формы)
 
@@ -351,6 +365,7 @@ is_public: Mapped[bool] = mapped_column(
 #### `/login` — Вход (`login.html`)
 
 Структура:
+
 - **Centred form** (max-width 28rem):
   - Поле `email` (type="email", required, autocomplete="email")
   - Поле `password` (type="password", required, minlength="8")
@@ -360,11 +375,13 @@ is_public: Mapped[bool] = mapped_column(
   - Ссылка "Зарегистрироваться"
 
 **Логика:**
+
 - POST `/login` с `email`, `password`, `next`
 - Если успех → set JWT-cookie (HttpOnly, SameSite=Lax, max_age=7 дней) + redirect на `next`
 - Если ошибка → show error, остаться на /login
 
 **Query params:**
+
 - `?next=/settings` — перенаправить на `/settings` после входа
 - `?error=...` — показать текст ошибки
 
@@ -373,12 +390,14 @@ is_public: Mapped[bool] = mapped_column(
 #### `/register` — Регистрация (`register.html`)
 
 Структура:
+
 - **Same as login:** email, password, кнопка "Зарегистрироваться"
 - **Validation:**
   - Пароль >= 8 символов
   - Email unique (IntegrityError → show error)
 
 **Логика:**
+
 - POST `/register` с `email`, `password`
 - Если успех → создать пользователя, set JWT-cookie + redirect `/`
 - Если ошибка → show error
@@ -390,6 +409,7 @@ is_public: Mapped[bool] = mapped_column(
 Требует аутентификации (redirect `/login?next=/settings` если не авторизован).
 
 Структура:
+
 - **Existing keys table:**
   - Столбцы: провайдер, метка (label), статус (активен/неактивен/повреждён), действия
   - Кнопки: "Проверить" (POST validate), "Удалить" (DELETE)
@@ -408,6 +428,7 @@ is_public: Mapped[bool] = mapped_column(
 #### `/about` — Методология (`about.html`)
 
 Структура:
+
 - **Intro:** что такое Дельфи, 5 персон, 2 раунда
 - **Personas section:** 5 карточек с персонами (icon, name, role, description)
 - **Pipeline section:** детальное описание 9 этапов
@@ -489,6 +510,7 @@ is_public: Mapped[bool] = mapped_column(
    - Else → 302 redirect на `/predict/{id}`
 
 **DOM IDs:**
+
 - `#prediction-form`, `#outlet`, `#outlet-suggestions`, `#target_date`, `#outlet-url-group`, `#outlet_url`, `#api_key`, `#submit-btn`, `#form-error`
 
 ---
@@ -501,6 +523,7 @@ is_public: Mapped[bool] = mapped_column(
 3. Connect SSE на `/api/v1/predictions/{id}/stream`
 
 **SSE event handling:**
+
 - Event format: `{ stage, message, progress, detail, elapsed_ms, cost_usd }`
 - Update `<progress value=...>` (0–100%)
 - Update step icons (pending → active → done)
@@ -534,30 +557,36 @@ const STAGE_PROGRESS = {
 ```
 
 **Step state transitions:**
+
 - Update step: `.fn-step--pending` → `.fn-step--active` → `.fn-step--done`
 - Pending: circle icon `○` (CSS counter номер)
 - Active: gradient shimmer background + animate-shimmer
 - Done: circle icon заменяется точкой с scale-in анимацией
 
 **Detail inline updates:**
+
 - `.fn-step-detail` (inside `.fn-step-content`) заполняется из SSE `detail` поля
 - `.fn-step-duration` (shrink-0) заполняется и показывается (fade-in) когда duration_ms известна
 
 **Narrative sidebar:**
+
 - Desktop: `#narrative-area` (sticky top-6)
 - Mobile: `#narrative-area-mobile` (text-center)
 - Заполняется из SSE `message` поля
 - Fade-in при обновлении
 
 **Completion:**
+
 - SSE event `stage: "completed"` → 1.5-second delay → redirect `/results/{id}`
 
 **Error handling:**
+
 - SSE event `stage: "failed"` → show `#error-section`, close connection
 - Stall detection — отключено в текущей версии (функция `checkStall()` — no-op)
 - Network error (SSE drops) → fallback to polling `/api/v1/predictions/{id}` every 5s
 
 **DOM IDs:**
+
 - `#progress-bar`, `#progress-percent`, `#progress-elapsed`
 - `#step-list`, `.fn-step[data-stage]`
 - `#narrative-area`, `#narrative-message`
@@ -599,6 +628,7 @@ const STAGE_PROGRESS = {
    - Show result (green "Ключ валиден" или red "Ключ невалиден")
 
 **DOM selectors:**
+
 - `#add-key-form`, `#add-key-btn`, `#add-key-error`, `#add-key-success`
 - `.fn-delete-btn[data-key-id]`, `.fn-validate-btn[data-key-id]`, `.fn-validate-result[data-key-id]`
 
@@ -629,6 +659,7 @@ const STAGE_PROGRESS = {
 ### Цветовая палитра (Tailwind + OKLCH)
 
 **Confidence levels** (для уровней уверенности):
+
 - `bg-confidence-very-high` — зелёный (80–100%)
 - `bg-confidence-high` — синий (60–79%)
 - `bg-confidence-moderate` — жёлтый/оранжевый (40–59%)
@@ -636,11 +667,13 @@ const STAGE_PROGRESS = {
 - `bg-confidence-speculative` — красный (0–19%)
 
 **Surfaces & Text:**
+
 - `bg-surface-0`, `bg-surface-1`, `bg-surface-2` — фон (светлые серые)
 - `text-text`, `text-text-heading`, `text-text-muted` — текст
 - `border-border` — граница
 
 **Primary:**
+
 - `bg-primary`, `text-primary` — основной цвет (синий)
 
 ### Компоненты (`fn-*` классы)
@@ -918,6 +951,7 @@ pytest tests/test_web/ -v
 ```
 
 Проверяются:
+
 - Status codes (200, 302, 403)
 - Context variables (шаблон передал правильные переменные)
 - Redirect logic (auth, completion)

@@ -77,6 +77,7 @@ $$p_{\text{calibrated}} = \sigma(a \cdot \text{logit}(p_{\text{raw}}) + b)$$
 #### Агрегация временных полей
 
 Для каждого события агрегируются поля:
+
 - `predicted_date` — медиана по датам персон
 - `uncertainty_days` — среднее
 - `scenario_types` — объединение
@@ -93,6 +94,7 @@ $$p_{\text{calibrated}} = \sigma(a \cdot \text{logit}(p_{\text{raw}}) + b)$$
 $$\text{score} = p_{\text{calib}} \times n \times (1 - s) \times r$$
 
 где:
+
 - $p_{\text{calib}}$ — калиброванная вероятность события
 - $n$ — новостная ценность (среднее по персонам)
 - $s$ — коэффициент насыщенности (текущее заполнение 0.0)
@@ -147,6 +149,7 @@ $$\text{temporal\_factor} = \max(0.5, 1.0 - 0.05 \cdot \text{days\_away})$$
 ### Входные данные
 
 Для анализа используется `OutletProfile` с:
+
 - Редакционной позицией (editorial_stance)
 - Типичными разделами (sections)
 - 10–20 примерами недавних заголовков (sample_headlines)
@@ -371,6 +374,7 @@ style_feedback = "scoring timeout — neutral score"
 #### Финальная фильтрация
 
 После применения матрицы:
+
 - Заголовки с решением `PASS` → попадают в `FinalPrediction`
 - Заголовки с `DEPRIORITIZE` → добавляются в конец списка (после `PASS`)
 - Все остальные (REJECT, REVISE, MERGE) → исключаются из вывода

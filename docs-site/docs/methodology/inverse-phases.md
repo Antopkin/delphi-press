@@ -7,22 +7,26 @@
 ## Фаза 1: Концепция (февраль 2026)
 
 **Что сделано:**
+
 - Формулировка проблемы: можно ли отличить информированных трейдеров от случайных по Brier Score?
 - Литературная база: Akey et al. 2025, Clinton & Huang 2024, Satopaa et al. 2014
 - Архитектура: 5 модулей (loader, profiler, signal, schemas, store)
 - Базовая фильтрация: Brier Score > медиана, Bayesian shrinkage λ
 
 **Ключевые решения:**
+
 - Использовать accuracy (Brier Score) как единственный сигнал для профилирования
 - Extremizing с фиксированным d=1.5 (Satopaa et al. 2014)
 - Хранение профилей в Parquet вместо JSON для эффективности
 
 **Метрики:**
+
 - ~1.7M профилей трейдеров Polymarket
 - Примерно 20% (348K) классифицировано как INFORMED
 - ~156 тестов на базовую функциональность
 
 **Что не сработало:**
+
 - Extremizing d=1.5 оказался uncalibrated (как показано позже в Phase 4)
 - Не было walk-forward валидации → высокий риск look-ahead bias
 
@@ -33,6 +37,7 @@
 **Дата завершения:** 2026-03-24
 
 **Что сделано:**
+
 - **Parquet оптимизация:** JSON (506 МБ) → Parquet + ZSTD (62 МБ, 8× сжатие)
   - Включает sidecar `bettor_profiles_summary.json` для быстрого доступа к статистике
 - **Parametric λ (Bayesian shrinkage):** Exp и Weibull distributions для адаптивной регуляризации
@@ -44,16 +49,19 @@
 - **E2E интеграция:** registry, dry_run.py с `--profiles` флагом
 
 **Ключевые решения:**
+
 - Хранить профили на сервере в `/data/inverse/` для переиспользования между запусками
 - Использовать bucketing по категориям рынка (неполная реализация)
 - Разделить signal computation от profiling (разные модули)
 
 **Метрики:**
+
 - 1.7M профилей, 348K INFORMED (20%)
 - 62 МБ storage на диске (vs 506 МБ JSON)
 - 156 inverse тестов, 1044 всего
 
 **Что не сработало:**
+
 - Domain-specific Brier Score (per trader per category) скиплен — слишком разреженные данные
 - concentration_entropy и timing_score как cited features из Mitts & Ofir — были ошибочно приписаны статье (статья использует другие сигналы)
 
@@ -64,6 +72,7 @@
 **Дата завершения:** 2026-03-30
 
 **Что сделано:**
+
 - **Adaptive extremizing:** d вычисляется из inter-bettor position_std, а не фиксирован (Satopaa et al. 2014)
   - Формула: d = 1.0 + 2.0 × stdev(informed_positions), clamp [1.0, 2.0]
 - **Soft volume gate:** линейный gradient для рынков $10K–$100K (Clinton & Huang 2024)
@@ -80,6 +89,7 @@
 - **6 crash fixes:** extremize bounds checking, timezone parsing, JSON schema validation
 
 **Ключевые исследовательские находки:**
+
 - Phase 3 начиналась с 5 параллельных research-агентов для критической оценки методологии
 - Ожидаемый BSS improvement: 2–4% поверх raw Polymarket (~10-15% улучшения от худшей линии)
 - Polymarket accuracy: 67% (vs PredictIt 93%, Kalshi 78%) — наша возможность на неэффективных рынках
@@ -87,11 +97,13 @@
   - Решение: параметризовать, default=20, но walk-forward может передать 5
 
 **Метрики:**
+
 - 1226 тестов
 - E2E сервер verified: 348K INFORMED profiles load за 7.5s
 - Без live testing на реальных данных (only synthetic eval)
 
 **Что не сработало:**
+
 - Domain-specific BS всё ещё не реализован (по рекомендации: instrument before optimize)
 - Timing_score как признак, из которого нужно извлекать информацию — пока только логирование
 
@@ -102,6 +114,7 @@
 **Дата завершения:** 2026-04-02
 
 **Что сделано:**
+
 - **Walk-forward evaluation (22 folds):** первая на Polymarket walk-forward оценка профилей трейдеров
   - 180-дневный burn-in, 60-дневные шаги, 60-дневные тестовые окна
   - DuckDB backend с predicate pushdown (избежать OOM на 470M trades)
@@ -127,6 +140,7 @@
 6. **Tier stability = 0.613:** 61% Jaccard overlap между consecutive folds' INFORMED sets
 
 **Метрики:**
+
 - **Robust subset (folds 0-16, ≥944 test markets):**
   - Mean BSS: **+0.127** (12.7% Brier Score reduction)
   - Median BSS: +0.095
@@ -143,6 +157,7 @@
 - 1242 тестов
 
 **Что не сработало:**
+
 - Variant ablation показал, что ВСЕ параметрические улучшения (adaptive d, volume gate, timing) ВРЕДЯТ
 - Базовый предположительный план Phase 3 был слишком оптимистичным
 
@@ -153,6 +168,7 @@
 **Дата завершения:** 2026-04-04
 
 **Что сделано:**
+
 - **conditionId fix:** enrichment теперь использует правильный join key (CTF hex hash из condition_id, не Gamma internal id)
   - Before: matches на wrong markets или no matches
   - After: enrichment fires для correct live Polymarket markets
@@ -169,11 +185,13 @@
 - **Deploy to production:** PR #1 merged в main, 4/4 Docker containers healthy
 
 **Ключевое обнаружение:**
+
 - Enrichment в production pipeline НЕ срабатывает для live рынков
 - Причина: profiles загружены, но `inverse_trades` пуст для active Polymarket markets
 - Trades из HuggingFace — исторические (до 30 дней назад), не совпадают с сегодняшними рынками
 
 **Метрики:**
+
 - 1243+ тестов
 - Mean BSS: +0.196 (все 22 folda positive)
 - Bootstrap CI: 95% excludes zero
@@ -181,6 +199,7 @@
 - Memory: 8 ГБ (DuckDB memory_limit=2GB safe)
 
 **Что не сработало:**
+
 - Live trades enrichment требует новой архитектуры (see Phase 6)
 
 ---
@@ -190,6 +209,7 @@
 **Дата планируемая:** 2026-04-05
 
 **Что будет сделано:**
+
 - **Polymarket Data API live fetch:** публичное, без аутентификации
   - GET `data-api.polymarket.com/trades?market={conditionId}&limit=10000`
   - Rate limit: 200 req/10 sec
@@ -208,11 +228,13 @@
 - **Tests:** mock API response → verify TradeRecord, mock trades + profiles → verify enrichment fires
 
 **Ожидаемые метрики:**
+
 - Data API trades для live markets: > 0 (expected mean ~500-2000 per market)
 - Enrichment latency: < 60 sec added (parallel fetch ~3 sec + signal compute ~10 sec per market)
 - Confidence: 95% (sign test p < 0.001 from Phase 4 baseline carries forward)
 
 **Критерии успеха:**
+
 - Live enrichment fires для >= 50% matching markets
 - Evidence chain: "Informed traders (N): X%, dispersion: Y"
 - Judge использует informed_probability в final forecast
@@ -267,6 +289,7 @@
 ## Ключевые литературные источники
 
 **Основные статьи:**
+
 - **Akey et al. 2025** (SSRN 6443103): "Top 1% captures 84% of Polymarket gains" (1.4M users, $20B volume)
 - **Clinton & Huang 2024** (Vanderbilt): Polymarket 67% accuracy vs PredictIt 93% vs Kalshi 78%
 - **Satopaa et al. 2014**: Extremizing optimal d варьируется [1.16, 3.92] по информационной корреляции
@@ -276,6 +299,7 @@
 - **Mitts & Ofir 2026** (Harvard Law): Cross-sectional bet size, within-trader bet size, profitability signals
 
 **Методология:**
+
 - FPP3 §5.10 (Hastie, Tibshirani, James): Time-series cross-validation
 - Guo et al. 2017: Expected Calibration Error (ECE)
 - Murphy 1971: Brier Score decomposition (REL, RES, UNC)
@@ -297,6 +321,7 @@
 **Фаза 6** → Live enrichment (Data API real-time trades, graceful degradation)
 
 **Ключевая эволюция:**
+
 - **Надёжность:** synthetic eval → walk-forward validation (first on Polymarket)
 - **Сигнал:** naive фильтрация → informed consensus с calibration checks
 - **Масштаб:** 1.7M профилей, 300K informed, 435K resolved markets
@@ -307,16 +332,19 @@
 ## Обновление документации
 
 Для разработчиков:
+
 - Читай `docs/methodology-inverse-problem.md` (§9) для полного описания Phase 2
 - Читай `tasks/research/polymarket_inverse_problem.md` для research context
 - Для live enrichment: `tasks/research/polymarket_clob_api.md`, `tasks/inverse_phase6_next.md`
 
 Для реализации:
+
 - `src/inverse/` — 8 модулей
 - `scripts/eval_walk_forward.py` — walk-forward evaluation
 - `scripts/duckdb_build_bucketed.py` — bucketed aggregates
 - `/home/deploy/data/inverse/` — server data
 
 Для пользователей:
+
 - Phase 5+ production-ready: всё 22 folda positive, CI excludes zero
 - Live enrichment (Phase 6): планируется в этой сессии

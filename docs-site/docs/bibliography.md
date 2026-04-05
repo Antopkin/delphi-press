@@ -47,17 +47,20 @@
 ## Citation Summary
 
 **Key papers on forecasting & prediction markets:**
+
 - Tetlock & Gardner (2015): foundational work on superforecasting methodology
 - Clinton & Huang (2024): Polymarket accuracy benchmarks
 - Akey et al. (2025): informed vs. uninformed traders analysis
 - Manski (2006), Satopää et al. (2014): forecast aggregation methods
 
 **Methods for behavioral cloning & inverse problems:**
+
 - Ross et al. (2011), Brown et al. (2019), Shen et al. (2026): learning from demonstrations
 - Xu et al. (2022): handling suboptimal expert data
 - Beliaev & Pedarsani (2025): inferring expertise from actions
 
 **Market mechanics & decision-making:**
+
 - Wolfers & Zitzewitz (2004): prediction market theory
 - Bürgi et al. (2025): market-specific analysis (Kalshi)
 - Mitts & Ofir (2026): informed vs. uninformed trading patterns

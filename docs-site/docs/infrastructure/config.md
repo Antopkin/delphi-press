@@ -142,6 +142,7 @@ uv run python -c "from src.config import get_settings; print(get_settings().open
 ```
 
 **Используется для:**
+
 - Тестирования (smoke tests)
 - Демонстраций с ограниченным бюджетом
 - Быстрой проверки (~2 мин, ~$1)
@@ -163,6 +164,7 @@ uv run python -c "from src.config import get_settings; print(get_settings().open
 ```
 
 **Используется для:**
+
 - Production прогнозов
 - Максимальной точности
 - Полного Дельфи цикла (~20 мин, ~$15)
@@ -259,9 +261,11 @@ redis:
 ```
 
 **Переменные:**
+
 - `REDIS_PASSWORD` — пароль доступа (генерируется в .env)
 
 **Лимиты ресурсов:**
+
 - CPU: 0.5 cores
 - RAM: 384 MB
 
@@ -281,6 +285,7 @@ app:
 ```
 
 **Лимиты ресурсов:**
+
 - CPU: 1.5 cores (20% от 8 vCPU сервера)
 - RAM: 768 MB
 
@@ -303,6 +308,7 @@ worker:
 ```
 
 **Лимиты ресурсов:**
+
 - CPU: 1.0 core
 - RAM: 512 MB
 
@@ -321,6 +327,7 @@ nginx:
 ```
 
 **Лимиты ресурсов:**
+
 - CPU: 0.5 cores
 - RAM: 128 MB
 

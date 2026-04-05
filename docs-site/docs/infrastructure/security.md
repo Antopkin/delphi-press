@@ -604,6 +604,7 @@ async def validate_url_safe_async(url: str) -> None:
 ### Проблема
 
 Hardcoded dev секреты в production могут привести к критическим уязвимостям:
+
 - `SECRET_KEY = "dev-insecure-key-change-in-production-32ch"` → все токены подделываются
 - `FERNET_KEY = "3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o="` → все API-ключи расшифровываются
 
@@ -845,6 +846,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 ```
 
 Когда пользователь кликает на внешнюю ссылку, `Referer` заголовок содержит только origin (без пути):
+
 - `https://delphi.antopkin.ru/predictions/123?key=456` → `Referer: https://delphi.antopkin.ru`
 
 #### Content-Security-Policy (CSP)

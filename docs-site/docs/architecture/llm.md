@@ -69,6 +69,7 @@
 
 !!! note "JSON Mode"
     24 из 27 задач используют JSON mode для структурированного вывода. Это означает:
+
     - OpenRouter просит модель вывести JSON
     - Ответ парсится как `dict` и валидируется через Pydantic-модель
     - Если парсинг или валидация не удаётся, агент возвращает `AgentResult(success=False)`
@@ -86,12 +87,14 @@
 $$\text{delay}_n = \min\left(\text{base} \cdot 2^n, \text{max\_delay}\right) + \text{jitter}$$
 
 где:
+
 - base = 1 сек (базовая задержка, `llm_retry_base_delay`)
 - max_delay = 30 сек (потолок, `llm_retry_max_delay`)
 - jitter ∈ [0, 0.5] сек (случайный разброс для избежания thundering herd)
 - n = номер попытки (0, 1, 2, ...)
 
 Пример:
+
 - Попытка 0: сразу выполнить
 - Попытка 1: ошибка → ждём 1–1.5 сек
 - Попытка 2: ошибка → ждём 2–2.5 сек
@@ -164,10 +167,12 @@ delay = retry_after or min(base_delay * (2 ** attempt), max_delay)
 $$\text{cost\_usd} = \left(\frac{\text{tokens\_in}}{1{,}000{,}000} \times \text{price\_in}\right) + \left(\frac{\text{tokens\_out}}{1{,}000{,}000} \times \text{price\_out}\right)$$
 
 где:
+
 - `tokens_in`, `tokens_out` — переданные OpenRouter в `usage`
 - `price_in`, `price_out` — цены из таблицы моделей ($/1M токенов)
 
 Пример: Claude Opus 4.6
+
 - Input: \$5 за 1М токенов
 - Output: \$25 за 1М токенов
 - Для 10k входных, 1k выходных: cost = (10k/1M × 5) + (1k/1M × 25) = 0.05 + 0.025 = \$0.075
@@ -213,6 +218,7 @@ $$\text{if } \text{estimated\_cost} > \text{remaining} \text{ then } \text{raise
 
 !!! warning "Бюджет исчерпан"
     Если во время пайплайна бюджет исчерпывается:
+
     - LLM-вызов блокируется исключением `LLMBudgetExceededError`
     - Стадия падает с ошибкой
     - Пайплайн прерывается (если стадия required=True)
