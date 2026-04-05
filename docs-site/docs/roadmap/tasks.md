@@ -182,10 +182,7 @@
 - *Сложность*: средняя. `prometheus_fastapi_instrumentator` для FastAPI + custom metrics (pipeline_duration, llm_cost_total, stage_errors). Grafana dashboard.
 - *Важность*: средняя для текущего масштаба. Высокая при росте пользователей.
 
-**CI/CD pipeline**: сейчас деплой ручной (`git pull && docker compose up`). Нет автоматического запуска тестов при push.
-
-- *Сложность*: низкая. GitHub Actions: `uv run pytest` + `ruff check` + `mkdocs build --strict`. Deploy через SSH action.
-- *Важность*: средняя. Предотвращает регрессии, ускоряет цикл.
+**CI/CD pipeline**: ~~сейчас деплой ручной~~ **Готово (v0.9.7).** GitHub Actions: `ruff check` + `pytest` + CSS build на push/PR. Auto-deploy на VPS через SSH после прохождения CI. Security audit (`uv audit`) по расписанию.
 
 **Database Audit & PostgreSQL Assessment**: аудит SQLite-схемы (неиспользуемые поля, индексы). Оценка миграции на PostgreSQL.
 
@@ -238,5 +235,5 @@
 
 - [ ] Per-persona weight update (B.6)
 - [ ] Platt scaling calibration (B.5)
-- [ ] CI/CD pipeline с автотестами
+- [x] CI/CD pipeline с автотестами
 - [ ] Observability (Prometheus + Grafana)

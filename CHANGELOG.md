@@ -4,6 +4,25 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.9.7] - 2026-04-06
+
+### Added
+
+- **GitHub Actions CI/CD pipeline** — автоматическое тестирование и деплой. **Почему:** деплой был ручным (`git pull && docker compose up`), тесты не запускались при push. Теперь:
+  - `ci.yml` — ruff lint + pytest + CSS build на push/PR в main
+  - `deploy.yml` — auto-deploy на VPS через SSH после прохождения CI
+  - `security.yml` — `uv audit` CVE-аудит зависимостей (push/PR + еженедельно)
+- **Dockerfile** — uv 0.8 → 0.11 (для поддержки `uv audit`)
+- **duckdb** добавлен в `[project.optional-dependencies] eval`
+
+### Fixed
+
+- **60 ruff lint ошибок** — unused imports, unsorted import blocks, line-too-long в тестовых fixtures
+- **4 falling теста** — version mismatch 0.9.4→0.9.5, outlet_historian days_back 14→30, preset card costs
+- **pygments CVE** (GHSA-5239-wwwm-4pmq) — обновлён 2.19.2 → 2.20.0
+
+---
+
 ## [0.9.6] - 2026-03-31
 
 ### Changed

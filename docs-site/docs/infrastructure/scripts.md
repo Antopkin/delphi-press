@@ -719,9 +719,27 @@ LOG_FILE="/var/log/inverse_refresh.log"
   Disk:     85G free
 ```
 
+### CI/CD Pipeline (GitHub Actions)
+
+Рутинные обновления автоматизированы через GitHub Actions (`.github/workflows/`):
+
+| Workflow | Триггер | Что делает |
+|----------|---------|------------|
+| `ci.yml` | push/PR в main | ruff lint + pytest + CSS build |
+| `deploy.yml` | после успешного CI (main) | SSH на VPS → `docker compose down && up` |
+| `security.yml` | push/PR + понедельник 08:00 | `uv audit` — CVE-аудит зависимостей |
+
+**Поток:** push → CI проходит → deploy.yml подключается по SSH → `git pull && docker compose down && build && up -d` → health check.
+
+!!! note "docker compose down обязателен"
+    Частичный рестарт (`--no-deps app`) ломает Redis auth — пароль не обновляется. Поэтому workflow всегда делает полный `down` перед `up`.
+
 ### deploy.sh
 
-**Назначение:** Быстрое развёртывание Delphi Press на чистом Debian/Ubuntu VPS
+**Назначение:** Начальное развёртывание Delphi Press на чистом Debian/Ubuntu VPS (one-time bootstrap)
+
+!!! info "Для рутинных обновлений используйте CI/CD"
+    После первичной настройки все обновления автоматически деплоятся через GitHub Actions при push в main.
 
 Полный цикл: установка Docker, клонирование репо, генерация секретов, создание контейнеров, запуск сервисов.
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Delphi Press — Quick Deploy on Debian/Ubuntu VPS
+# Delphi Press — Initial VPS Bootstrap (one-time setup)
+# Routine updates are handled by GitHub Actions (.github/workflows/deploy.yml)
 # Usage: ssh deploy@YOUR_VPS && bash scripts/deploy.sh
 set -euo pipefail
 
