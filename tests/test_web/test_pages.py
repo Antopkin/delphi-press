@@ -176,8 +176,8 @@ class TestIndexPage:
         assert 'name="preset"' in resp.text
         assert 'value="light"' in resp.text
         assert 'value="full"' in resp.text
-        assert "~$1" in resp.text
-        assert "~$15" in resp.text
+        assert "~$0.20" in resp.text
+        assert "~$7" in resp.text
         # Standard preset hidden from UI (kept in backend for backward compat)
         assert 'value="standard"' not in resp.text
 

@@ -113,7 +113,7 @@ class OutletHistorian(BaseAgent):
     async def _scrape_articles(self, url: str) -> list[ScrapedArticle]:
         """Скрейпинг статей с graceful degradation."""
         try:
-            return await self._scraper.scrape_articles(url, days_back=14, max_articles=20)
+            return await self._scraper.scrape_articles(url, days_back=30, max_articles=100)
         except Exception:
             self.logger.warning("Scraper failed for %s", url)
             return []
