@@ -6,11 +6,7 @@ Uses in-memory DuckDB tables with synthetic data — no Parquet files needed.
 
 from __future__ import annotations
 
-import csv
-import math
-import tempfile
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
 
@@ -372,7 +368,7 @@ class TestEdgeCases:
             )
             con.execute(
                 "INSERT INTO positions VALUES (?, ?, ?, ?, ?, ?)",
-                [f"u0", f"m{i}", 0.8, 100.0, _ts(5 + i), 1],
+                ["u0", f"m{i}", 0.8, 100.0, _ts(5 + i), 1],
             )
 
         # burn_in=180 → T_start way past all markets → zero folds
@@ -389,7 +385,6 @@ class TestEdgeCases:
 
     def test_csv_output_columns(self, duckdb_con, tmp_path):
         """Output CSV has all required columns."""
-        csv_path = tmp_path / "test_output.csv"
         results = run_walk_forward(
             duckdb_con,
             burn_in_days=180,
@@ -432,8 +427,9 @@ class TestBucketedMode:
     @pytest.fixture
     def bucketed_db(self, tmp_path):
         """Create in-memory DuckDB with bucketed data + parquet file."""
-        import duckdb
         import random
+
+        import duckdb
 
         rng = random.Random(42)
         con = duckdb.connect()

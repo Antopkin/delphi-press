@@ -1,6 +1,6 @@
 """Tests for src.schemas.timeline — HorizonBand, TimelineEntry, PredictedTimeline."""
 
-from datetime import UTC, date, datetime
+from datetime import date
 
 import pytest
 from pydantic import ValidationError

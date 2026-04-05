@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from src.eval.metrics import (
@@ -12,7 +10,6 @@ from src.eval.metrics import (
     calibration_slope,
     expected_calibration_error,
 )
-
 
 # ---------------------------------------------------------------------------
 # Murphy decomposition

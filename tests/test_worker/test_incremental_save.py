@@ -6,18 +6,10 @@ generation/quality_gate stages, so data is never lost on late-stage failures.
 
 from __future__ import annotations
 
-import uuid
-from dataclasses import field
 from datetime import date
-from unittest.mock import AsyncMock, patch
 
-import pytest
-
-from src.db.models import PredictionStatus
 from src.schemas.agent import AgentResult, StageResult
 from src.schemas.pipeline import PipelineContext
-from src.schemas.prediction import HeadlineOutput, PredictionResponse
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
 

@@ -14,7 +14,6 @@ from src.inverse.schemas import (
     BettorProfile,
     BettorTier,
     ExponentialFit,
-    InformedSignal,
     ParametricResult,
     TradeRecord,
 )

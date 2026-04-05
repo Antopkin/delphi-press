@@ -131,7 +131,6 @@ class TestBudgetEstimate:
         Gemini-3.1-flash-lite ($0.25/$1.50 per 1M) значительно дешевле,
         чем захардкоженный flat rate $20/1M — estimate должен быть ниже.
         """
-        from unittest.mock import patch
 
         from src.llm.pricing import calculate_cost
 

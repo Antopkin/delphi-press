@@ -325,7 +325,7 @@ class TestQualityGateConcurrency:
         """Factual and style checks within _score_one should run in parallel."""
         import asyncio
         import time
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import patch
 
         from src.agents.generators.quality_gate import QualityGate
 
@@ -359,9 +359,8 @@ class TestQualityGateConcurrency:
     async def test_execute_scores_headlines_concurrently(self, mock_router, make_context):
         """execute() should score multiple headlines in parallel, not sequentially."""
         import asyncio
-        import json
         import time
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import patch
 
         from src.agents.generators.quality_gate import QualityGate
 
@@ -392,8 +391,6 @@ class TestQualityGateConcurrency:
         ctx.framing_briefs = framings
         ctx.outlet_profile = make_outlet_profile()
 
-        original_score_one = gate._score_one
-
         async def slow_score_one(*args, **kwargs):
             await asyncio.sleep(0.1)
             return QualityScore(
@@ -417,7 +414,6 @@ class TestQualityGateConcurrency:
     async def test_execute_limits_concurrency_with_semaphore(self, mock_router, make_context):
         """Concurrent scoring should respect semaphore limit (max 5 at a time)."""
         import asyncio
-        import time
         from unittest.mock import patch
 
         from src.agents.generators.quality_gate import QualityGate
@@ -551,8 +547,6 @@ class TestQualityGateConcurrency:
 
         hanging_thread_id = "thread_0002"
         call_count = 0
-
-        original_check_factual = gate._check_factual
 
         async def selective_hanging_factual(headline, prediction, *, min_score=3):
             nonlocal call_count

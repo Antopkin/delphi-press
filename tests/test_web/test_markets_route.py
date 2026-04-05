@@ -16,9 +16,8 @@ from sqlalchemy.pool import StaticPool
 from src.config import Settings
 from src.db.engine import create_session_factory
 from src.db.models import Base, Headline, Prediction, PredictionStatus
-from src.inverse.schemas import BettorProfile, BettorTier, ProfileSummary
-from src.web.market_service import MarketCard, MarketSignalService
-
+from src.inverse.schemas import ProfileSummary
+from src.web.market_service import MarketCard
 
 # ── Fakes ─────────────────────────────────────────────────────────
 

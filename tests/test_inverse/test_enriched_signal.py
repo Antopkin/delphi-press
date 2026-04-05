@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import pytest
-
 from src.inverse.schemas import (
     BettorProfile,
     BettorTier,
@@ -14,7 +12,6 @@ from src.inverse.schemas import (
     TradeRecord,
 )
 from src.inverse.signal import compute_enriched_signal, extremize
-
 
 # ---------------------------------------------------------------------------
 # Extremize

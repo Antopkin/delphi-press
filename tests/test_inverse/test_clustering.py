@@ -6,7 +6,6 @@ import pytest
 
 from src.inverse.schemas import BettorProfile, BettorTier, ClusterAssignment
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -327,7 +326,7 @@ class TestLabelClusters:
 class TestBuildFeatureMatrix:
     def test_feature_matrix_shape(self) -> None:
         """_build_feature_matrix returns correct shape."""
-        from src.inverse.clustering import _build_feature_matrix, _DEFAULT_FEATURES
+        from src.inverse.clustering import _DEFAULT_FEATURES, _build_feature_matrix
 
         profiles = _make_profiles(5)
         matrix, names = _build_feature_matrix(profiles, _DEFAULT_FEATURES)

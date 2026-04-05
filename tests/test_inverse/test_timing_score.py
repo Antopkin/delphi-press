@@ -9,8 +9,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import pytest
-
 from src.inverse.profiler import build_bettor_profiles
 from src.inverse.schemas import BettorProfile, TradeRecord
 

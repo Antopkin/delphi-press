@@ -4,7 +4,6 @@ import pytest
 
 from src.utils.fuzzy_match import fuzzy_match_to_market
 
-
 # ── Fixtures ────────────────────────────────────────────────────────
 
 

@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from datetime import date
 
-import pytest
-from pydantic import ValidationError
-
 from src.api.predictions import CreatePredictionRequest
 from src.db.models import PredictionStatus
 

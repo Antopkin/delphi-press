@@ -7,12 +7,11 @@ from datetime import datetime, timezone
 import pytest
 
 from src.inverse.profiler import (
-    aggregate_position,
     _classify_tier,
+    aggregate_position,
     build_bettor_profiles,
 )
 from src.inverse.schemas import BettorTier, TradeRecord
-
 
 # ---------------------------------------------------------------------------
 # aggregate_position

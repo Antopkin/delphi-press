@@ -134,7 +134,10 @@ class TestDelphiPersonaAgent:
                     "probability": 0.55,
                     "newsworthiness": 0.7,
                     "scenario_type": "baseline",
-                    "reasoning": "Base rate analysis shows 40% historical frequency, adjusted up for current momentum and specific triggers identified.",
+                    "reasoning": (
+                        "Base rate analysis shows 40% historical frequency, "
+                        "adjusted up for current momentum and specific triggers identified."
+                    ),
                     "key_assumptions": ["Status quo holds", "No external shock"],
                     "evidence": ["Treaty deadline approaching"],
                     "conditional_on": [],
@@ -175,11 +178,16 @@ class TestDelphiPersonaAgent:
             "predictions": [
                 {
                     "event_thread_id": "thread_0000",
-                    "prediction": "Revised: event will happen with measurable impact on policy after review.",
+                    "prediction": (
+                        "Revised: event will happen with measurable impact on policy after review."
+                    ),
                     "probability": 0.58,
                     "newsworthiness": 0.75,
                     "scenario_type": "baseline",
-                    "reasoning": "After mediator feedback, base rate reasoning confirmed. Adjusted slightly upward based on new facts from dispute resolution.",
+                    "reasoning": (
+                        "After mediator feedback, base rate reasoning confirmed. "
+                        "Adjusted slightly upward based on new facts from dispute resolution."
+                    ),
                     "key_assumptions": ["Status quo holds", "No external shock"],
                     "evidence": ["Treaty deadline approaching"],
                     "conditional_on": [],
@@ -219,7 +227,10 @@ class TestDelphiPersonaAgent:
                     "probability": 0.55,
                     "newsworthiness": 0.7,
                     "scenario_type": "baseline",
-                    "reasoning": "Base rate analysis shows 40% historical frequency, adjusted up for current momentum and specific triggers.",
+                    "reasoning": (
+                        "Base rate analysis shows 40% historical frequency, "
+                        "adjusted up for current momentum and specific triggers."
+                    ),
                     "key_assumptions": ["Status quo holds", "No external shock"],
                     "evidence": ["Treaty deadline approaching"],
                     "conditional_on": [],

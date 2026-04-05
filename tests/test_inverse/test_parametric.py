@@ -8,7 +8,6 @@ import pytest
 
 from src.inverse.parametric import fit_exponential, fit_weibull
 
-
 # ---------------------------------------------------------------------------
 # Exponential fit
 # ---------------------------------------------------------------------------

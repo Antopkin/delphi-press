@@ -205,7 +205,8 @@ class Settings(LLMConfig):
         if self.fernet_key == self._INSECURE_FERNET_KEY:
             msg = (
                 "FERNET_KEY is set to the insecure dev default. "
-                "Generate a new key: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+                "Generate a new key: python -c "
+                "'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
             )
             raise ValueError(msg)
         if ["*"] == self.cors_origins:

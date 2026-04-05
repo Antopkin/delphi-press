@@ -6,7 +6,6 @@ import pytest
 
 from src.utils.url_validator import SSRFBlockedError, validate_url_safe
 
-
 # ── SSRF protection ─────────────────────────────────────────────────
 
 

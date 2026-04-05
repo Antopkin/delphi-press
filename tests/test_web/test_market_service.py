@@ -10,7 +10,6 @@ import pytest
 from src.inverse.schemas import BettorProfile, BettorTier, ProfileSummary
 from src.web.market_service import MarketCard, MarketSignalService
 
-
 # ── Fixtures ──────────────────────────────────────────────────────
 
 

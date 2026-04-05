@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from src.llm.prompts.forecasters.mediator import MediatorPrompt
 from src.llm.prompts.forecasters.persona import PersonaPrompt
-from src.schemas.events import CrossImpactMatrix, EventTrajectory, Scenario
+from src.schemas.events import EventTrajectory, Scenario
 
 
 def _make_trajectory() -> EventTrajectory:
