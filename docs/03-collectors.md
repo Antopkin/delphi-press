@@ -1,3 +1,6 @@
+> **Архивная спека.** Этот документ — предреализационное техническое задание. Написан до кода.
+> Актуальная документация: [`docs-site/docs/`](../docs-site/docs/). Код — источник правды для схем и сигнатур.
+
 # 03 — Агенты-коллекторы
 
 > Реализуемые файлы: `src/agents/collectors/news_scout.py`, `src/agents/collectors/event_calendar.py`, `src/agents/collectors/outlet_historian.py`

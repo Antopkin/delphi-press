@@ -1,3 +1,6 @@
+> **Архивная спека.** Этот документ — предреализационное техническое задание. Написан до кода.
+> Актуальная документация: [`docs-site/docs/`](../docs-site/docs/). Код — источник правды для схем и сигнатур.
+
 # 02 — Агентная инфраструктура
 
 > Реализуемые файлы: `src/agents/base.py`, `src/agents/orchestrator.py`, `src/agents/registry.py`, `src/schemas/agent.py`, `src/schemas/pipeline.py`, `src/schemas/progress.py`

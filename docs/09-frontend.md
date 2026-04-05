@@ -1,3 +1,6 @@
+> **Архивная спека.** Этот документ — предреализационное техническое задание. Написан до кода.
+> Актуальная документация: [`docs-site/docs/`](../docs-site/docs/). Код — источник правды для схем и сигнатур.
+
 # 09 -- Frontend: Architecture & Design System
 
 > Реализуемые файлы: `src/web/templates/*.html`, `src/web/static/css/input.css`, `src/web/static/js/*.js`, `src/web/router.py`

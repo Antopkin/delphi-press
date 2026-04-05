@@ -1,3 +1,6 @@
+> **Архивная спека.** Этот документ — предреализационное техническое задание. Написан до кода.
+> Актуальная документация: [`docs-site/docs/`](../docs-site/docs/). Код — источник правды для схем и сигнатур.
+
 # 04 — Агенты-аналитики
 
 > Реализуемые файлы: `src/agents/analysts/event_trend.py`, `src/agents/analysts/geopolitical.py`, `src/agents/analysts/economic.py`, `src/agents/analysts/media.py`

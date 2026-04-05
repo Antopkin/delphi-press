@@ -12,16 +12,21 @@
    - Resume: `POST /api/v1/predictions/{id}/resume`
    - Оценка: ~200–300 LOC, без миграции БД
 
-3. **Gemini Flash JSON Repair**
+3. **Database Audit & Optimization**
+   - Комплексный аудит схемы БД (SQLite/SQLAlchemy 2.0): неиспользуемые поля, недостающие индексы, отсутствие нормализации
+   - Выполнить субагентами (postgres-pro, data-engineer, security-engineer) с рекомендациями по миграции
+   - Оценить: SQLite → PostgreSQL при росте нагрузки
+
+4. **Gemini Flash JSON Repair**
    - Light-пресет генерирует кривые JSON на ряде стадий
    - Варианты: JSON repair middleware, prompt engineering, замена на Claude Haiku 4.5
 
-4. **Event-Level Prediction Storage**
+5. **Event-Level Prediction Storage**
    - Сохранять `PredictedTimeline` в JSON/DB после каждого run
    - Блокирует per-prediction market eval (сравнение Delphi BS vs Polymarket BS для конкретных прогнозов)
    - Агрегатный market eval (направления B+C) уже реализован
 
-5. **Retrospective Evaluation Pilot**
+6. **Retrospective Evaluation Pilot**
    - Инфраструктура готова (Brier, Log Score, Composite Score, bootstrap CI, Wayback CDX)
    - Осталось: 50 runs × 3 горизонта → ~150–350 пар
    - Стоимость < \$1

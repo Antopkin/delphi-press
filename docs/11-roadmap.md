@@ -1,3 +1,6 @@
+> **Архивная спека.** Этот документ — предреализационное техническое задание. Написан до кода.
+> Актуальная документация: хронология → [`CHANGELOG.md`](../CHANGELOG.md), задачи → [`docs-site/docs/roadmap/tasks.md`](../docs-site/docs/roadmap/tasks.md), архитектура → [`docs-site/docs/architecture/`](../docs-site/docs/architecture/).
+
 # 11 — Implementation Roadmap
 
 > Статус на 2026-03-31. Production deployed v0.9.5. Обновлено: 2026-03-31 (v0.9.5 date serialization fix + bettor profiles via GitHub Releases + key validation + outlet UX + v0.9.4 Market Dashboard + Opus everywhere + pipeline resilience + 6 TDD bugfixes + v0.9.3 Phase 5 BSS variants + conditionId fix + v0.9.2 walk-forward eval + v0.9.1 calibration + v0.9.0 Phase 2 + v0.8.0 OutletResolver + v0.7.1 security audit).
@@ -121,6 +124,80 @@ tests/test_integration/             — 7 E2E integration tests
 - `src/data_sources/foresight.py` — `fetch_resolved_markets()`, `fetch_trades_batch()` (уже есть)
 - `src/main.py` — hot-reload profiles в lifespan или по signal
 - `src/web/templates/base.html` — вернуть nav link когда готово
+
+---
+
+### Pipeline Checkpoint & Resume (planned)
+
+**Цель:** Возобновление пайплайна с точки останова после сбоя (без повторного прогона дорогих стадий 1-8).
+
+**Статус:** PLANNED. Инцидент: прогноз РБК трижды падал на stage 9 (quality_gate) по таймауту OpenRouter. Стадии 1-8 ($5-10) терялись полностью — PipelineContext живёт только в памяти.
+
+**Проблема:** `PipelineStep.output_data` (JSON) в БД существует, но **никогда не заполняется**. Промежуточные данные (signals, event_threads, assessments, ranked_predictions) не сериализуются. Поле `output_data` — мёртвый код.
+
+**План:**
+
+- [ ] **Сериализация контекста** — после каждой стадии сохранять соответствующие слоты PipelineContext в `PipelineStep.output_data`:
+  - Stage 1: `signals`, `scheduled_events`, `outlet_profile`, `foresight_events`
+  - Stage 2: `event_threads`
+  - Stage 3: `trajectories`, `cross_impact_matrix`
+  - Stage 4: `round1_assessments`
+  - Stage 5: `mediator_synthesis`, `round2_assessments`
+  - Stage 6: `ranked_predictions`, `predicted_timeline`
+  - Stage 7: `framing_briefs`
+  - Stage 8: `generated_headlines`
+  - Файл: `src/worker.py` (stage_callback)
+
+- [ ] **Восстановление контекста** — `load_context_from_db(prediction_id) → PipelineContext`:
+  - Загрузить все completed PipelineStep для prediction
+  - Десериализовать `output_data` → заполнить слоты контекста
+  - Файл: `src/db/repositories.py` или новый `src/pipeline/checkpoint.py`
+
+- [ ] **Resume в оркестраторе** — `run_prediction(request, resume_from_stage=N)`:
+  - Пропустить стадии 1..N-1, загрузить контекст из БД
+  - Выполнить стадии N..9
+  - Файл: `src/agents/orchestrator.py`
+
+- [ ] **API endpoint** — `POST /api/v1/predictions/{id}/resume`:
+  - Валидация: prediction.status == FAILED, stages 1..N-1 completed
+  - Файл: `src/api/predictions.py`
+
+- [ ] **CLI flag** — `scripts/dry_run.py --resume-from <prediction_id>`:
+  - Для отладки без Redis/worker
+  - Файл: `scripts/dry_run.py`
+
+**Оценка:** ~200-300 LOC. Не требует миграции БД (поле `output_data` уже существует).
+
+**Критерий успеха:** упавший прогноз возобновляется с точки останова, $0 за повторные стадии.
+
+---
+
+### Database Audit & Optimization (planned)
+
+**Цель:** Комплексный аудит БД — запустить тематических субагентов (postgres-pro, data-engineer, security-engineer) для анализа схемы, индексов, хранения данных и рекомендаций по улучшению.
+
+**Статус:** PLANNED.
+
+**Контекст:** БД (SQLite/SQLAlchemy 2.0) росла инкрементально по мере добавления фич. Есть подозрения на:
+- Неиспользуемые поля (e.g. `output_data` — никогда не заполняется)
+- Недостающие индексы для production-нагрузок
+- Отсутствие нормализации (JSON blobs вместо связанных таблиц)
+- Отсутствие retention policy (старые predictions, raw_articles)
+- Несоответствие схемы актуальному коду
+
+**План:**
+- [ ] **Schema audit** — субагент анализирует `src/db/models.py`, `src/db/repositories.py`, реальное использование полей в коде
+- [ ] **Query performance** — проверка индексов, N+1 queries, slow paths
+- [ ] **Data integrity** — FK constraints, nullable fields, orphaned records
+- [ ] **Storage optimization** — JSON blobs → нормализация?, retention policy для raw_articles
+- [ ] **Migration plan** — Alembic миграции для рекомендованных изменений
+- [ ] **SQLite → PostgreSQL?** — оценить необходимость миграции при росте нагрузки
+
+**Ключевые файлы:**
+- `src/db/models.py` — ORM-модели (6 таблиц)
+- `src/db/repositories.py` — репозитории
+- `src/db/session.py` — async engine, session factory
+- `data/delphi_press.db` — production DB (~160 KB)
 
 ---
 
@@ -504,4 +581,4 @@ evaluation = [
 
 ---
 
-*Создано: 2026-03-28. Обновлено: 2026-03-30 (v0.9.4 Market Dashboard, 1296 тестов).*
+*Создано: 2026-03-28. Обновлено: 2026-03-31 (QualityGate parallelization, pipeline checkpoint planned, DB audit planned).*

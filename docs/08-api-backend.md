@@ -1,3 +1,6 @@
+> **Архивная спека.** Этот документ — предреализационное техническое задание. Написан до кода.
+> Актуальная документация: [`docs-site/docs/`](../docs-site/docs/). Код — источник правды для схем и сигнатур.
+
 # 08 -- API, база данных и очередь задач
 
 > Реализуемые файлы: `src/config.py`, `src/main.py`, `src/worker.py`, `src/db/engine.py`, `src/db/models.py`, `src/db/repositories.py`, `src/api/router.py`, `src/api/predictions.py`, `src/api/outlets.py`, `src/api/health.py`

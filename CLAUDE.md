@@ -14,36 +14,34 @@
 **Сервер**: `deploy@213.165.220.144` (static IP), Debian 12, Yandex Cloud (4 vCPU 20%, 8GB RAM). Захарденен, Docker 29.3.1, TLS via Let's Encrypt.
 **Язык интерфейса**: русский. Результаты на языке целевого СМИ.
 
-## Спецификации
+## Документация
 
-**Перед реализацией любого модуля — прочитай его спеку из `docs/`.** Спеки содержат Pydantic-схемы, сигнатуры функций, промпты агентов и контракты между модулями.
+Актуальная документация проекта: **`docs-site/docs/`** ([delphi.antopkin.ru/docs/](https://delphi.antopkin.ru/docs/)).
 
-### Навигация по спекам
+### Навигация по документации
 
-- `src/schemas/` → соответствующие спеки по модулю
-- `src/agents/base.py`, `orchestrator.py` → `docs/02-agents-core.md`
-- `src/agents/collectors/` → `docs/03-collectors.md`
-- `src/data_sources/outlet_resolver.py`, `wikidata_client.py`, `feed_discovery.py` → `docs/03-collectors.md` (§7: OutletResolver)
-- `src/agents/analysts/` → `docs/04-analysts.md`
-- `src/agents/forecasters/` → `docs/05-delphi-pipeline.md`
-- `src/agents/generators/` → `docs/06-generators.md`
-- `src/llm/` → `docs/07-llm-layer.md`
-- `src/api/`, `src/db/` → `docs/08-api-backend.md`
-- `src/api/auth.py`, `src/api/keys.py` → `docs/08-api-backend.md` (§12: аутентификация)
-- `src/security/` → `docs/08-api-backend.md` (§12: KeyVault, шифрование)
-- `src/data_sources/foresight.py` → `tasks/research/metaculus_polymarket_api.md`, `tasks/research/gdelt_api.md`
-- `src/agents/collectors/foresight_collector.py` → `docs/03-collectors.md` + ресёрчи выше
-- `src/web/` → `docs/09-frontend.md`
-- `src/eval/` → `tasks/research/retrospective_testing.md`
-- `src/inverse/` → `tasks/research/polymarket_inverse_problem.md` (обратная задача: профилирование участников, informed consensus)
-- Roadmap (задачи, баги, сессии) → `docs/11-roadmap.md`
+- Архитектура и pipeline: `docs-site/docs/architecture/`
+- LLM-инфраструктура: `docs-site/docs/architecture/llm.md`
+- Метод Дельфи (раунды, персоны): `docs-site/docs/delphi-method/`
+- Методология (inverse problem, walk-forward): `docs-site/docs/methodology/`
+- API reference: `docs-site/docs/api/reference.md`
+- Frontend: `docs-site/docs/frontend/web-ui.md`
+- Промпты агентов: `docs-site/docs/appendix/prompts.md`
+- Инфраструктура: `docs-site/docs/infrastructure/`
+- Roadmap и задачи: `docs-site/docs/roadmap/tasks.md`
+- Changelog: `CHANGELOG.md`
+
+Архивные предреализационные спеки: `docs/` (историческая ссылка, не source of truth).
+
+### Утилиты
+
 - `scripts/dry_run.py` → E2E dry run без инфраструктуры
 - `tests/fixtures/mock_llm.py` → MockLLMClient для E2E тестов
-- `.claude/skills/predict/` → Claude Code predict skill (сессия 12)
+- `.claude/skills/predict/` → Claude Code predict skill
 
 ## Дизайн-система (Impeccable)
 
-Проект использует [Impeccable](https://github.com/pbakaus/impeccable) — систему дизайн-скиллов для Claude Code (21 скилл в `.claude/skills/`).
+Проект использует [Impeccable](https://github.com/pbakaus/impeccable) — систему дизайн-скиллов для Claude Code (20 скиллов в `.claude/skills/`).
 
 **Первый запуск**: выполни `/teach-impeccable` для настройки дизайн-контекста проекта. Результат сохраняется в `.impeccable.md`.
 
@@ -63,7 +61,7 @@
 | Продвинутое | `/overdrive` |
 | Настройка | `/teach-impeccable` |
 
-**Стек фронтенда**: Tailwind CSS v4.2.2 (PostCSS build, @theme config) + 17 JS-referenced `fn-*` components + Newsreader/Source Sans 3/JetBrains Mono (Google Fonts). Спека: `docs/09-frontend.md`.
+**Стек фронтенда**: Tailwind CSS v4.2.2 (PostCSS build, @theme config) + 17 JS-referenced `fn-*` components + Newsreader/Source Sans 3/JetBrains Mono (Google Fonts). Документация: `docs-site/docs/frontend/web-ui.md`.
 
 ## Доменный глоссарий
 
@@ -121,6 +119,4 @@ uv run python scripts/dry_run.py --help
 
 ## Архитектура pipeline
 
-Полное описание: **[`docs/architecture.md`](docs/architecture.md)** — 9 стадий, 28 LLM-задач, data flow, task IDs, known gotchas.
-
-Краткая навигация по pipeline: `docs/11-roadmap.md` (таблица компонентов + ключевые файлы).
+Полное описание: **[`docs-site/docs/architecture/pipeline.md`](docs-site/docs/architecture/pipeline.md)** — 9 стадий, 28 LLM-задач, data flow, task IDs, known gotchas.
