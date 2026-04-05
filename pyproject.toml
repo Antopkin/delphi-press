@@ -64,3 +64,9 @@ select = ["E", "F", "I"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "mkdocs-material",
+    "pymdown-extensions",
+]
