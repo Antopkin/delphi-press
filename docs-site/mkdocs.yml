@@ -102,7 +102,7 @@ nav:
   - Dead Ends:
     - 21 case study: dead-ends/case-studies.md
   - Дорожная карта:
-    - Задачи и backlog: roadmap/tasks.md
+    - Дорожная карта: roadmap/tasks.md
     - "Дискуссия: архетипы": roadmap/discussion.md
   - Frontend:
     - Web UI: frontend/web-ui.md
