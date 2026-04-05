@@ -37,6 +37,7 @@ ml = [
 ]
 eval = [
     "statsmodels>=0.14",
+    "duckdb>=1.0",
 ]
 dev = [
     "pytest>=8.0",
