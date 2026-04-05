@@ -7,7 +7,7 @@
 __pycache__
 
 research/
-docs/
+/docs/
 tests/
 data/
 scripts/
