@@ -8,8 +8,8 @@
 <section class="mb-12">
     <h1 class="text-4xl md:text-5xl leading-tight mb-3">О методологии</h1>
     <p class="max-w-2xl text-text-muted text-lg leading-relaxed">
-        Описание как система прогнозирует заголовки и первые абзацы, которые опубликуют новостные издания.
-        Сочетание данных рынков прогнозов и доработанного под LLM метода Дельфи
+        Система прогнозирования заголовков, построенная на двух столпах:
+        математический анализ рынков прогнозов и экспертный анализ ИИ-агентов по методу Дельфи
     </p>
 </section>
 
@@ -27,6 +27,12 @@
             Затем, для каждого вероятного события, генерирует заголовок и лид в стиле указанного издания.
             Разные издания по-разному освещают одно и то же: одно фокусируется на экономических последствиях,
             другое — на геополитическом контексте. Прогноз требует понимания редакционной логики.
+        </p>
+        <p>
+            Для решения используются <strong>два параллельных пайплайна</strong>:
+            математический анализ prediction markets (Polymarket) и мультиагентный метод Дельфи.
+            Результаты обоих объединяются в Judge — финальном синтезаторе, который строит
+            калиброванный таймлайн событий.
         </p>
     </div>
 
@@ -61,320 +67,97 @@
     </details>
 </section>
 
-{# ===== SECTION 2: DELPHI METHOD ===== #}
+{# ===== SECTION 2: TWO PILLARS ARCHITECTURE ===== #}
 <section class="mb-12">
-    <h2 class="text-2xl mb-4">Как мы используем метод Дельфи для политического форсайтинга</h2>
-
-    <blockquote class="font-heading italic text-lg border-l-4 border-primary pl-6 my-8 text-text-muted not-italic">
-        В основе <strong>Delphi Press</strong> лежит классический
-        <strong>метод Дельфи</strong> — структурированная техника группового прогнозирования,
-        разработанная RAND Corporation в 1963 году (Dalkey & Helmer).
-    </blockquote>
-
-    <div class="space-y-4 text-text leading-relaxed max-w-prose mb-6">
-        <p>
-            Ключевая идея: один эксперт имеет слепые пятна.
-            Несколько независимых экспертов с разными взглядами дают более калиброванный прогноз.
-        </p>
-        <p>
-            В нашей системе роль экспертов выполняют пять ИИ-агентов на базе Claude Opus 4.6 (Anthropic).
-            Каждый имеет уникальный когнитивный профиль: реалист оценивает базовые ставки и исторические аналогии,
-            геостратег — силовые балансы и интересы, экономист — потоки капитала и санкции,
-            медиа-эксперт — новостную ценность и редакционную логику, адвокат дьявола — пропущенные риски и чёрных лебедей.
-            Разнообразие перспектив минимизирует систематические ошибки одной точки зрения.
-        </p>
-        <p>
-            Процесс состоит из двух раундов прогнозирования. Раунд 1 — агенты независимо анализируют события.
-            Раунд 2 — они видят аргументы друг друга (без знания авторства) и пересматривают оценки.
-            Итоговая вероятность — взвешенная медиана с калибровкой по Brier Score каждого агента.
-            Brier Score — стандартная метрика точности вероятностных прогнозов: чем ближе к 0, тем точнее.
-            Случайное угадывание даёт 0.25, идеальный прогнозист — 0.
-        </p>
-    </div>
-
-    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1">
-        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
-            Пять перспектив на потенциальные события 
-        </summary>
-        <div class="space-y-3 pt-2">
-            <p class="text-sm leading-relaxed">
-                Исследование <strong>AIA Forecaster</strong> (Schoenegger et al., 2024) показало:
-                простое усреднение нескольких запусков одной модели даёт слабое улучшение.
-                Ключ — в <strong>структурированном разнообразии</strong>: когда каждый агент анализирует
-                проблему через свою призму, они ловят разные аспекты и компенсируют слепые пятна друг друга.
-            </p>
-            <p class="text-sm leading-relaxed">
-                Наши пять агентов используют одну базовую модель (Claude Opus 4.6), но каждый
-                получает уникальный системный промпт с когнитивным профилем: собственные приоритеты,
-                аналитические фреймворки и критерии оценки. Это аналог реального Дельфи-метода,
-                где одни и те же данные анализируются экспертами из разных областей.
-            </p>
-            <p class="text-sm leading-relaxed">
-                <strong>DeLLMphi</strong> (Zhao et al., 2024) подтвердил: структурированная медиация
-                между раундами (не просто показать чужие оценки, а заставить переосмыслить аргументы)
-                даёт улучшение на 10–18%.
-            </p>
-        </div>
-    </details>
-</section>
-
-
-{# ===== SECTION 3: FIVE EXPERTS ===== #}
-<section class="mb-12">
-    <h2 class="text-2xl mb-6">Пять экспертов: когнитивные профили</h2>
-
-    <div class="overflow-x-auto mb-6">
-        <table class="w-full">
-            <thead>
-                <tr>
-                    <th class="text-left w-1/4">Эксперт</th>
-                    <th class="text-left">Фокус анализа</th>
-                    <th class="text-left w-1/3">Ключевой вопрос</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr class="hover:bg-surface-1 transition-colors">
-                    <td class="font-semibold">Реалист-аналитик</td>
-                    <td class="text-text-muted">Базовые ставки, исторические аналогии, политические риски, инерция институтов</td>
-                    <td class="font-heading italic">&laquo;Как часто подобное происходило раньше?&raquo;</td>
-                </tr>
-                <tr class="hover:bg-surface-1 transition-colors">
-                    <td class="font-semibold">Геостратег</td>
-                    <td class="text-text-muted">Силовые балансы, стратегические интересы, альянсы, международные отношения</td>
-                    <td class="font-heading italic">&laquo;Кому выгодно? (Cui bono?)&raquo;</td>
-                </tr>
-                <tr class="hover:bg-surface-1 transition-colors">
-                    <td class="font-semibold">Экономист</td>
-                    <td class="text-text-muted">Потоки капитала, санкции, фискальная политика, товарные рынки</td>
-                    <td class="font-heading italic">&laquo;Следуй за деньгами&raquo;</td>
-                </tr>
-                <tr class="hover:bg-surface-1 transition-colors">
-                    <td class="font-semibold">Медиа-эксперт</td>
-                    <td class="text-text-muted">Новостная ценность, редакционная логика, гейткипинг, медийный насыщенность</td>
-                    <td class="font-heading italic">&laquo;Что попадёт в выпуск?&raquo;</td>
-                </tr>
-                <tr class="hover:bg-surface-1 transition-colors">
-                    <td class="font-semibold">Адвокат дьявола</td>
-                    <td class="text-text-muted">Пропущенные риски, pre-mortem анализ, контраргументы, чёрные лебеди</td>
-                    <td class="font-heading italic">&laquo;Что может пойти не так?&raquo;</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1">
-        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
-            Почему именно эти пять? 
-        </summary>
-        <div class="space-y-3 pt-2">
-            <p class="text-sm leading-relaxed">
-                Состав вдохновлён исследованиями Tetlock и его Good Judgment Project (2005–2015).
-                Успешные долгосрочные прогнозисты используют множество источников информации и
-                открыты к альтернативным интерпретациям. Мы формализовали эту процедуру в пять
-                когнитивных стилей, каждый с чётким промптом.
-            </p>
-            <p class="text-sm leading-relaxed">
-                <strong>DeLLMphi</strong> (Zhao et al., 2024) воспроизвели классический Дельфи с LLM
-                и показали: структурированное разнообразие позиций во втором раунде даёт улучшение
-                на 10–18%. Просто усреднять оценки недостаточно; нужна настоящая медиация, которая
-                заставляет агентов переосмыслить аргументы друг друга.
-            </p>
-        </div>
-    </details>
-</section>
-
-{# ===== SECTION 4: PIPELINE FLOWCHART ===== #}
-<section class="mb-12">
-    <h2 class="text-2xl mb-4">Pipeline: 9 стадий прогнозирования</h2>
+    <h2 class="text-2xl mb-4">Архитектура: два столпа</h2>
 
     <p class="text-text-muted mb-6">
-        Процесс разделён на 9 стадий. Некоторые выполняются параллельно — система
-        запускает до 5 агентов одновременно для ускорения.
+        Прогноз строится двумя независимыми пайплайнами, результаты которых
+        объединяются на стадии синтеза. Каждый столп решает свою задачу: математический
+        извлекает сигнал из поведения участников рынка, экспертный — из рассуждений ИИ-агентов.
     </p>
 
     <pre class="mermaid mb-6">
 flowchart TD
     subgraph collect["Сбор данных"]
-        NS["NewsScout"] & EC["EventCalendar"] & OH["OutletHistorian"] & FC["ForesightCollector"]
+        NS["NewsScout<br/>RSS + web search"] & EC["EventCalendar<br/>запланированные события"] & OH["OutletHistorian<br/>архив издания"] & FC["ForesightCollector<br/>Polymarket"]
     end
 
-    subgraph analyze["Анализ"]
-        MERGE["Объединение сигналов"] --> CLUSTER["Кластеризация"]
-        CLUSTER --> GA["Геополитик"] & EA["Экономист"] & MA["Медиа-аналитик"]
-        GA & EA & MA --> SCENARIOS["Сценарии"]
+    subgraph pillar1["Столп 1: Математический пайплайн"]
+        PROFILES["1.7M профилей<br/>Brier Score"] --> INFORMED["348K INFORMED<br/>top 20%"]
+        INFORMED --> CONSENSUS["Informed consensus<br/>accuracy-weighted"]
     end
 
-    subgraph delphi["Дельфи-консенсус"]
-        P1["Реалист"] & P2["Геостратег"] & P3["Экономист"] & P4["Медиа-эксперт"] & P5["Адвокат дьявола"]
-        P1 & P2 & P3 & P4 & P5 --> MED["Медиатор"]
-        MED --> R2["Раунд 2<br/>пересмотр оценок"]
-        R2 --> JUDGE["Judge<br/>таймлайн"]
+    subgraph pillar2["Столп 2: Экспертный пайплайн"]
+        ANALYSTS["3 аналитика<br/>геополитик, экономист, медиа"] --> SCENARIOS["Сценарии + траектории"]
+        SCENARIOS --> DELPHI["5 персон Дельфи<br/>2 раунда + медиатор"]
     end
 
-    subgraph output["Генерация"]
-        FRAME["Фрейминг"] --> HEADLINE["Заголовок + лид"]
-        HEADLINE --> QG["Quality Gate"]
+    subgraph synthesis["Синтез"]
+        JUDGE["Judge<br/>market_weight + expert_weight"] --> TIMELINE["Таймлайн событий"]
+        TIMELINE --> HEADLINES["Заголовки + лиды"]
+        HEADLINES --> QG["Quality Gate"]
     end
 
-    NS & EC & OH & FC --> MERGE
-    SCENARIOS --> P1 & P2 & P3 & P4 & P5
-    JUDGE --> FRAME
+    NS & EC & OH & FC --> ANALYSTS
+    FC --> PROFILES
+    CONSENSUS --> JUDGE
+    DELPHI --> JUDGE
 
     style collect fill:#d1fae5,stroke:#059669
-    style analyze fill:#dbeafe,stroke:#2563eb
-    style delphi fill:#ede9fe,stroke:#7c3aed
-    style output fill:#fef3c7,stroke:#d97706
+    style pillar1 fill:#dbeafe,stroke:#2563eb
+    style pillar2 fill:#ede9fe,stroke:#7c3aed
+    style synthesis fill:#fef3c7,stroke:#d97706
     </pre>
 
-    <div class="space-y-3 mb-6">
-        <div class="border-l-4 border-green-600 pl-4">
-            <strong class="block mb-1">Фаза 1: Сбор данных</strong>
-            <p class="text-text-muted text-sm">Четыре коллектора параллельно собирают новостные сигналы из RSS-фидов, поисковых систем, архивов издания и рынков прогнозов (Polymarket, Metaculus).</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div class="border-2 border-blue-600 rounded-lg p-4">
+            <span class="text-xs font-semibold uppercase tracking-wider text-blue-600">Столп 1</span>
+            <strong class="block text-lg mt-1 mb-2">Математический пайплайн</strong>
+            <p class="text-text-muted text-sm leading-relaxed">
+                Профилирование 1.7M участников Polymarket по Brier Score.
+                Bayesian shrinkage, HDBSCAN-кластеризация, параметрические модели (Exp/Weibull).
+                Walk-forward валидация: BSS +0.196 на 22 фолдах.
+            </p>
+            <p class="text-xs text-text-muted mt-2">470M ставок, 33 ГБ данных, DuckDB</p>
         </div>
-        <div class="border-l-4 border-blue-600 pl-4">
-            <strong class="block mb-1">Фаза 2: Анализ</strong>
-            <p class="text-text-muted text-sm">Сигналы кластеризуются в событийные нити (TF-IDF + HDBSCAN). Три аналитика параллельно строят сценарии развития: геополитический, экономический, медийный. Cross-impact matrix определяет, как события влияют друг на друга.</p>
-        </div>
-        <div class="border-l-4 border-purple-600 pl-4">
-            <strong class="block mb-1">Фаза 3: Дельфи-консенсус</strong>
-            <p class="text-text-muted text-sm">Пять экспертов независимо оценивают вероятности (раунд 1). Медиатор синтезирует разногласия. Эксперты пересматривают оценки (раунд 2). Judge строит <strong>предсказанный таймлайн</strong> — хронологию событий с вероятностями на трёх горизонтах (1-2, 3-4, 5-7 дней).</p>
-        </div>
-        <div class="border-l-4 border-amber-600 pl-4">
-            <strong class="block mb-1">Фаза 4: Генерация</strong>
-            <p class="text-text-muted text-sm">Для топ-7 событий из таймлайна система анализирует редакционный стиль целевого издания и генерирует заголовки + первые абзацы. Quality Gate проверяет факты и соответствие стилю.</p>
+        <div class="border-2 border-purple-600 rounded-lg p-4">
+            <span class="text-xs font-semibold uppercase tracking-wider text-purple-600">Столп 2</span>
+            <strong class="block text-lg mt-1 mb-2">Экспертный пайплайн</strong>
+            <p class="text-text-muted text-sm leading-relaxed">
+                Метод Дельфи: 5 ИИ-агентов с разными когнитивными профилями.
+                Два раунда прогнозирования с медиацией. Структурированное разнообразие
+                перспектив минимизирует систематические ошибки.
+            </p>
+            <p class="text-xs text-text-muted mt-2">Claude Opus 4.6, 18 агентов, 28 LLM-задач</p>
         </div>
     </div>
-
-    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1">
-        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
-            Алгоритмы каждой стадии
-        </summary>
-        <div class="space-y-4 pt-2 text-sm">
-            {# — Фаза 1: Сбор данных (зелёный) — #}
-            <div class="border-l-4 border-green-600 pl-3">
-                <p class="font-semibold mb-1">Стадия 1: Сбор данных</p>
-                <p class="text-text-muted">Четыре коллектора работают параллельно: NewsScout (RSS-фиды + web search), EventCalendar (запланированные политические и экономические события), OutletHistorian (архив целевого издания за последние дни), ForesightCollector (активные контракты Polymarket и Metaculus). Результат: ~200 новостных сигналов.</p>
-            </div>
-            {# — Фаза 2: Анализ (синий) — #}
-            <div class="border-l-4 border-blue-600 pl-3">
-                <p class="font-semibold mb-1">Стадия 2: Кластеризация событий</p>
-                <p class="text-text-muted">TF-IDF векторизация с tri-gram tokenization, cosine similarity matrix, HDBSCAN (min_cluster_size=3). Выбор HDBSCAN вместо K-means: число кластеров заранее неизвестно, шумовые статьи автоматически отсеиваются (Campello et al., 2013). Результат: 15-30 событийных нитей из ~200 статей.</p>
-            </div>
-            <div class="border-l-4 border-blue-600 pl-3">
-                <p class="font-semibold mb-1">Стадия 3: Анализ траекторий</p>
-                <p class="text-text-muted">Три аналитика (геополитический, экономический, медийный) параллельно строят сценарии. Перекрёстная матрица определяет каузальные связи: как событие A влияет на вероятность события B. Это позволяет учитывать цепочки последствий.</p>
-            </div>
-            {# — Фаза 3: Дельфи-консенсус (фиолетовый) — #}
-            <div class="border-l-4 border-purple-600 pl-3">
-                <p class="font-semibold mb-1">Стадия 4: Дельфи — раунд 1</p>
-                <p class="text-text-muted">Пять экспертных персон независимо оценивают вероятность каждого события: Реалист (base rates), Геостратег (баланс сил), Экономист (денежные потоки), Медиа-эксперт (новостная ценность), Адвокат дьявола (чёрные лебеди). Анонимность: персоны не видят оценки друг друга.</p>
-            </div>
-            <div class="border-l-4 border-purple-600 pl-3">
-                <p class="font-semibold mb-1">Стадия 5: Дельфи — раунд 2</p>
-                <p class="text-text-muted">Медиатор не просто показывает чужие оценки — он синтезирует аргументы, выделяет точки разногласий и формулирует контраргументы. Это заставляет персон переосмыслить позиции, а не просто сдвинуться к среднему (Zhao et al., 2024).</p>
-            </div>
-            <div class="border-l-4 border-purple-600 pl-3">
-                <p class="font-semibold mb-1">Стадия 6: Консенсус и таймлайн</p>
-                <p class="text-text-muted">Judge агрегирует оценки в предсказанный таймлайн на трёх горизонтах: 1-2 дня (оперативный режим, высокий вес), 3-4 дня (смешанный режим), 5-7 дней (структурный режим, низкий вес). Калибрует вероятности, интегрирует сигналы prediction markets.</p>
-            </div>
-            {# — Фаза 4: Генерация (янтарный) — #}
-            <div class="border-l-4 border-amber-600 pl-3">
-                <p class="font-semibold mb-1">Стадия 7: Фрейминг</p>
-                <p class="text-text-muted">Анализ редакционного стиля целевого издания: жанр, типичная длина заголовков, лексика, тональность, характерные углы подачи. Для каждого события определяется фрейм: угроза, возможность, кризис, рутина или сенсация.</p>
-            </div>
-            <div class="border-l-4 border-amber-600 pl-3">
-                <p class="font-semibold mb-1">Стадия 8: Генерация заголовков</p>
-                <p class="text-text-muted">StyleReplicator генерирует заголовки и первые абзацы в стиле целевого издания. Каждый заголовок стилизуется под конкретный формат: длина, лексика, тональность соответствуют профилю СМИ.</p>
-            </div>
-            <div class="border-l-4 border-amber-600 pl-3">
-                <p class="font-semibold mb-1">Стадия 9: Quality Gate</p>
-                <p class="text-text-muted">Алгоритмическая проверка (без LLM): факт-чек заголовка по source data, стилевая consistency (длина, лексика, тональность vs. профиль издания). Заголовки ниже порога отбраковываются.</p>
-            </div>
-            <p class="text-xs text-text-muted border-t border-border pt-2">
-                Общее время: 15-40 минут. Стоимость: $5-15 за полный прогноз (зависит от числа событий и режима). 18 агентов, 28 LLM-задач.
-            </p>
-        </div>
-    </details>
 </section>
 
-{# ===== SECTION 5: HORIZON-AWARE FORECASTING ===== #}
+{# ===== SECTION 3: PILLAR 1 — MATHEMATICAL PIPELINE ===== #}
 <section class="mb-12">
-    <h2 class="text-2xl mb-4">Horizon-aware прогнозирование</h2>
-
-    <div class="space-y-4 text-text leading-relaxed max-w-prose mb-6">
-        <p>
-            Не все события одинаково предсказуемы. Завтрашнее заседание парламента
-            предсказать проще, чем последствия через неделю.
-            Система учитывает это, разделяя прогноз на три временных горизонта.
-        </p>
-    </div>
-
-    <div class="overflow-x-auto mb-6">
-        <table class="w-full">
-            <thead>
-                <tr>
-                    <th scope="col">Горизонт</th>
-                    <th scope="col">Вес в оценке</th>
-                    <th scope="col">Характеристика</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr class="hover:bg-surface-1 transition-colors">
-                    <td><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-very-high">1-2 дня</span></td>
-                    <td>Высокий</td>
-                    <td>Оперативный режим. Ближайшие события — больше данных, выше точность. Основная часть прогноза.</td>
-                </tr>
-                <tr class="hover:bg-surface-1 transition-colors">
-                    <td><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-moderate">3-4 дня</span></td>
-                    <td>Средний</td>
-                    <td>Смешанный режим. Сценарии развития + каузальные цепочки.</td>
-                </tr>
-                <tr class="hover:bg-surface-1 transition-colors">
-                    <td><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-low">5-7 дней</span></td>
-                    <td>Низкий</td>
-                    <td>Структурный режим. Опирается на тренды, выше неопределённость.</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1">
-        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
-            Как горизонт влияет на агрегацию?
-        </summary>
-        <div class="space-y-3 pt-2">
-            <p class="text-sm leading-relaxed">
-                Каждый эксперт даёт оценки отдельно по каждому горизонту.
-                Judge агрегирует их с horizon-weighted voting: ближние события получают
-                больший вес, дальние — меньший. Это предотвращает ситуацию, когда
-                спекулятивный прогноз на неделю вытесняет обоснованный прогноз на завтра.
-            </p>
-            <p class="text-sm leading-relaxed">
-                Калибровка по горизонтам: если модель говорит «60% на горизонте 7 дней», это должно
-                означать, что в 60% аналогичных случаев событие действительно происходит.
-                Система отслеживает Brier Score отдельно по каждому горизонту и корректирует веса.
-            </p>
-        </div>
-    </details>
-</section>
-
-
-{# ===== SECTION 6: WISDOM OF THE INFORMED ===== #}
-<section class="mb-12">
-    <h2 class="text-2xl mb-4">Мудрость информированных: сигнал рынков прогнозов</h2>
+    <h2 class="text-2xl mb-4">Столп 1: Математический пайплайн</h2>
 
     <p class="text-text-muted mb-6">
-        Рынки прогнозов (Polymarket, Metaculus) агрегируют мнения тысяч участников.
-        Но рыночная цена — среднее по объёму ставок, а не по качеству прогнозистов.
+        Самый трудоёмкий и уникальный компонент системы. Мы извлекаем сигнал от
+        исторически точных участников Polymarket, отделяя информированное мнение от шума.
+        Это первая опубликованная walk-forward оценка профилей трейдеров Polymarket.
     </p>
 
     <div class="space-y-4 text-text leading-relaxed max-w-prose mb-6">
         <p>
-            Ключевая идея: не все участники рынка одинаково полезны.
-            Среди 1.7 миллионов трейдеров Polymarket есть те, кто систематически делает точные прогнозы,
-            и те, кто ставит случайно или следует за толпой.
-            Мы разделяем их по исторической точности (Brier Score на разрешённых рынках)
-            и строим <strong>informed consensus</strong> — взвешенное мнение только проверенных прогнозистов.
+            Рыночная цена на Polymarket формируется в CLOB (Central Limit Order Book) — непрерывном
+            аукционе, где цена — результат встречи спроса и предложения. <strong>Проблема:</strong>
+            цена взвешена по объёмам ставок, не по точности прогнозов.
+            Крупные спекулянты перевешивают мелких, но точных аналитиков.
+            Маркет-мейкеры выставляют ликвидность, не отражая своих убеждений.
+        </p>
+        <p>
+            <strong>Наше решение:</strong> вместо одной рыночной цены — два сигнала.
+            <strong>Raw market price</strong> — агрегированная цена (как есть).
+            <strong>Informed consensus</strong> — взвешенный консенсус исторически точных участников.
+            Разница между ними (dispersion) — мера неопределённости. Если информированные думают
+            иначе, чем рынок в целом, это ценный сигнал.
         </p>
         <p>
             Результат: из 1.7M участников 348K классифицированы как «информированные» (top 20% по Brier Score).
@@ -491,6 +274,69 @@ flowchart TD
 
     <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1 mt-4">
         <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
+            Числовой пример: как работает informed consensus
+        </summary>
+        <div class="space-y-4 pt-2">
+            <p class="text-sm leading-relaxed">
+                Рынок с \(p_{\mathrm{raw}} = 0.55\), три INFORMED-трейдера:
+            </p>
+            <table class="w-full text-xs">
+                <thead>
+                    <tr>
+                        <th class="text-left border-b border-border p-1">Трейдер</th>
+                        <th class="text-right border-b border-border p-1">BS</th>
+                        <th class="text-right border-b border-border p-1">Позиция</th>
+                        <th class="text-right border-b border-border p-1">Объём $</th>
+                        <th class="text-right border-b border-border p-1">Recency</th>
+                        <th class="text-right border-b border-border p-1">Вес</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="border-b border-border">
+                        <td class="p-1">A</td>
+                        <td class="p-1 text-right">0.10</td>
+                        <td class="p-1 text-right">0.80</td>
+                        <td class="p-1 text-right">100</td>
+                        <td class="p-1 text-right">1.0</td>
+                        <td class="p-1 text-right font-mono">(0.90)(100)(1.0) = 90.0</td>
+                    </tr>
+                    <tr class="border-b border-border">
+                        <td class="p-1">B</td>
+                        <td class="p-1 text-right">0.08</td>
+                        <td class="p-1 text-right">0.75</td>
+                        <td class="p-1 text-right">200</td>
+                        <td class="p-1 text-right">0.8</td>
+                        <td class="p-1 text-right font-mono">(0.92)(200)(0.8) = 147.2</td>
+                    </tr>
+                    <tr>
+                        <td class="p-1">C</td>
+                        <td class="p-1 text-right">0.15</td>
+                        <td class="p-1 text-right">0.70</td>
+                        <td class="p-1 text-right">50</td>
+                        <td class="p-1 text-right">0.9</td>
+                        <td class="p-1 text-right font-mono">(0.85)(50)(0.9) = 38.25</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="bg-surface-0 p-3 rounded border border-border text-sm font-mono">
+                \[p_{\mathrm{inf}}^{\mathrm{raw}} = \frac{(0.80)(90) + (0.75)(147.2) + (0.70)(38.25)}{90 + 147.2 + 38.25} = \frac{209.18}{275.45} \approx 0.759\]
+            </div>
+            <div class="bg-surface-0 p-3 rounded border border-border text-sm font-mono mt-2">
+                \[\text{coverage} = 3/20 = 0.15\]
+            </div>
+            <div class="bg-surface-0 p-3 rounded border border-border text-sm font-mono mt-2">
+                \[p_{\mathrm{inf}} = (0.15)(0.759) + (0.85)(0.55) \approx 0.581\]
+            </div>
+            <p class="text-sm text-text-muted mt-2">
+                <strong>Результат:</strong> рынок даёт 55%, но информированные трейдеры тянут вверх до 58.1%.
+                Coverage низкий (15%), поэтому сигнал сжимается к рыночной цене.
+                При 20+ информированных участниках coverage = 1.0 и влияние было бы полным.
+            </p>
+        </div>
+    </details>
+
+    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1 mt-4">
+        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
             Данные: 470 миллионов ставок
         </summary>
         <div class="space-y-4 pt-2">
@@ -551,7 +397,7 @@ flowchart TD
             <div>
                 <p class="text-sm font-semibold mb-2">Проблема lucky streaks</p>
                 <p class="text-sm text-text-muted mb-2">
-                    Участник с 3 удачными ставками получает BS ≈ 0 и попадает в INFORMED тир.
+                    Участник с 3 удачными ставками пол��чает BS ≈ 0 и попадает в INFORMED тир.
                     Но при n=3 дисперсия BS огромна — это может быть просто удача.
                     Решение: Bayesian shrinkage (Ferro & Fricker, 2012).
                 </p>
@@ -671,9 +517,277 @@ flowchart TD
             </div>
         </div>
     </details>
+
+    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1 mt-4">
+        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
+            Imitation Learning: формальная аналогия
+        </summary>
+        <div class="space-y-4 pt-2">
+            <p class="text-sm leading-relaxed">
+                Consensus-механизм имеет структурную аналогию с <strong>Behaviour Cloning</strong> (BC)
+                из Imitation Learning. Accuracy-weighted consensus — это по сути
+                <strong>Weighted Offline Behaviour Cloning</strong>: мы учимся у лучших трейдеров
+                (экспертных демонстраций), взвешивая их действия по качеству.
+            </p>
+            <div class="bg-surface-0 p-3 rounded border border-border text-sm font-mono">
+                \[\hat{p} = \frac{\sum_i w_i \cdot \pi_i(s)}{\sum_i w_i}, \quad w_i = (1 - \mathrm{BS}_i) \cdot V_i \cdot r_i\]
+            </div>
+            <p class="text-xs text-text-muted mt-2">
+                Это эквивалентно минимизации взвешенного MSE: \(\min_p \sum_i w_i (p - \pi_i(s))^2\),
+                решение которой — именно weighted mean (Genest & Zidek 1986, Cooke 1991).
+                Фреймирование через IL открывает доступ к инструментам из ML-литературы:
+                DAgger для итеративного улучшения, offline RL для оптимальных весов.
+            </p>
+        </div>
+    </details>
 </section>
 
-{# ===== SECTION 6.5: WALK-FORWARD EVALUATION ===== #}
+{# ===== SECTION 4: PILLAR 2 — EXPERT PIPELINE ===== #}
+<section class="mb-12">
+    <h2 class="text-2xl mb-4">Столп 2: Экспертный пайплайн</h2>
+
+    <blockquote class="font-heading italic text-lg border-l-4 border-primary pl-6 my-8 text-text-muted not-italic">
+        Второй столп системы — классический
+        <strong>метод Дельфи</strong>, структурированная техника группового прогнозирования,
+        разработанная RAND Corporation в 1963 году (Dalkey & Helmer),
+        адаптированная для ИИ-агентов.
+    </blockquote>
+
+    <div class="space-y-4 text-text leading-relaxed max-w-prose mb-6">
+        <p>
+            Ключевая идея: один эксперт имеет слепые пятна.
+            Несколько независимых экспертов с разными взглядами дают более калиброванный прогноз.
+        </p>
+        <p>
+            В нашей системе роль экспертов выполняют пять ИИ-агентов на базе Claude Opus 4.6 (Anthropic).
+            Каждый имеет уникальный когнитивный профиль: реалист оценивает базовые ставки и исторические аналогии,
+            геостратег — силовые балансы и интересы, экономист — потоки капитала и санкции,
+            медиа-эксперт — новостную ценность и редакционную логику, адвокат дьявола — пропущенные риски и чёрных лебедей.
+            Разнообразие перспектив минимизирует систематические ошибки одной точки зрения.
+        </p>
+        <p>
+            Процесс состоит из двух раундов прогнозирования. Раунд 1 — агенты независимо анализируют события.
+            Раунд 2 — они видят аргументы друг друга (без знания авторства) и пересматривают оценки.
+            Итоговая вероятность — взвешенная медиана с калибровкой по Brier Score каждого агента.
+        </p>
+    </div>
+
+    <pre class="mermaid mb-6">
+flowchart LR
+    subgraph r1["Раунд 1: независимая оценка"]
+        P1["Реалист"] & P2["Геостратег"] & P3["Экономист"] & P4["Медиа"] & P5["Адвокат<br/>дьявола"]
+    end
+
+    subgraph med["Медиация"]
+        M["Медиатор<br/>синтез + контраргументы"]
+    end
+
+    subgraph r2["Раунд 2: пересмотр"]
+        R1["Реалист'"] & R2["Геостратег'"] & R3["Экономист'"] & R4["Медиа'"] & R5["Адвокат'"]
+    end
+
+    P1 & P2 & P3 & P4 & P5 --> M
+    M --> R1 & R2 & R3 & R4 & R5
+
+    style r1 fill:#ede9fe,stroke:#7c3aed
+    style med fill:#fef3c7,stroke:#d97706
+    style r2 fill:#ede9fe,stroke:#7c3aed
+    </pre>
+
+    <div class="overflow-x-auto mb-6">
+        <table class="w-full">
+            <thead>
+                <tr>
+                    <th class="text-left w-1/4">Эксперт</th>
+                    <th class="text-left">Фокус анализа</th>
+                    <th class="text-left w-1/3">Ключевой вопрос</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="hover:bg-surface-1 transition-colors">
+                    <td class="font-semibold">Реалист-аналитик</td>
+                    <td class="text-text-muted">Базовые ставки, исторические аналогии, политические риски, инерция институтов</td>
+                    <td class="font-heading italic">&laquo;Как часто подобное происходило раньше?&raquo;</td>
+                </tr>
+                <tr class="hover:bg-surface-1 transition-colors">
+                    <td class="font-semibold">Геостратег</td>
+                    <td class="text-text-muted">Силовые балансы, стратегические интересы, альянсы, международные отношения</td>
+                    <td class="font-heading italic">&laquo;Кому выгодно? (Cui bono?)&raquo;</td>
+                </tr>
+                <tr class="hover:bg-surface-1 transition-colors">
+                    <td class="font-semibold">Экономист</td>
+                    <td class="text-text-muted">Потоки капитала, санкции, фискальная политика, товарные рынки</td>
+                    <td class="font-heading italic">&laquo;Следуй за деньгами&raquo;</td>
+                </tr>
+                <tr class="hover:bg-surface-1 transition-colors">
+                    <td class="font-semibold">Медиа-эксперт</td>
+                    <td class="text-text-muted">Новостная ценность, редакционная логика, гейткипинг, медийный насыщенность</td>
+                    <td class="font-heading italic">&laquo;Что попадёт в выпуск?&raquo;</td>
+                </tr>
+                <tr class="hover:bg-surface-1 transition-colors">
+                    <td class="font-semibold">Адвокат дьявола</td>
+                    <td class="text-text-muted">Пропущенные риски, pre-mortem анализ, контраргументы, чёрные лебеди</td>
+                    <td class="font-heading italic">&laquo;Что может пойти не так?&raquo;</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1">
+        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
+            Почему именно эти пять?
+        </summary>
+        <div class="space-y-3 pt-2">
+            <p class="text-sm leading-relaxed">
+                Состав вдохновлён исследованиями Tetlock и его Good Judgment Project (2005–2015).
+                Успешные долгосрочные прогнозисты используют множество источников информации и
+                открыты к альтернативным интерпретациям. Мы формализовали эту процедуру в пять
+                когнитивных стилей, каждый с чётким промптом.
+            </p>
+            <p class="text-sm leading-relaxed">
+                Исследование <strong>AIA Forecaster</strong> (Schoenegger et al., 2024) показало:
+                простое усреднение нескольких запусков одной модели даёт слабое улучшение.
+                Ключ — в <strong>структурированном разнообразии</strong>: когда каждый агент анализирует
+                проблему через свою призму, они ловят разные аспекты и компенсируют слепые пятна друг друга.
+            </p>
+            <p class="text-sm leading-relaxed">
+                <strong>DeLLMphi</strong> (Zhao et al., 2024) подтвердил: структурированная медиация
+                между раундами (не просто показать чужие оценки, а заставить переосмыслить аргументы)
+                даёт улучшение на 10–18%.
+            </p>
+        </div>
+    </details>
+</section>
+
+{# ===== SECTION 5: SYNTHESIS ===== #}
+<section class="mb-12">
+    <h2 class="text-2xl mb-4">Синтез: как Judge объединяет сигналы</h2>
+
+    <p class="text-text-muted mb-6">
+        Результаты обоих столпов — informed probability от Polymarket и экспертные оценки от Дельфи —
+        объединяются в стадии Judge. Итог: ранжированный таймлайн событий с калиброванными вероятностями.
+    </p>
+
+    <pre class="mermaid mb-6">
+flowchart LR
+    subgraph inputs["Входные сигналы"]
+        PM["Informed consensus<br/>Polymarket"]
+        DL["Экспертные оценки<br/>5 персон Дельфи"]
+    end
+
+    subgraph judge["Judge"]
+        MW["Market weight<br/>formula"] --> AGG["Агрегация<br/>вероятностей"]
+        AGG --> CALIB["Калибровка<br/>Platt scaling"]
+    end
+
+    subgraph output["Результат"]
+        TL["Таймлайн<br/>3 горизонта"] --> FR["Фрейминг<br/>стиль издания"]
+        FR --> HL["Заголовки<br/>+ лиды"]
+        HL --> QG["Quality Gate"]
+    end
+
+    PM --> MW
+    DL --> AGG
+    CALIB --> TL
+
+    style inputs fill:#d1fae5,stroke:#059669
+    style judge fill:#fef3c7,stroke:#d97706
+    style output fill:#dbeafe,stroke:#2563eb
+    </pre>
+
+    <div class="space-y-4 text-text leading-relaxed max-w-prose mb-6">
+        <p>
+            Informed probability входит как «виртуальная шестая персона» с динамическим весом,
+            зависящим от ликвидности рынка, волатильности и горизонта:
+        </p>
+    </div>
+
+    <div class="bg-surface-0 p-4 rounded border border-border mb-6">
+        <p class="text-sm font-semibold mb-2">Market weight formula</p>
+        <div class="text-sm font-mono space-y-1">
+            <div>\[w_{\text{market}} = w_0 \times f_{\text{liq}} \times f_{\text{vol}} \times r_{\text{dist}} \times f_{\text{horizon}}\]</div>
+        </div>
+        <table class="w-full text-xs mt-3">
+            <tr class="border-b border-border">
+                <td class="p-1 font-mono">w₀ = 0.15</td>
+                <td class="p-1">Базовый вес (15% от финальной оценки)</td>
+            </tr>
+            <tr class="border-b border-border">
+                <td class="p-1 font-mono">f_liq = max(0.5, min(log₁₀(liq)/6, 1.5))</td>
+                <td class="p-1">Фактор ликвидности: чем больше объём, тем надёжнее</td>
+            </tr>
+            <tr class="border-b border-border">
+                <td class="p-1 font-mono">f_vol = 1/(1 + σ₇ₐ)</td>
+                <td class="p-1">Фактор волатильности: стабильная цена → выше доверие</td>
+            </tr>
+            <tr class="border-b border-border">
+                <td class="p-1 font-mono">r_dist</td>
+                <td class="p-1">Флаг надёжности распределения (0.0 или 1.0)</td>
+            </tr>
+            <tr>
+                <td class="p-1 font-mono">f_horizon</td>
+                <td class="p-1">1.0 (≤90д), 0.75 (90-180д), 0.5 (>180д)</td>
+            </tr>
+        </table>
+    </div>
+
+    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1">
+        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
+            Полный pipeline: 9 стадий прогнозирования
+        </summary>
+        <div class="space-y-4 pt-2 text-sm">
+            <p class="text-text-muted mb-2">
+                Процесс разделён на 9 стадий. Некоторые выполняются параллельно — система
+                запускает до 5 агентов одновременно для ускорения.
+            </p>
+            {# — Фаза 1: Сбор данных (зелёный) — #}
+            <div class="border-l-4 border-green-600 pl-3">
+                <p class="font-semibold mb-1">Стадия 1: Сбор данных</p>
+                <p class="text-text-muted">Четыре коллектора работают параллельно: NewsScout (RSS-фиды + web search), EventCalendar (запланированные политические и экономические события), OutletHistorian (архив целевого издания за последние дни), ForesightCollector (активные контракты Polymarket и Metaculus). Результат: ~200 новостных сигналов.</p>
+            </div>
+            {# — Фаза 2: Анализ (синий) — #}
+            <div class="border-l-4 border-blue-600 pl-3">
+                <p class="font-semibold mb-1">Стадия 2: Кластеризация событий</p>
+                <p class="text-text-muted">TF-IDF векторизация с tri-gram tokenization, cosine similarity matrix, HDBSCAN (min_cluster_size=3). Выбор HDBSCAN вместо K-means: число кластеров заранее неизвестно, шумовые статьи автоматически отсеиваются (Campello et al., 2013). Результат: 15-30 событийных нитей из ~200 статей.</p>
+            </div>
+            <div class="border-l-4 border-blue-600 pl-3">
+                <p class="font-semibold mb-1">Стадия 3: Анализ траекторий</p>
+                <p class="text-text-muted">Три аналитика (геополитический, экономический, медийный) параллельно строят сценарии. Перекрёстная матрица определяет каузальные связи: как событие A влияет на вероятность события B. Это позволяет учитывать цепочки последствий.</p>
+            </div>
+            {# — Фаза 3: Дельфи-консенсус (фиолетовый) — #}
+            <div class="border-l-4 border-purple-600 pl-3">
+                <p class="font-semibold mb-1">Стадия 4: Дельфи — раунд 1</p>
+                <p class="text-text-muted">Пять экспертных персон независимо оценивают вероятность каждого события: Реалист (base rates), Геостратег (баланс сил), Экономист (денежные потоки), Медиа-эксперт (новостная ценность), Адвокат дьявола (чёрные лебеди). Анонимность: персоны не видят оценки друг друга.</p>
+            </div>
+            <div class="border-l-4 border-purple-600 pl-3">
+                <p class="font-semibold mb-1">Стадия 5: Дельфи — раунд 2</p>
+                <p class="text-text-muted">Медиатор не просто показывает чужие оценки — он синтезирует аргументы, выделяет точки разногласий и формулирует контраргументы. Это заставляет персон переосмыслить позиции, а не просто сдвинуться к среднему (Zhao et al., 2024).</p>
+            </div>
+            <div class="border-l-4 border-purple-600 pl-3">
+                <p class="font-semibold mb-1">Стадия 6: Консенсус и таймлайн</p>
+                <p class="text-text-muted">Judge агрегирует оценки в предсказанный таймлайн на трёх горизонтах: 1-2 дня (оперативный режим, высокий вес), 3-4 дня (смешанный режим), 5-7 дней (структурный режим, низкий вес). Калибрует вероятности, интегрирует сигналы prediction markets через market weight formula.</p>
+            </div>
+            {# — Фаза 4: Генерация (янтарный) — #}
+            <div class="border-l-4 border-amber-600 pl-3">
+                <p class="font-semibold mb-1">Стадия 7: Фрейминг</p>
+                <p class="text-text-muted">Анализ редакционного стиля целевого издания: жанр, типичная длина заголовков, лексика, тональность, характерные углы подачи. Для каждого события определяется фрейм: угроза, возможность, кризис, рутина или сенсация.</p>
+            </div>
+            <div class="border-l-4 border-amber-600 pl-3">
+                <p class="font-semibold mb-1">Стадия 8: Генерация заголовков</p>
+                <p class="text-text-muted">StyleReplicator генерирует заголовки и первые абзацы в стиле целевого издания. Каждый заголовок стилизуется под конкретный формат: длина, лексика, тональность соответствуют профилю СМИ.</p>
+            </div>
+            <div class="border-l-4 border-amber-600 pl-3">
+                <p class="font-semibold mb-1">Стадия 9: Quality Gate</p>
+                <p class="text-text-muted">Алгоритмическая проверка (без LLM): факт-чек заголовка по source data, стилевая consistency (длина, лексика, тональность vs. профиль издания). Заголовки ниже порога отбраковываются.</p>
+            </div>
+            <p class="text-xs text-text-muted border-t border-border pt-2">
+                Общее время: 15-40 минут. Стоимость: $5-15 за полный прогноз (зависит от числа событий и режима). 18 агентов, 28 LLM-задач.
+            </p>
+        </div>
+    </details>
+</section>
+
+{# ===== SECTION 6: WALK-FORWARD VALIDATION ===== #}
 <section class="mb-12">
     <h2 class="text-2xl mb-4">Walk-Forward валидация</h2>
 
@@ -957,7 +1071,68 @@ flowchart TD
     </details>
 </section>
 
-{# ===== SECTION 7: EVALUATION & METRICS ===== #}
+{# ===== SECTION 7: HORIZON-AWARE FORECASTING ===== #}
+<section class="mb-12">
+    <h2 class="text-2xl mb-4">Horizon-aware прогнозирование</h2>
+
+    <div class="space-y-4 text-text leading-relaxed max-w-prose mb-6">
+        <p>
+            Не все события одинаково предсказуемы. Завтрашнее заседание парламента
+            предсказать проще, чем последствия через неделю.
+            Система учитывает это, разделяя прогноз на три временных горизонта.
+        </p>
+    </div>
+
+    <div class="overflow-x-auto mb-6">
+        <table class="w-full">
+            <thead>
+                <tr>
+                    <th scope="col">Горизонт</th>
+                    <th scope="col">Вес в оценке</th>
+                    <th scope="col">Характеристика</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="hover:bg-surface-1 transition-colors">
+                    <td><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-very-high">1-2 дня</span></td>
+                    <td>Высокий</td>
+                    <td>Оперативный режим. Ближайшие события — больше данных, выше точность. Основная часть прогноза.</td>
+                </tr>
+                <tr class="hover:bg-surface-1 transition-colors">
+                    <td><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-moderate">3-4 дня</span></td>
+                    <td>Средний</td>
+                    <td>Смешанный режим. Сценарии развития + каузальные цепочки.</td>
+                </tr>
+                <tr class="hover:bg-surface-1 transition-colors">
+                    <td><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold text-white bg-confidence-low">5-7 дней</span></td>
+                    <td>Низкий</td>
+                    <td>Структурный режим. Опирается на тренды, выше неопределённость.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <details class="space-y-3 border border-border rounded-lg p-4 bg-surface-1">
+        <summary class="cursor-pointer font-semibold text-lg text-primary hover:underline">
+            Как горизонт влияет на агрегацию?
+        </summary>
+        <div class="space-y-3 pt-2">
+            <p class="text-sm leading-relaxed">
+                Каждый эксперт даёт оценки отдельно по каждому горизонту.
+                Judge агрегирует их с horizon-weighted voting: ближние события получают
+                больший вес, дальние — меньший. Это предотвращает ситуацию, когда
+                спекулятивный прогноз на неделю вытесняет обоснованный прогноз на завтра.
+            </p>
+            <p class="text-sm leading-relaxed">
+                Калибровка по горизонтам: если модель говорит «60% на горизонте 7 дней», это должно
+                означать, что в 60% аналогичных случаев событие действительно происходит.
+                Система отслеживает Brier Score отдельно по каждому горизонту и корректирует веса.
+            </p>
+        </div>
+    </details>
+</section>
+
+{# ===== SECTION 8: EVALUATION & METRICS ===== #}
 <section class="mb-12">
     <h2 class="text-2xl mb-4">Валидация и метрики</h2>
 
@@ -1133,7 +1308,7 @@ flowchart TD
     </details>
 </section>
 
-{# ===== SECTION 8: TECH STACK ===== #}
+{# ===== SECTION 9: TECH STACK ===== #}
 <section class="mb-12">
     <h2 class="text-2xl mb-4">Технологический стек</h2>
 
@@ -1249,7 +1424,7 @@ graph TB
     </details>
 </section>
 
-{# ===== SECTION 9: BIBLIOGRAPHY ===== #}
+{# ===== SECTION 10: BIBLIOGRAPHY ===== #}
 <section class="mb-12">
     <h2 class="text-2xl mb-4">Источники и литература</h2>
 
@@ -1329,10 +1504,18 @@ graph TB
                 <li>Clinton & Huang (2024). &laquo;Polymarket Accuracy Study.&raquo; Vanderbilt University.</li>
             </ul>
         </div>
+
+        <div>
+            <strong>Imitation Learning и opinion pooling:</strong>
+            <ul class="list-disc pl-6 text-text-muted space-y-1 mt-1">
+                <li>Genest & Zidek (1986). &laquo;Combining Probability Distributions: A Critique and an Annotated Bibliography.&raquo; Statistical Science.</li>
+                <li>Cooke (1991). &laquo;Experts in Uncertainty.&raquo; Oxford University Press.</li>
+            </ul>
+        </div>
     </div>
 </section>
 
-{# ===== SECTION 10: DISCLAIMER ===== #}
+{# ===== SECTION 11: DISCLAIMER ===== #}
 <section class="mb-12">
     <h2 class="text-2xl mb-4">Замечание</h2>
 
