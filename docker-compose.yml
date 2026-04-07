@@ -136,7 +136,9 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro
       - ./nginx/faun-security-headers.conf:/etc/nginx/conf.d/faun-security-headers.conf:ro
-      - ./nginx/moskino-security-headers.conf:/etc/nginx/conf.d/moskino-security-headers.conf:ro
+      # No moskino-security-headers.conf — Outline sends its own
+      # (nonce-based, via helmet), adding ours here produced duplicate
+      # CSP headers and broke Outline's loader.
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./src/web/static:/var/www/static:ro
       - docs_data:/var/www/docs:ro
