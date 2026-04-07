@@ -24,10 +24,36 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            # Fail fast on any command error. Previously the script ran
+            # without `set -e`, so a silent `git pull` failure (e.g. a
+            # dirty working tree) would let the rest of the script
+            # continue and rebuild containers from the stale checkout —
+            # no actual deploy happened, and nobody noticed until the
+            # unrelated curl at the end finally tripped exit 1.
+            set -euo pipefail
+
             cd ~/apps/delphi-press
-            git pull origin main
+
+            # --ff-only refuses to merge or rebase; if someone has
+            # modified files on the VPS out-of-band, this hard-errors
+            # instead of silently leaving a merge mess. When it fails,
+            # the operator must reconcile via `git stash` (or by
+            # committing the local edits and pushing), then re-run.
+            git pull --ff-only origin main
+
             docker compose down
             docker compose build
             docker compose up -d
-            sleep 10
-            curl -f http://localhost:8000/api/v1/health || exit 1
+
+            # Give the app enough time to finish sequelize migrations
+            # and nginx enough time to re-resolve upstreams.
+            sleep 15
+
+            # Health-check through the real public path (nginx -> app).
+            # The previous check targeted http://localhost:8000/ which
+            # does not work: the app container only `expose:`s 8000
+            # internally, it does not publish it to the host, so curl
+            # was always failing with "connection refused" and the
+            # Deploy workflow was marked failed even when the deploy
+            # itself had succeeded.
+            curl -fsS --max-time 10 https://delphi.antopkin.ru/api/v1/health
