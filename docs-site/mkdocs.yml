@@ -112,6 +112,7 @@ nav:
     - База данных: infrastructure/database.md
     - Безопасность: infrastructure/security.md
     - Конфигурация: infrastructure/config.md
+    - Reverse proxy: infrastructure/reverse-proxy.md
     - Скрипты: infrastructure/scripts.md
   - Приложения:
     - Data Flow: appendix/data-flow.md
