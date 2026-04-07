@@ -124,9 +124,15 @@ services:
         condition: service_healthy
     networks:
       - frontend
+      # Shared network with additional backends hosted on the same VPS
+      # (e.g. outline-moskino for moskino-workshops.antopkin.ru). Created
+      # externally via `docker network create outline-net`.
+      - outline-net
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro
+      # Additional server blocks for multi-tenant subdomains (Outline, etc.)
+      - ./nginx/servers:/etc/nginx/servers:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./src/web/static:/var/www/static:ro
       - docs_data:/var/www/docs:ro
@@ -152,3 +158,5 @@ networks:
     internal: true
   frontend:
     driver: bridge
+  outline-net:
+    external: true
