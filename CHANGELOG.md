@@ -4,6 +4,14 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [Unreleased] - 2026-04-09
+
+### Changed
+
+- **`app` container memory limit: 768 MB → 1024 MB.** **Почему:** в production `docker stats` стабильно показывал контейнер `delphi-press-app-1` на 700+ MiB в idle-режиме (>90% от старого лимита). Одна вспышка трафика или один длинный прогон Дельфи-цепочки мог вызвать OOM-kill процесса FastAPI, обрыв SSE-стрима и падение пайплайна предсказания на середине. Проблема была обнаружена во время bootstrap-сессии соседнего проекта `moskino_site` на том же VPS (cross-project discovery: при разворачивании Outline для команды Москино мы сверили память всех контейнеров на хосте и увидели, что `delphi-press-app-1` сидит критически близко к лимиту). Добавление 256 MiB headroom оставляет VPS с комфортным запасом после всех сожителей: outline-moskino stack (~2.5 GB), faun (200 MB), afisha-bot (130 MB), redis (384 MB), nginx (128 MB) — см. обновлённую таблицу распределения памяти в `docs-site/docs/infrastructure/config.md`. Rollback: одна строка в `docker-compose.yml`, CI передеплоит за ~30 секунд.
+
+---
+
 ## [0.9.7] - 2026-04-06
 
 ### Added

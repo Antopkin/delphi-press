@@ -287,7 +287,33 @@ app:
 **Лимиты ресурсов:**
 
 - CPU: 1.5 cores (20% от 8 vCPU сервера)
-- RAM: 768 MB
+- RAM: **1024 MB** (было 768 MB до 2026-04-09)
+
+!!! info "Почему 1024M, а не 768M"
+    До 2026-04-09 у `app` был лимит 768M, но в production-`docker stats`
+    контейнер стабильно держался на 700+ MiB (>90% лимита) в idle-режиме,
+    то есть одна вспышка трафика или один длинный прогон Delphi-цепочки
+    мог вызвать OOM-kill от ядра. Лимит подняли до 1024M. Общий бюджет
+    памяти VPS (~7.8 GiB) после этого остаётся с комфортным запасом даже
+    с учётом параллельно живущих на том же хосте стеков:
+
+    | Контейнер | Лимит | Наблюдаемый usage |
+    |---|---|---|
+    | `delphi-press-app` | 1024 MB | ~700 MiB |
+    | `delphi-press-worker` | 512 MB | ~90 MiB |
+    | `delphi-press-redis` | 384 MB | ~10 MiB |
+    | `delphi-press-nginx` | 128 MB | ~8 MiB |
+    | `outline-moskino` | 1536 MB | ~450 MiB |
+    | `outline-moskino-postgres` | 768 MB | ~80 MiB |
+    | `outline-moskino-redis` | 256 MB | ~10 MiB |
+    | `faun-cloud-1` | 256 MB | ~70 MiB |
+    | `faun-edge-1` | 256 MB | ~100 MiB |
+    | `faun-lora_gateway-1` | 128 MB | ~30 MiB |
+    | `afisha-bot-bot-1` | 256 MB | ~60 MiB |
+    | `afisha-bot-parser-1` | 256 MB | ~70 MiB |
+    | **Суммарный лимит** | **~5.8 GiB** | **~1.7 GiB** |
+
+    Пятый-шестой GiB RAM остаётся системе и file-cache.
 
 **Health check:**
 ```bash
