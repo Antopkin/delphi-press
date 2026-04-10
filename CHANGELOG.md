@@ -4,11 +4,13 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
-## [Unreleased] - 2026-04-09
+## [Unreleased] - 2026-04-10
 
 ### Changed
 
-- **`app` container memory limit: 768 MB → 1024 MB.** **Почему:** в production `docker stats` стабильно показывал контейнер `delphi-press-app-1` на 700+ MiB в idle-режиме (>90% от старого лимита). Одна вспышка трафика или один длинный прогон Дельфи-цепочки мог вызвать OOM-kill процесса FastAPI, обрыв SSE-стрима и падение пайплайна предсказания на середине. Проблема была обнаружена во время bootstrap-сессии соседнего проекта `moskino_site` на том же VPS (cross-project discovery: при разворачивании Outline для команды Москино мы сверили память всех контейнеров на хосте и увидели, что `delphi-press-app-1` сидит критически близко к лимиту). Добавление 256 MiB headroom оставляет VPS с комфортным запасом после всех сожителей: outline-moskino stack (~2.5 GB), faun (200 MB), afisha-bot (130 MB), redis (384 MB), nginx (128 MB) — см. обновлённую таблицу распределения памяти в `docs-site/docs/infrastructure/config.md`. Rollback: одна строка в `docker-compose.yml`, CI передеплоит за ~30 секунд.
+- **CompactProfileStore: app memory ~928 MiB → ~250 MiB.** **Почему:** app-контейнер стабильно сидел на 928 MiB / 1024 MiB (90.6%) — в любой момент мог быть OOM-killed. Корневая причина: при старте приложения 348K `BettorProfile` Pydantic-объектов (10 полей каждый, ~1254 bytes) загружались целиком из Parquet в `dict`, занимая ~500 MiB. При этом runtime (`compute_informed_signal`, `/markets`) использует только 3 поля: `tier`, `brier_score`, `recency_weight`. Решение: `CompactProfile` — `dataclass(frozen=True, slots=True)` из 3 полей (~213 bytes/объект), `CompactProfileStore` — duck-type-совместимая обёртка, `load_profiles_compact()` — загрузка с pyarrow column projection (читает 3 колонки из 10). Worker продолжает использовать полный `load_profiles()` в отдельном контейнере. Лимит 1024M оставлен как запас (~750 MiB headroom).
+
+- **`app` container memory limit: 768 MB → 1024 MB** (2026-04-09). **Почему:** до оптимизации `docker stats` показывал 700+ MiB idle. Теперь лимит сохранён как headroom после CompactProfileStore.
 
 ---
 

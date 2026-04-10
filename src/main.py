@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Load bettor profiles for /markets dashboard (optional — graceful degradation)
     market_service = None
     try:
-        from src.inverse.store import DEFAULT_PROFILES_PATH, load_profiles
+        from src.inverse.store import DEFAULT_PROFILES_PATH, load_profiles_compact
         from src.web.market_service import MarketSignalService
 
         # Try Parquet first, then JSON fallback
@@ -87,9 +87,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             profiles_path = profiles_path.with_suffix(".json")
 
         if profiles_path.exists():
-            profiles, profile_summary = load_profiles(profiles_path, tier_filter="informed")
+            profiles, profile_summary = load_profiles_compact(
+                profiles_path, tier_filter="informed"
+            )
             market_service = MarketSignalService(profiles, profile_summary)
-            logger.info("Loaded %d informed profiles for /markets", len(profiles))
+            logger.info("Loaded %d compact profiles for /markets", len(profiles))
         else:
             logger.info("No bettor profiles found, /markets will show empty state")
     except Exception:
