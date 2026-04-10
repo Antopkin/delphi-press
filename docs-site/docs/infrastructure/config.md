@@ -289,17 +289,16 @@ app:
 - CPU: 1.5 cores (20% от 8 vCPU сервера)
 - RAM: **1024 MB** (было 768 MB до 2026-04-09)
 
-!!! info "Почему 1024M, а не 768M"
-    До 2026-04-09 у `app` был лимит 768M, но в production-`docker stats`
-    контейнер стабильно держался на 700+ MiB (>90% лимита) в idle-режиме,
-    то есть одна вспышка трафика или один длинный прогон Delphi-цепочки
-    мог вызвать OOM-kill от ядра. Лимит подняли до 1024M. Общий бюджет
-    памяти VPS (~7.8 GiB) после этого остаётся с комфортным запасом даже
-    с учётом параллельно живущих на том же хосте стеков:
+!!! info "Почему 1024M при ~250 MiB usage"
+    До 2026-04-10 app-контейнер потреблял ~928 MiB (90.6% от лимита 1024M)
+    из-за загрузки 348K полных `BettorProfile` Pydantic-объектов (~500 MiB).
+    Оптимизация `CompactProfileStore` (slots dataclass, 3 поля вместо 10,
+    pyarrow column projection) снизила потребление до ~250 MiB.
+    Лимит 1024M сохранён как generous headroom (~750 MiB запаса).
 
     | Контейнер | Лимит | Наблюдаемый usage |
     |---|---|---|
-    | `delphi-press-app` | 1024 MB | ~700 MiB |
+    | `delphi-press-app` | 1024 MB | ~250 MiB (после CompactProfileStore) |
     | `delphi-press-worker` | 512 MB | ~90 MiB |
     | `delphi-press-redis` | 384 MB | ~10 MiB |
     | `delphi-press-nginx` | 128 MB | ~8 MiB |
@@ -311,9 +310,9 @@ app:
     | `faun-lora_gateway-1` | 128 MB | ~30 MiB |
     | `afisha-bot-bot-1` | 256 MB | ~60 MiB |
     | `afisha-bot-parser-1` | 256 MB | ~70 MiB |
-    | **Суммарный лимит** | **~5.8 GiB** | **~1.7 GiB** |
+    | **Суммарный лимит** | **~5.8 GiB** | **~1.3 GiB** |
 
-    Пятый-шестой GiB RAM остаётся системе и file-cache.
+    Шестой-седьмой GiB RAM остаётся системе и file-cache.
 
 **Health check:**
 ```bash

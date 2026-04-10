@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import ItemsView, KeysView, ValuesView
+from dataclasses import dataclass
 from pathlib import Path
 
 from src.inverse.schemas import BettorProfile, BettorTier, ProfileSummary
@@ -24,9 +26,70 @@ from src.inverse.schemas import BettorProfile, BettorTier, ProfileSummary
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "CompactProfile",
+    "CompactProfileStore",
     "load_profiles",
+    "load_profiles_compact",
     "save_profiles",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Compact profile store (~70 MiB instead of ~500 MiB for 348K profiles)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class CompactProfile:
+    """Minimal profile data for signal computation.
+
+    Stores only the 3 fields accessed at runtime by compute_informed_signal():
+    tier, brier_score, recency_weight. Uses slots for ~83% memory reduction
+    vs full BettorProfile Pydantic model (213 vs 1,254 bytes per object).
+    """
+
+    brier_score: float
+    recency_weight: float
+    tier: BettorTier = BettorTier.INFORMED
+
+
+class CompactProfileStore:
+    """Memory-efficient profile store for the web app.
+
+    Drop-in replacement for dict[str, BettorProfile] in read paths:
+    supports .get(), [], in, len(), .keys(), .values(), .items().
+
+    Used by MarketSignalService and compute_informed_signal() at runtime.
+    The full BettorProfile dict is still used by the worker for offline tasks.
+    """
+
+    def __init__(self, profiles: dict[str, CompactProfile]) -> None:
+        self._profiles = profiles
+
+    def get(self, user_id: str, default: CompactProfile | None = None) -> CompactProfile | None:
+        return self._profiles.get(user_id, default)
+
+    def __contains__(self, user_id: str) -> bool:
+        return user_id in self._profiles
+
+    def __getitem__(self, user_id: str) -> CompactProfile:
+        return self._profiles[user_id]
+
+    def __len__(self) -> int:
+        return len(self._profiles)
+
+    def __bool__(self) -> bool:
+        return bool(self._profiles)
+
+    def keys(self) -> KeysView[str]:
+        return self._profiles.keys()
+
+    def values(self) -> ValuesView[CompactProfile]:
+        return self._profiles.values()
+
+    def items(self) -> ItemsView[str, CompactProfile]:
+        return self._profiles.items()
+
 
 # ---------------------------------------------------------------------------
 # Default path
@@ -99,6 +162,37 @@ def load_profiles(
     if path.suffix == ".parquet":
         return _load_parquet(path, tier_filter=tier_filter)
     return _load_json(path, tier_filter=tier_filter)
+
+
+def load_profiles_compact(
+    path: Path = DEFAULT_PROFILES_PATH,
+    *,
+    tier_filter: str | None = "informed",
+) -> tuple[CompactProfileStore, ProfileSummary]:
+    """Load profiles in compact form — only brier_score, recency_weight, tier.
+
+    Memory-efficient alternative to load_profiles() for the web app.
+    Uses ~70 MiB instead of ~500 MiB for 348K profiles (column projection
+    + slots dataclass instead of full Pydantic model).
+
+    Args:
+        path: Path to the profiles file (.parquet or .json).
+        tier_filter: Only return profiles with this tier value.
+
+    Returns:
+        Tuple of (CompactProfileStore, ProfileSummary).
+
+    Raises:
+        FileNotFoundError: If profiles haven't been built yet.
+    """
+    path = Path(path)
+    if not path.exists():
+        msg = f"Profile store not found: {path}. Run scripts/build_bettor_profiles.py first."
+        raise FileNotFoundError(msg)
+
+    if path.suffix == ".parquet":
+        return _load_parquet_compact(path, tier_filter=tier_filter)
+    return _load_json_compact(path, tier_filter=tier_filter)
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +304,99 @@ def _load_summary_sidecar(
     )
 
 
+def _load_parquet_compact(
+    path: Path,
+    *,
+    tier_filter: str | None,
+) -> tuple[CompactProfileStore, ProfileSummary]:
+    """Load profiles from Parquet with column projection (memory-efficient).
+
+    Reads only user_id + brier_score + recency_weight columns, skipping
+    the 7 unused columns entirely. Builds CompactProfile dataclass objects
+    instead of full BettorProfile Pydantic models.
+    """
+    import pyarrow.parquet as pq
+
+    filters = None
+    if tier_filter is not None:
+        filters = [("tier", "=", tier_filter)]
+
+    # Column projection: read only the 3 columns we need.
+    # Empty Parquet files (0 profiles) have no columns — read without projection.
+    metadata = pq.read_metadata(path)
+    if metadata.num_rows == 0:
+        summary_path = _summary_sidecar_path(path)
+        if summary_path.exists():
+            data = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary = ProfileSummary(**data)
+        else:
+            summary = ProfileSummary(
+                total_users=0,
+                profiled_users=0,
+                informed_count=0,
+                moderate_count=0,
+                noise_count=0,
+                median_brier=0.0,
+                p10_brier=0.0,
+                p90_brier=0.0,
+            )
+        return CompactProfileStore({}), summary
+
+    table = pq.read_table(
+        path,
+        filters=filters,
+        columns=["user_id", "brier_score", "recency_weight"],
+    )
+
+    user_ids = table.column("user_id").to_pylist()
+    brier_scores = table.column("brier_score").to_pylist()
+    recency_weights = table.column("recency_weight").to_pylist()
+
+    del table  # Release pyarrow memory immediately
+
+    tier = BettorTier(tier_filter) if tier_filter is not None else BettorTier.INFORMED
+    profiles = {
+        uid.lower(): CompactProfile(
+            brier_score=bs,
+            recency_weight=rw,
+            tier=tier,
+        )
+        for uid, bs, rw in zip(user_ids, brier_scores, recency_weights)
+    }
+
+    del user_ids, brier_scores, recency_weights
+
+    # Load summary from sidecar JSON only (no fallback reconstruction)
+    summary_path = _summary_sidecar_path(path)
+    if summary_path.exists():
+        data = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary = ProfileSummary(**data)
+    else:
+        logger.warning(
+            "Summary sidecar %s not found; /markets stats will show zeros",
+            summary_path,
+        )
+        summary = ProfileSummary(
+            total_users=0,
+            profiled_users=0,
+            informed_count=0,
+            moderate_count=0,
+            noise_count=0,
+            median_brier=0.0,
+            p10_brier=0.0,
+            p90_brier=0.0,
+        )
+
+    store = CompactProfileStore(profiles)
+    logger.info(
+        "Loaded %d compact profiles from %s (tier_filter=%s)",
+        len(store),
+        path,
+        tier_filter,
+    )
+    return store, summary
+
+
 # ---------------------------------------------------------------------------
 # JSON implementation (legacy)
 # ---------------------------------------------------------------------------
@@ -252,3 +439,33 @@ def _load_json(
         tier_filter,
     )
     return profiles, summary
+
+
+def _load_json_compact(
+    path: Path,
+    *,
+    tier_filter: str | None,
+) -> tuple[CompactProfileStore, ProfileSummary]:
+    """Load profiles from JSON in compact form (memory-efficient)."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+
+    summary = ProfileSummary(**data["summary"])
+    tier = BettorTier(tier_filter) if tier_filter is not None else BettorTier.INFORMED
+    profiles: dict[str, CompactProfile] = {}
+    for raw in data["profiles"]:
+        if tier_filter is not None and raw.get("tier") != tier_filter:
+            continue
+        profiles[raw["user_id"].lower()] = CompactProfile(
+            brier_score=raw["brier_score"],
+            recency_weight=raw.get("recency_weight", 1.0),
+            tier=tier,
+        )
+
+    store = CompactProfileStore(profiles)
+    logger.info(
+        "Loaded %d compact profiles from %s (tier_filter=%s)",
+        len(store),
+        path,
+        tier_filter,
+    )
+    return store, summary

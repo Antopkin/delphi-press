@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 
 from src.inverse.schemas import BettorProfile, BettorTier, ProfileSummary
-from src.inverse.store import load_profiles, save_profiles
+from src.inverse.store import (
+    CompactProfile,
+    CompactProfileStore,
+    load_profiles,
+    load_profiles_compact,
+    save_profiles,
+)
 
 
 @pytest.fixture()
@@ -299,3 +305,191 @@ class TestParquetRoundTrip:
         assert len(loaded) == 3
         assert loaded_summary.profiled_users == 3
         assert loaded_summary.informed_count == 1
+
+
+# -----------------------------------------------------------------------
+# CompactProfileStore unit tests
+# -----------------------------------------------------------------------
+
+
+class TestCompactProfileStore:
+    def test_basic_operations(self) -> None:
+        profiles = {
+            "0xaaa": CompactProfile(brier_score=0.08, recency_weight=0.95),
+            "0xbbb": CompactProfile(brier_score=0.22, recency_weight=0.88),
+        }
+        store = CompactProfileStore(profiles)
+
+        assert len(store) == 2
+        assert bool(store) is True
+        assert "0xaaa" in store
+        assert "0xzzz" not in store
+
+    def test_get_and_getitem(self) -> None:
+        store = CompactProfileStore(
+            {
+                "0xaaa": CompactProfile(brier_score=0.08, recency_weight=0.95),
+            }
+        )
+
+        p = store.get("0xaaa")
+        assert p is not None
+        assert p.brier_score == 0.08
+        assert p.recency_weight == 0.95
+        assert p.tier == BettorTier.INFORMED
+
+        assert store["0xaaa"] is p
+        assert store.get("nonexistent") is None
+
+    def test_getitem_raises_keyerror(self) -> None:
+        store = CompactProfileStore({})
+        with pytest.raises(KeyError):
+            _ = store["missing"]
+
+    def test_keys_values_items(self) -> None:
+        profiles = {
+            "0xaaa": CompactProfile(brier_score=0.08, recency_weight=0.95),
+            "0xbbb": CompactProfile(brier_score=0.22, recency_weight=0.88),
+        }
+        store = CompactProfileStore(profiles)
+
+        assert set(store.keys()) == {"0xaaa", "0xbbb"}
+        assert len(list(store.values())) == 2
+        assert len(list(store.items())) == 2
+
+    def test_empty_store(self) -> None:
+        store = CompactProfileStore({})
+        assert len(store) == 0
+        assert bool(store) is False
+        assert store.get("anything") is None
+
+    def test_compact_profile_default_tier(self) -> None:
+        p = CompactProfile(brier_score=0.1, recency_weight=0.9)
+        assert p.tier == BettorTier.INFORMED
+
+    def test_compact_profile_frozen(self) -> None:
+        p = CompactProfile(brier_score=0.1, recency_weight=0.9)
+        with pytest.raises(AttributeError):
+            p.brier_score = 0.5  # type: ignore[misc]
+
+
+# -----------------------------------------------------------------------
+# Compact loading — Parquet
+# -----------------------------------------------------------------------
+
+
+class TestParquetCompactLoad:
+    def test_compact_load_parquet(self, tmp_path: Path, sample_data: tuple) -> None:
+        profiles, summary = sample_data
+        path = tmp_path / "profiles.parquet"
+        save_profiles(profiles, summary, path)
+
+        store, loaded_summary = load_profiles_compact(path, tier_filter="informed")
+        assert hasattr(store, "get") and hasattr(store, "keys")
+        assert len(store) == 1
+        assert "0xaaa" in store
+        assert loaded_summary.profiled_users == 3
+
+    def test_compact_profile_data(self, tmp_path: Path, sample_data: tuple) -> None:
+        profiles, summary = sample_data
+        path = tmp_path / "profiles.parquet"
+        save_profiles(profiles, summary, path)
+
+        store, _ = load_profiles_compact(path, tier_filter="informed")
+        p = store["0xaaa"]
+        assert abs(p.brier_score - 0.08) < 1e-6
+        assert abs(p.recency_weight - 0.95) < 1e-6
+        assert p.tier == BettorTier.INFORMED
+
+    def test_compact_load_all_tiers(self, tmp_path: Path, sample_data: tuple) -> None:
+        profiles, summary = sample_data
+        path = tmp_path / "profiles.parquet"
+        save_profiles(profiles, summary, path)
+
+        store, _ = load_profiles_compact(path, tier_filter=None)
+        assert len(store) == 3
+        assert "0xaaa" in store
+        assert "0xbbb" in store
+        assert "0xccc" in store
+
+    def test_compact_keys_lowercase(self, tmp_path: Path, sample_data: tuple) -> None:
+        profiles, summary = sample_data
+        path = tmp_path / "profiles.parquet"
+        save_profiles(profiles, summary, path)
+
+        store, _ = load_profiles_compact(path, tier_filter=None)
+        assert set(store.keys()) == {"0xaaa", "0xbbb", "0xccc"}
+
+    def test_compact_load_nonexistent_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError, match="Profile store not found"):
+            load_profiles_compact(tmp_path / "nonexistent.parquet")
+
+    def test_compact_empty_profiles(self, tmp_path: Path) -> None:
+        summary = ProfileSummary(
+            total_users=0,
+            profiled_users=0,
+            informed_count=0,
+            moderate_count=0,
+            noise_count=0,
+            median_brier=0.0,
+            p10_brier=0.0,
+            p90_brier=0.0,
+        )
+        path = tmp_path / "empty.parquet"
+        save_profiles([], summary, path)
+
+        store, loaded_summary = load_profiles_compact(path, tier_filter=None)
+        assert len(store) == 0
+        assert loaded_summary.profiled_users == 0
+
+    def test_compact_sidecar_missing_returns_zero_summary(
+        self, tmp_path: Path, sample_data: tuple
+    ) -> None:
+        profiles, summary = sample_data
+        path = tmp_path / "profiles.parquet"
+        save_profiles(profiles, summary, path)
+
+        # Delete sidecar
+        sidecar = tmp_path / "profiles_summary.json"
+        sidecar.unlink()
+
+        store, loaded_summary = load_profiles_compact(path, tier_filter="informed")
+        assert len(store) == 1
+        assert loaded_summary.total_users == 0  # Zero summary fallback
+
+
+# -----------------------------------------------------------------------
+# Compact loading — JSON
+# -----------------------------------------------------------------------
+
+
+class TestJsonCompactLoad:
+    def test_compact_load_json(self, tmp_path: Path, sample_data: tuple) -> None:
+        profiles, summary = sample_data
+        path = tmp_path / "profiles.json"
+        save_profiles(profiles, summary, path)
+
+        store, loaded_summary = load_profiles_compact(path, tier_filter="informed")
+        assert hasattr(store, "get") and hasattr(store, "keys")
+        assert len(store) == 1
+        assert "0xaaa" in store
+        assert loaded_summary.profiled_users == 3
+
+    def test_compact_json_data(self, tmp_path: Path, sample_data: tuple) -> None:
+        profiles, summary = sample_data
+        path = tmp_path / "profiles.json"
+        save_profiles(profiles, summary, path)
+
+        store, _ = load_profiles_compact(path, tier_filter="informed")
+        p = store["0xaaa"]
+        assert p.brier_score == 0.08
+        assert p.recency_weight == 0.95
+        assert p.tier == BettorTier.INFORMED
+
+    def test_compact_json_all_tiers(self, tmp_path: Path, sample_data: tuple) -> None:
+        profiles, summary = sample_data
+        path = tmp_path / "profiles.json"
+        save_profiles(profiles, summary, path)
+
+        store, _ = load_profiles_compact(path, tier_filter=None)
+        assert len(store) == 3

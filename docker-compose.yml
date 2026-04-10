@@ -67,16 +67,11 @@ services:
       resources:
         limits:
           cpus: "1.5"
-          # Bumped from 768M → 1024M on 2026-04-09.
-          # `docker stats` consistently showed the app container sitting
-          # at 700+ MiB (>90% of the old limit) during normal idle —
-          # one traffic spike or one long prediction run away from an
-          # OOM kill. Total VPS RAM is ~7.8 GiB; raising this by 256 MiB
-          # still leaves comfortable headroom after the outline-moskino
-          # stack (1.5 GiB outline + 768 MiB postgres + 256 MiB redis),
-          # faun (200 MiB), afisha-bot (130 MiB), redis (384 MiB), and
-          # nginx (128 MiB). First noticed during the moskino_site
-          # bootstrap session — see docs-site/docs/infrastructure/config.md.
+          # 1024M kept as generous headroom after CompactProfileStore
+          # optimization (2026-04-10): replaced dict[str, BettorProfile]
+          # (~500 MiB for 348K Pydantic objects) with slots dataclass
+          # store (~70 MiB). Observed idle dropped from ~928 MiB to ~250 MiB.
+          # See docs-site/docs/infrastructure/config.md.
           memory: 1024M
     logging:
       driver: json-file

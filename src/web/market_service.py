@@ -21,6 +21,7 @@ import time
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.inverse.schemas import BettorProfile, InformedSignal, ProfileSummary
+from src.inverse.store import CompactProfileStore
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ class MarketSignalService:
 
     def __init__(
         self,
-        profiles: dict[str, BettorProfile],
+        profiles: CompactProfileStore | dict[str, BettorProfile],
         summary: ProfileSummary,
     ) -> None:
         self.profiles = profiles
