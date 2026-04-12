@@ -214,7 +214,7 @@ class ClaudeCodeProvider(LLMProvider):
         "anthropic/claude-sonnet-4.5": "claude-sonnet-4-5",
     }
 
-    def __init__(self, *, max_concurrency: int = 3) -> None:
+    def __init__(self, *, max_concurrency: int = 1) -> None:
         if not _HAS_CLAUDE_SDK:
             msg = "claude-agent-sdk required. Install: uv add claude-agent-sdk"
             raise ImportError(msg)

@@ -168,6 +168,17 @@
 
 ---
 
+### Направление: Claude Code Agent Tool оркестрация
+
+**Agent Tool LLM routing**: заменить `claude-agent-sdk` subprocess вызовы ��а внутренний Agent tool Claude Code. Текущая реализация (`ClaudeCodeProvider`) порождает отдельный CLI процесс на каждый LLM-вызов → rate limiting ��ри параллельных вызовах. Agent tool внутри Claude Code сессии не имеет этого ограничения (проверено: 20 параллельных субагентов без проблем).
+
+- **Архитектура**: predict skill оркестрирует 9 стадий. Д��я каждой LLM-задачи → Agent tool субагент. Для data processing → `Bash(python ...)`. Результаты собираются в skill и сохраняются в БД.
+- **Предусловие**: вынести каждую стадию в отдельный Python CLI-скрипт (collection, event_id, trajectory, etc.) для вызова через Bash.
+- *Сложность*: высокая — переработка оркестрации из Python в SKILL.md.
+- *Важность*: средняя — sequential mode (`max_concurrency=1`) работ��ет, но медленнее (~20-30 мин vs потенциально ~10 мин с парал��елизмом).
+
+---
+
 ### Направление: Калибровка и оценка
 
 **Per-Persona Weight Update (B.6)**: динамическая подстройка весов 5 Дельфи-персон по историческому BS.

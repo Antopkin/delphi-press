@@ -639,9 +639,10 @@ class TestStopReasonMapping:
 class TestConcurrencySemaphore:
     """Cycle 13: max_concurrency parameter controls semaphore."""
 
-    def test_default_concurrency_is_three(self) -> None:
+    def test_default_concurrency_is_one(self) -> None:
+        """Sequential by default — avoids Max subscription rate limiting."""
         provider = ClaudeCodeProvider()
-        assert provider._semaphore._value == 3
+        assert provider._semaphore._value == 1
 
     def test_custom_concurrency(self) -> None:
         provider = ClaudeCodeProvider(max_concurrency=2)
