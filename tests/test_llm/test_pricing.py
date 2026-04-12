@@ -27,6 +27,20 @@ class TestCalculateCost:
         expected = (10000 / 1_000_000 * 15.00) + (5000 / 1_000_000 * 75.00)
         assert cost == pytest.approx(expected)
 
+    def test_openrouter_claude_haiku_4_5(self):
+        cost = calculate_cost(
+            "anthropic/claude-haiku-4.5", tokens_in=1_000_000, tokens_out=500_000
+        )
+        expected = (1_000_000 / 1_000_000 * 1.00) + (500_000 / 1_000_000 * 5.00)
+        assert cost == pytest.approx(expected)
+
+    def test_openrouter_gemini_2_5_flash_lite(self):
+        cost = calculate_cost(
+            "google/gemini-2.5-flash-lite", tokens_in=1_000_000, tokens_out=1_000_000
+        )
+        expected = (1_000_000 / 1_000_000 * 0.10) + (1_000_000 / 1_000_000 * 0.40)
+        assert cost == pytest.approx(expected)
+
     def test_unknown_model_returns_zero(self):
         assert calculate_cost("unknown/model", tokens_in=1000, tokens_out=500) == 0.0
 
@@ -79,6 +93,7 @@ class TestPricingTablesComplete:
             "anthropic/claude-sonnet-4",
             "anthropic/claude-opus-4",
             "anthropic/claude-haiku-3.5",
+            "anthropic/claude-haiku-4.5",
             "google/gemini-2.5-pro",
             "google/gemini-2.0-flash",
             "meta-llama/llama-4-maverick",
@@ -89,6 +104,7 @@ class TestPricingTablesComplete:
             "anthropic/claude-sonnet-4.5",
             "meta-llama/llama-4-scout",
             "google/gemini-2.5-flash",
+            "google/gemini-2.5-flash-lite",
         }
         assert expected.issubset(MODEL_PRICING.keys())
 
@@ -96,3 +112,19 @@ class TestPricingTablesComplete:
         for model, (pin, pout) in MODEL_PRICING.items():
             assert pin > 0, f"{model} input price must be positive"
             assert pout > 0, f"{model} output price must be positive"
+
+
+class TestUnknownModelWarning:
+    def test_unknown_model_logs_warning_once(self, caplog):
+        import logging
+
+        from src.llm.pricing import _WARNED_UNKNOWN_MODELS
+
+        _WARNED_UNKNOWN_MODELS.discard("test/fake-model-xyz")
+
+        with caplog.at_level(logging.WARNING, logger="src.llm.pricing"):
+            calculate_cost("test/fake-model-xyz", 1000, 500)
+            calculate_cost("test/fake-model-xyz", 2000, 1000)
+
+        warnings = [r for r in caplog.records if "fake-model-xyz" in r.message]
+        assert len(warnings) == 1, "warning должен логироваться только один раз per model"

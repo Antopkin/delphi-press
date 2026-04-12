@@ -518,7 +518,12 @@ def write_summary_markdown(records: list[dict], path: Path) -> None:
             )
         overall = sum(r["scores"]["mean_combined"] for r in valid) / len(valid)
         lines.append(f"\n**Общий средний combined score: {overall:.4f}**")
-        lines.append(f"_Baseline (два случайных Русских новостных заголовка): ~0.10–0.15_\n")
+        lines.append(
+            "_Baselines (измерены на этом же датасете): "
+            "cross-outlet shuffled 0.284, shuffled-words 0.264, "
+            "anti-baseline (unrelated text) 0.235. "
+            "См. раздел 'Honest Baseline Analysis' ниже._\n"
+        )
 
     lines.append("\n---\n")
 
