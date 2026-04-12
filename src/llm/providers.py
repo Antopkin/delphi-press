@@ -253,7 +253,7 @@ class ClaudeCodeProvider(LLMProvider):
     def _stderr_handler(line: str) -> None:
         """Логирует stderr от Claude Code CLI."""
         if line.strip():
-            logger.debug("claude-cli stderr: %s", line.rstrip())
+            logger.warning("claude-cli stderr: %s", line.rstrip())
 
     def _build_options(self, request: LLMRequest, system_prompt: str | None) -> ClaudeAgentOptions:
         """Строит ClaudeAgentOptions из LLMRequest."""
@@ -262,6 +262,7 @@ class ClaudeCodeProvider(LLMProvider):
             model=self._map_model(request.model),
             setting_sources=["user"],  # "user" для OAuth auth, без "project"/"local"
             tools=[],
+            mcp_servers={},  # отключить MCP — user servers нестабильны при subprocess
             max_turns=1,
             permission_mode="plan",
             stderr=self._stderr_handler,
