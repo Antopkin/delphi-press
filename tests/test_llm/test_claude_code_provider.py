@@ -382,14 +382,14 @@ class TestBuildOptions:
     def provider(self) -> ClaudeCodeProvider:
         return ClaudeCodeProvider()
 
-    def test_build_options_setting_sources_empty(self, provider: ClaudeCodeProvider) -> None:
-        """setting_sources must be [] to prevent loading user/project configs."""
+    def test_build_options_setting_sources_user_only(self, provider: ClaudeCodeProvider) -> None:
+        """setting_sources=["user"] for OAuth auth, without project/local configs."""
         request = LLMRequest(
             messages=[LLMMessage(role=MessageRole.USER, content="Go.")],
             model="anthropic/claude-opus-4.6",
         )
         options = provider._build_options(request, system_prompt="System prompt")
-        assert options.setting_sources == []
+        assert options.setting_sources == ["user"]
 
     def test_build_options_tools_empty(self, provider: ClaudeCodeProvider) -> None:
         """tools must be [] — subagent is a pure LLM, no tool use."""
@@ -639,9 +639,9 @@ class TestStopReasonMapping:
 class TestConcurrencySemaphore:
     """Cycle 13: max_concurrency parameter controls semaphore."""
 
-    def test_default_concurrency_is_five(self) -> None:
+    def test_default_concurrency_is_three(self) -> None:
         provider = ClaudeCodeProvider()
-        assert provider._semaphore._value == 5
+        assert provider._semaphore._value == 3
 
     def test_custom_concurrency(self) -> None:
         provider = ClaudeCodeProvider(max_concurrency=2)

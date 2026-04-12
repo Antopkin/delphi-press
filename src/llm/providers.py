@@ -214,11 +214,13 @@ class ClaudeCodeProvider(LLMProvider):
         "anthropic/claude-sonnet-4.5": "claude-sonnet-4-5",
     }
 
-    def __init__(self, *, max_concurrency: int = 5) -> None:
+    def __init__(self, *, max_concurrency: int = 3) -> None:
         if not _HAS_CLAUDE_SDK:
             msg = "claude-agent-sdk required. Install: uv add claude-agent-sdk"
             raise ImportError(msg)
         self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._max_retries = 2
+        self._retry_delay = 5.0
 
     def _map_model(self, openrouter_id: str) -> str:
         """Маппит OpenRouter model ID на Claude Code формат."""
@@ -247,46 +249,100 @@ class ClaudeCodeProvider(LLMProvider):
         prompt = "\n\n".join(user_parts)
         return system_prompt, prompt
 
+    @staticmethod
+    def _stderr_handler(line: str) -> None:
+        """Логирует stderr от Claude Code CLI."""
+        if line.strip():
+            logger.debug("claude-cli stderr: %s", line.rstrip())
+
     def _build_options(self, request: LLMRequest, system_prompt: str | None) -> ClaudeAgentOptions:
         """Строит ClaudeAgentOptions из LLMRequest."""
         return ClaudeAgentOptions(
             system_prompt=system_prompt,
             model=self._map_model(request.model),
-            setting_sources=[],
+            setting_sources=["user"],  # "user" для OAuth auth, без "project"/"local"
             tools=[],
             max_turns=1,
             permission_mode="plan",
+            stderr=self._stderr_handler,
+            env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
         )
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
-        """Выполнить LLM-вызов через Claude Code SDK."""
+        """Выполнить LLM-вызов через Claude Code SDK с retry."""
         system_prompt, prompt = self._extract_messages(request.messages)
         options = self._build_options(request, system_prompt)
 
-        result_msg: ResultMessage | None = None
+        last_error: Exception | None = None
 
-        async with self._semaphore:
-            try:
-                async for msg in query(prompt=prompt, options=options):
-                    if isinstance(msg, ResultMessage):
-                        result_msg = msg
-            except ClaudeSDKError as e:
-                raise LLMProviderError(str(e), provider="claude_code") from e
-            except Exception as e:
+        for attempt in range(self._max_retries + 1):
+            result_msg: ResultMessage | None = None
+
+            async with self._semaphore:
+                try:
+                    async for msg in query(prompt=prompt, options=options):
+                        if isinstance(msg, ResultMessage):
+                            result_msg = msg
+                except ClaudeSDKError as e:
+                    last_error = e
+                    if attempt < self._max_retries:
+                        delay = self._retry_delay * (2**attempt)
+                        logger.warning(
+                            "Claude Code call failed (attempt %d/%d), retrying in %.0fs: %s",
+                            attempt + 1,
+                            self._max_retries + 1,
+                            delay,
+                            e,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                    raise LLMProviderError(str(e), provider="claude_code") from e
+                except Exception as e:
+                    last_error = e
+                    if attempt < self._max_retries:
+                        delay = self._retry_delay * (2**attempt)
+                        logger.warning(
+                            "Claude Code call failed (attempt %d/%d), retrying in %.0fs: %s",
+                            attempt + 1,
+                            self._max_retries + 1,
+                            delay,
+                            e,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                    raise LLMProviderError(
+                        f"Unexpected error from Claude Code: {e}",
+                        provider="claude_code",
+                    ) from e
+
+            if result_msg is None:
+                if attempt < self._max_retries:
+                    logger.warning(
+                        "No ResultMessage (attempt %d/%d), retrying...",
+                        attempt + 1,
+                        self._max_retries + 1,
+                    )
+                    await asyncio.sleep(self._retry_delay)
+                    continue
                 raise LLMProviderError(
-                    f"Unexpected error from Claude Code: {e}",
+                    "No ResultMessage received from Claude Code",
                     provider="claude_code",
-                ) from e
+                )
 
-        if result_msg is None:
-            raise LLMProviderError(
-                "No ResultMessage received from Claude Code",
-                provider="claude_code",
-            )
+            if result_msg.is_error:
+                error_text = "; ".join(result_msg.errors or ["Unknown error"])
+                if attempt < self._max_retries:
+                    logger.warning(
+                        "Claude Code returned error (attempt %d/%d), retrying: %s",
+                        attempt + 1,
+                        self._max_retries + 1,
+                        error_text,
+                    )
+                    await asyncio.sleep(self._retry_delay)
+                    continue
+                raise LLMProviderError(error_text, provider="claude_code")
 
-        if result_msg.is_error:
-            error_text = "; ".join(result_msg.errors or ["Unknown error"])
-            raise LLMProviderError(error_text, provider="claude_code")
+            break  # success
 
         usage = result_msg.usage or {}
         tokens_in = usage.get("input_tokens", 0)
