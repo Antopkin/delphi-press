@@ -7,13 +7,38 @@
 - **Claude Code mode** — пользователь открывает Claude Code в директории проекта, просит прогноз на естественном языке. `claude-agent-sdk` → Claude Code Max подписка ($0/run). Sonnet 4.6 (сбор), Opus 4.6 (анализ). Результаты в локальной БД.
 - **CLI mode** — `scripts/dry_run.py --provider claude_code --db data/delphi_press.db` для headless запуска.
 
-**Стек**: Python 3.12+, FastAPI, ARQ (Redis), SQLite/SQLAlchemy 2.0, Pydantic v2, Jinja2 + Tailwind CSS v4, Docker Compose, pyarrow.
-**Версия**: 0.9.5. **Тесты**: 1324.
-**LLM**: OpenRouter (Claude/GPT-4/Gemini). Клиент через OpenAI SDK с `base_url`. max_tokens unlimited. Metaculus отключён (403).
+**Стек**: Python 3.12+, FastAPI, ARQ (Redis), SQLite/SQLAlchemy 2.0, Pydantic v2, Jinja2 + Tailwind CSS v4, Docker Compose, pyarrow, claude-agent-sdk.
+**Версия**: 0.9.8. **Тесты**: 1413.
+**LLM**: OpenRouter (Claude/GPT-4/Gemini) для Web UI; Claude Code SDK (Max подписка) для локальных прогонов. Metaculus отключён (403).
 **Auth**: JWT (PyJWT) + bcrypt. API-ключи пользователей: Fernet-шифрование (cryptography).
 **Архитектура**: модульный монолит. Деплой: 4 контейнера (app + worker + redis + nginx).
 **Сервер**: `deploy@213.165.220.144` (static IP), Debian 12, Yandex Cloud (4 vCPU 20%, 8GB RAM). Захарденен, Docker 29.3.1, TLS via Let's Encrypt.
 **Язык интерфейса**: русский. Результаты на языке целевого СМИ.
+
+## Claude Code mode: прогнозирование через подписку
+
+Этот проект — не только кодовая база для разработки, но и **рабочий инструмент прогнозирования**. При открытии директории в Claude Code пользователь может сразу запускать прогнозы на естественном языке.
+
+**Как использовать:**
+- Пользователь пишет: "Сделай прогноз для ТАСС на завтра" или "Forecast BBC Russian headlines"
+- Claude распознаёт intent и триггерит predict skill (`.claude/skills/predict/`)
+- Pipeline: 9 стадий, 28 LLM-задач, Sonnet 4.6 (сбор) + Opus 4.6 (анализ/персоны)
+- Все вызовы через Claude Code Max подписку ($0/run)
+- Результаты сохраняются в локальную БД (`data/delphi_press.db`)
+- Просмотр: `uvicorn src.main:app --port 8000` → `localhost:8000/results/{id}`
+
+**Ключевые файлы:**
+- `src/llm/providers.py` → `ClaudeCodeProvider` (claude-agent-sdk → Claude Code CLI)
+- `src/llm/router.py` → `CLAUDE_CODE_ASSIGNMENTS` (Gemini→Sonnet, остальное→Opus)
+- `scripts/dry_run.py --provider claude_code --db data/delphi_press.db` → движок под капотом
+- `.claude/skills/predict/SKILL.md` → skill definition
+
+**Отличия от Web UI:**
+- LLM-провайдер: `ClaudeCodeProvider` (SDK subprocess) vs `OpenRouterClient` (HTTP API)
+- Модели сбора: Sonnet 4.6 vs Gemini Flash Lite
+- Биллинг: $0 (Max подписка) vs $5-15 (OpenRouter)
+- БД: локальная vs VPS
+- Весь остальной pipeline идентичен: те же агенты, промпты, парсинг, схемы
 
 ## Документация
 
@@ -36,9 +61,10 @@
 
 ### Утилиты
 
-- `scripts/dry_run.py` → E2E dry run без инфраструктуры
+- `scripts/dry_run.py` → E2E dry run (поддерживает `--provider claude_code --db data/delphi_press.db`)
 - `tests/fixtures/mock_llm.py` → MockLLMClient для E2E тестов
-- `.claude/skills/predict/` → Claude Code predict skill
+- `.claude/skills/predict/` → Claude Code predict skill (natural language trigger)
+- `src/db/stage_persistence.py` → shared DB callback для worker и dry_run
 
 ## Дизайн-система (Impeccable)
 
@@ -103,7 +129,24 @@ ruff format src/ tests/ && ruff check src/ --fix    # lint
 docker compose up -d                                # production
 ```
 
-### E2E Dry Run (без Redis/DB/Docker)
+### Claude Code mode (Max подписка, $0/run)
+
+```bash
+# Через Claude Code (рекомендуемый способ):
+# Открой Claude Code в директории проекта и напиши:
+# "Сделай прогноз для ТАСС на завтра"
+
+# Или через CLI напрямую:
+uv run python scripts/dry_run.py --provider claude_code --outlet "ТАСС" --db data/delphi_press.db
+
+# Просмотр результатов:
+uv run uvicorn src.main:app --port 8000
+# → localhost:8000/results/{prediction_id}
+```
+
+Не требует API-ключей — использует Claude Code Max подписку. Sonnet 4.6 для сбора, Opus 4.6 для анализа.
+
+### E2E Dry Run через OpenRouter (API, $0.25-15/run)
 
 ```bash
 # Дешёвая модель, 5 event threads (быстрый smoke test, ~$0.25)

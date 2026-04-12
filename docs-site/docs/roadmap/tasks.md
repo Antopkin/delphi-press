@@ -2,7 +2,7 @@
 
 !!! info "Формат"
     Kanban: Done → In Progress → Next → Backlog.
-    Текущая версия: **v0.9.6** (2026-03-31). Тесты: 1 324.
+    Текущая версия: **v0.9.8** (2026-04-12). Тесты: 1 413.
 
 ---
 
@@ -20,6 +20,8 @@
 | Progress / results redesign | v0.9.6 | Hero h1, shimmer, фазовая группировка, bordered cards |
 | Docs-site (29 страниц) | v0.9.6 | mkdocs-material, KaTeX, 11 gotchas, bibliography |
 | Литобзор архетипов | v0.9.6 | 26 статей, валидация 6 тезисов, [RFC](discussion.md) |
+| Wayback HTML ground-truth | v0.9.7 | Fetcher для ТАСС/РИА/РБК, forward-forecast runner |
+| Claude Code mode ($0/run) | v0.9.8 | `ClaudeCodeProvider`, claude-agent-sdk, predict skill, 1413 тестов |
 
 ---
 

@@ -4,6 +4,40 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.9.8] - 2026-04-12
+
+### Added
+
+- **Claude Code mode: LLM через Max подписку ($0/run).** **Почему:** один прогон через OpenRouter стоит $5-15 (28 LLM-задач, Opus 4.6). Max подписка Claude Code ($200/мес) покрывает неограниченные вызовы. Новый `ClaudeCodeProvider(LLMProvider)` в `src/llm/providers.py` использует `claude-agent-sdk` для маршрутизации через Claude Code CLI subprocess. Тот же pipeline (9 стадий, 13 агентов, Pydantic-схемы), тот же парсинг — меняется только LLM-провайдер. Sonnet 4.6 для collection-задач (3 из 28), Opus 4.6 для всего остального.
+
+- **`CLAUDE_CODE_ASSIGNMENTS`** в `src/llm/router.py` — таблица назначений для Claude Code mode. Gemini-задачи (news_scout_search, event_calendar, event_clustering) ремаппятся на `anthropic/claude-sonnet-4.6`, fallback_models=[] (Claude Code ретрится внутренне).
+
+- **Prefix-based provider routing** в `ModelRouter._resolve_provider()`. `anthropic/*` модели → `ClaudeCodeProvider` (если зарегистрирован), остальные → OpenRouter. Backward compatible: если claude_code не зарегистрирован, всё идёт на openrouter.
+
+- **`LLM_PROVIDER` env var** в `src/llm/config.py` — переключатель `"openrouter"` | `"claude_code"`.
+
+- **`src/db/stage_persistence.py`** — shared module для инкрементального сохранения pipeline results. **Почему:** `_make_stage_callback()` была приватной функцией в `worker.py`, недоступной из `dry_run.py`. Извлечена в shared module, используется и worker, и dry_run. Backward-compat aliases в worker.py.
+
+- **`--provider claude_code` + `--db` флаги** в `scripts/dry_run.py`. Персистентная SQLite с prediction/pipeline_steps/headlines. Результаты видны через `uvicorn src.main:app --port 8000`.
+
+- **Natural language predict skill** (`.claude/skills/predict/SKILL.md`). Триггерится на "сделай прогноз", "forecast headlines", "что напишет СМИ". Thin wrapper над `dry_run.py --provider claude_code`.
+
+- **39 новых тесто��** в `tests/test_llm/test_claude_code_provider.py`: model mapping, message extraction, complete(), error handling, edge cases (None usage, empty streams, import guard, stop reason mapping, concurrency semaphore).
+
+- **7 новых тестов** в `tests/test_llm/test_router.py`: prefix routing, CLAUDE_CODE_ASSIGNMENTS invariants.
+
+### Fixed
+
+- **`dry_run.py`: `response.status == "success"` → `"completed"`** — оркестратор возвращает `"completed"`, не `"success"`. Все predictions через `--db` помечались бы как FAILED. Найдено аудит-агентом (backend-developer).
+
+- **Missing pricing для `anthropic/claude-sonnet-4.6`** в `src/llm/pricing.py` — cost tracking показывал $0 для collection-задач в Claude Code mode.
+
+- **`_map_model` бросал raw `KeyError`** для неизвестных моделей — обёрнут в `LLMProviderError` с описанием поддерживаемых моделей.
+
+- **Non-SDK exceptions не перехватывались** в `ClaudeCodeProvider.complete()` — `anyio.ClosedResourceError`, `OSError` пролетали мимо. Добавлен fallback `except Exception`.
+
+- **Missing `predicted_timeline` и `delphi_summary`** в `dry_run.py update_status()` — web UI не показывал timeline и expert summary для dry-run predictions.
+
 ## [Unreleased] - 2026-04-11
 
 ### Added
