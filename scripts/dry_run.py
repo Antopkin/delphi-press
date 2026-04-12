@@ -384,7 +384,9 @@ async def main() -> None:
         from src.db.models import PredictionStatus
 
         final_status = (
-            PredictionStatus.COMPLETED if response.status == "success" else PredictionStatus.FAILED
+            PredictionStatus.COMPLETED
+            if response.status == "completed"
+            else PredictionStatus.FAILED
         )
         async with get_session(_session_factory) as session:
             repo = PredictionRepository(session)
@@ -394,6 +396,8 @@ async def main() -> None:
                 total_duration_ms=response.duration_ms,
                 total_llm_cost_usd=response.total_cost_usd,
                 error_message=response.error,
+                predicted_timeline=getattr(response, "predicted_timeline", None),
+                delphi_summary=getattr(response, "delphi_summary", None),
             )
             await session.commit()
         logger.info("Prediction %s finalized: %s", prediction_id, final_status.value)

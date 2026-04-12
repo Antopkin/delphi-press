@@ -222,7 +222,14 @@ class ClaudeCodeProvider(LLMProvider):
 
     def _map_model(self, openrouter_id: str) -> str:
         """Маппит OpenRouter model ID на Claude Code формат."""
-        return self._MODEL_MAP[openrouter_id]
+        try:
+            return self._MODEL_MAP[openrouter_id]
+        except KeyError:
+            raise LLMProviderError(
+                f"Unsupported model '{openrouter_id}' for Claude Code. "
+                f"Supported: {list(self._MODEL_MAP)}",
+                provider="claude_code",
+            ) from None
 
     @staticmethod
     def _extract_messages(
@@ -265,6 +272,11 @@ class ClaudeCodeProvider(LLMProvider):
                         result_msg = msg
             except ClaudeSDKError as e:
                 raise LLMProviderError(str(e), provider="claude_code") from e
+            except Exception as e:
+                raise LLMProviderError(
+                    f"Unexpected error from Claude Code: {e}",
+                    provider="claude_code",
+                ) from e
 
         if result_msg is None:
             raise LLMProviderError(
