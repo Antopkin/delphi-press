@@ -19,7 +19,7 @@ class LLMConfig(BaseSettings):
     openrouter_api_key: str = ""
 
     # Claude Code SDK
-    claude_code_max_concurrency: int = 5
+    claude_code_max_concurrency: int = 1  # sequential — avoids Max subscription rate limits
 
     # Дефолтные модели
     default_model_cheap: str = "google/gemini-3.1-flash-lite-preview"

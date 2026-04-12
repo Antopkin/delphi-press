@@ -428,22 +428,45 @@ class TestBuildOptions:
         assert options.model == "claude-sonnet-4-5"
 
     def test_build_options_system_prompt_passed(self, provider: ClaudeCodeProvider) -> None:
-        """System prompt should be forwarded to options."""
+        """System prompt should be forwarded with _NO_TOOLS_INSTRUCTION appended."""
         request = LLMRequest(
             messages=[LLMMessage(role=MessageRole.USER, content="Go.")],
             model="anthropic/claude-opus-4.6",
         )
         options = provider._build_options(request, system_prompt="Be a forecaster.")
-        assert options.system_prompt == "Be a forecaster."
+        assert options.system_prompt.startswith("Be a forecaster.")
+        assert "<constraints>" in options.system_prompt
+        assert "Never emit tool_use blocks" in options.system_prompt
 
     def test_build_options_system_prompt_none(self, provider: ClaudeCodeProvider) -> None:
-        """System prompt=None should be forwarded as None."""
+        """system_prompt=None still gets _NO_TOOLS_INSTRUCTION."""
         request = LLMRequest(
             messages=[LLMMessage(role=MessageRole.USER, content="Go.")],
             model="anthropic/claude-opus-4.6",
         )
         options = provider._build_options(request, system_prompt=None)
-        assert options.system_prompt is None
+        assert options.system_prompt is not None
+        assert "<constraints>" in options.system_prompt
+
+    def test_build_options_extra_args_strict_mcp(self, provider: ClaudeCodeProvider) -> None:
+        """strict-mcp-config prevents user MCP servers from loading."""
+        request = LLMRequest(
+            messages=[LLMMessage(role=MessageRole.USER, content="Go.")],
+            model="anthropic/claude-opus-4.6",
+        )
+        options = provider._build_options(request, system_prompt=None)
+        assert "strict-mcp-config" in options.extra_args
+        assert "no-session-persistence" in options.extra_args
+
+    def test_build_options_json_mode_instruction(self, provider: ClaudeCodeProvider) -> None:
+        """json_mode=True adds JSON-only instruction to system prompt."""
+        request = LLMRequest(
+            messages=[LLMMessage(role=MessageRole.USER, content="Go.")],
+            model="anthropic/claude-opus-4.6",
+            json_mode=True,
+        )
+        options = provider._build_options(request, system_prompt="Analyst.")
+        assert "valid JSON only" in options.system_prompt
 
 
 class TestEmptyMessages:

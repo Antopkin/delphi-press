@@ -253,19 +253,55 @@ class ClaudeCodeProvider(LLMProvider):
     def _stderr_handler(line: str) -> None:
         """Логирует stderr от Claude Code CLI."""
         if line.strip():
-            logger.warning("claude-cli stderr: %s", line.rstrip())
+            logger.debug("claude-cli stderr: %s", line.rstrip())
+
+    # Instruction appended to every system prompt to suppress tool-use attempts.
+    # Claude Code CLI always injects tool definitions into the model context even
+    # with `--tools ""`.  The model may generate tool_use blocks (especially for
+    # web-search on forecasting prompts), consuming turns and sometimes causing
+    # exit code 1.  A deterministic SDK-level disable doesn't exist (see
+    # _build_options), so we reinforce with a prompt-level constraint.
+    _NO_TOOLS_INSTRUCTION: str = (
+        "\n\n<constraints>\n"
+        "CRITICAL: You do NOT have access to any tools, web search, file operations, "
+        "or external resources in this session. Tool definitions visible in the system "
+        "context are disabled and will fail if invoked. Respond with text only. "
+        "Never emit tool_use blocks.\n"
+        "</constraints>"
+    )
 
     def _build_options(self, request: LLMRequest, system_prompt: str | None) -> ClaudeAgentOptions:
-        """Строит ClaudeAgentOptions из LLMRequest."""
+        """Строит ClaudeAgentOptions из LLMRequest.
+
+        Цель — pure LLM completion без agent loop.  Три уровня защиты:
+        1. `tools=[]` → CLI получает `--tools ""` → built-in tools отключены.
+        2. `disallowed_tools=["*"]` → wildcard deny для всех tools (built-in + MCP).
+        3. `_NO_TOOLS_INSTRUCTION` в system prompt → модель не генерирует tool_use.
+        4. `max_turns=1` → даже если модель попытается tool_use, CLI не пойдёт
+           во второй turn.  Extended thinking НЕ считается отдельным turn.
+
+        `setting_sources=["user"]` сохранён для OAuth auth (Max подписка).
+        `mcp_servers={}` не подгружает MCP из SDK, но user settings могут
+        добавить свои серверы — их блокирует disallowed_tools wildcard.
+        """
+        hardened_system = (system_prompt or "") + self._NO_TOOLS_INSTRUCTION
+        if request.json_mode:
+            hardened_system += "\nRespond in valid JSON only. No markdown, no preamble."
+
         return ClaudeAgentOptions(
-            system_prompt=system_prompt,
+            system_prompt=hardened_system,
             model=self._map_model(request.model),
-            setting_sources=["user"],  # "user" для OAuth auth, без "project"/"local"
+            setting_sources=["user"],
             tools=[],
-            mcp_servers={},  # отключить MCP — user servers нестабильны при subprocess
+            disallowed_tools=["*"],
+            mcp_servers={},
             max_turns=1,
             permission_mode="plan",
             stderr=self._stderr_handler,
+            extra_args={
+                "strict-mcp-config": None,
+                "no-session-persistence": None,
+            },
             env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
         )
 
@@ -274,10 +310,11 @@ class ClaudeCodeProvider(LLMProvider):
         system_prompt, prompt = self._extract_messages(request.messages)
         options = self._build_options(request, system_prompt)
 
-        last_error: Exception | None = None
+        result_msg: ResultMessage | None = None
 
         for attempt in range(self._max_retries + 1):
-            result_msg: ResultMessage | None = None
+            result_msg = None
+            sdk_error: Exception | None = None
 
             async with self._semaphore:
                 try:
@@ -285,36 +322,29 @@ class ClaudeCodeProvider(LLMProvider):
                         if isinstance(msg, ResultMessage):
                             result_msg = msg
                 except ClaudeSDKError as e:
-                    last_error = e
-                    if attempt < self._max_retries:
-                        delay = self._retry_delay * (2**attempt)
-                        logger.warning(
-                            "Claude Code call failed (attempt %d/%d), retrying in %.0fs: %s",
-                            attempt + 1,
-                            self._max_retries + 1,
-                            delay,
-                            e,
-                        )
-                        await asyncio.sleep(delay)
-                        continue
-                    raise LLMProviderError(str(e), provider="claude_code") from e
+                    sdk_error = e
                 except Exception as e:
-                    last_error = e
-                    if attempt < self._max_retries:
-                        delay = self._retry_delay * (2**attempt)
-                        logger.warning(
-                            "Claude Code call failed (attempt %d/%d), retrying in %.0fs: %s",
-                            attempt + 1,
-                            self._max_retries + 1,
-                            delay,
-                            e,
-                        )
-                        await asyncio.sleep(delay)
-                        continue
-                    raise LLMProviderError(
-                        f"Unexpected error from Claude Code: {e}",
-                        provider="claude_code",
-                    ) from e
+                    sdk_error = e
+
+            # Retry logic — sleep OUTSIDE semaphore to not block other tasks
+            if sdk_error is not None:
+                if attempt < self._max_retries:
+                    delay = self._retry_delay * (2**attempt)
+                    logger.warning(
+                        "Claude Code call failed (attempt %d/%d), retrying in %.0fs: %s",
+                        attempt + 1,
+                        self._max_retries + 1,
+                        delay,
+                        sdk_error,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                if isinstance(sdk_error, ClaudeSDKError):
+                    raise LLMProviderError(str(sdk_error), provider="claude_code") from sdk_error
+                raise LLMProviderError(
+                    f"Unexpected error from Claude Code: {sdk_error}",
+                    provider="claude_code",
+                ) from sdk_error
 
             if result_msg is None:
                 if attempt < self._max_retries:
@@ -326,15 +356,30 @@ class ClaudeCodeProvider(LLMProvider):
                     await asyncio.sleep(self._retry_delay)
                     continue
                 raise LLMProviderError(
-                    "No ResultMessage received from Claude Code",
-                    provider="claude_code",
+                    "No ResultMessage received from Claude Code", provider="claude_code"
                 )
+
+            # tool_use detection — model tried to call a tool despite constraints
+            if result_msg.stop_reason == "tool_use" or (
+                not result_msg.result and result_msg.is_error
+            ):
+                if attempt < self._max_retries:
+                    logger.warning(
+                        "Claude Code returned tool_use/empty (attempt %d/%d), retrying...",
+                        attempt + 1,
+                        self._max_retries + 1,
+                    )
+                    await asyncio.sleep(self._retry_delay)
+                    continue
+                if result_msg.is_error:
+                    error_text = "; ".join(result_msg.errors or ["tool_use with empty result"])
+                    raise LLMProviderError(error_text, provider="claude_code")
 
             if result_msg.is_error:
                 error_text = "; ".join(result_msg.errors or ["Unknown error"])
                 if attempt < self._max_retries:
                     logger.warning(
-                        "Claude Code returned error (attempt %d/%d), retrying: %s",
+                        "Claude Code error (attempt %d/%d): %s",
                         attempt + 1,
                         self._max_retries + 1,
                         error_text,

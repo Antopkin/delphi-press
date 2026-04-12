@@ -218,7 +218,7 @@ async def main() -> None:
     if api_key:
         providers["openrouter"] = OpenRouterClient(api_key=api_key)
     if use_claude_code:
-        providers["claude_code"] = ClaudeCodeProvider(max_concurrency=5)
+        providers["claude_code"] = ClaudeCodeProvider()  # default: sequential (max_concurrency=1)
     router = ModelRouter(
         providers=providers,
         assignments=assignments,
