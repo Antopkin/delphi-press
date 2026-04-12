@@ -1,4 +1,4 @@
-"""LLM-провайдеры: OpenRouter, retry-логика.
+"""LLM-провайдеры: OpenRouter, Claude Code SDK, retry-логика.
 
 Спека: docs/07-llm-layer.md (§2).
 Контракт: LLMProvider.complete(LLMRequest) → LLMResponse.
@@ -18,7 +18,20 @@ from openai import AsyncOpenAI
 
 from src.llm.exceptions import LLMProviderError, LLMRateLimitError
 from src.llm.pricing import calculate_cost
-from src.schemas.llm import LLMRequest, LLMResponse
+from src.schemas.llm import LLMMessage, LLMRequest, LLMResponse, MessageRole
+
+# Claude Code SDK — lazy import to avoid hard dependency for OpenRouter-only setups
+try:
+    from claude_agent_sdk import (
+        ClaudeAgentOptions,
+        ClaudeSDKError,
+        ResultMessage,
+        query,
+    )
+
+    _HAS_CLAUDE_SDK = True
+except ImportError:
+    _HAS_CLAUDE_SDK = False
 
 logger = logging.getLogger(__name__)
 
@@ -186,3 +199,107 @@ class OpenRouterClient(LLMProvider):
     @property
     def provider_name(self) -> str:
         return "openrouter"
+
+
+class ClaudeCodeProvider(LLMProvider):
+    """Claude Code SDK provider — биллинг через Max подписку.
+
+    Использует claude-agent-sdk для маршрутизации LLM-вызовов через
+    Claude Code CLI. Каждый вызов complete() порождает subprocess.
+    """
+
+    _MODEL_MAP: dict[str, str] = {
+        "anthropic/claude-opus-4.6": "claude-opus-4-6",
+        "anthropic/claude-sonnet-4.6": "claude-sonnet-4-6",
+        "anthropic/claude-sonnet-4.5": "claude-sonnet-4-5",
+    }
+
+    def __init__(self, *, max_concurrency: int = 5) -> None:
+        if not _HAS_CLAUDE_SDK:
+            msg = "claude-agent-sdk required. Install: uv add claude-agent-sdk"
+            raise ImportError(msg)
+        self._semaphore = asyncio.Semaphore(max_concurrency)
+
+    def _map_model(self, openrouter_id: str) -> str:
+        """Маппит OpenRouter model ID на Claude Code формат."""
+        return self._MODEL_MAP[openrouter_id]
+
+    @staticmethod
+    def _extract_messages(
+        messages: list[LLMMessage],
+    ) -> tuple[str | None, str]:
+        """Извлекает system_prompt и user prompt из списка сообщений."""
+        system_parts: list[str] = []
+        user_parts: list[str] = []
+        for m in messages:
+            if m.role == MessageRole.SYSTEM:
+                system_parts.append(m.content)
+            else:
+                user_parts.append(m.content)
+        system_prompt = "\n\n".join(system_parts) if system_parts else None
+        prompt = "\n\n".join(user_parts)
+        return system_prompt, prompt
+
+    def _build_options(self, request: LLMRequest, system_prompt: str | None) -> ClaudeAgentOptions:
+        """Строит ClaudeAgentOptions из LLMRequest."""
+        return ClaudeAgentOptions(
+            system_prompt=system_prompt,
+            model=self._map_model(request.model),
+            setting_sources=[],
+            tools=[],
+            max_turns=1,
+            permission_mode="plan",
+        )
+
+    async def complete(self, request: LLMRequest) -> LLMResponse:
+        """Выполнить LLM-вызов через Claude Code SDK."""
+        system_prompt, prompt = self._extract_messages(request.messages)
+        options = self._build_options(request, system_prompt)
+
+        result_msg: ResultMessage | None = None
+
+        async with self._semaphore:
+            try:
+                async for msg in query(prompt=prompt, options=options):
+                    if isinstance(msg, ResultMessage):
+                        result_msg = msg
+            except ClaudeSDKError as e:
+                raise LLMProviderError(str(e), provider="claude_code") from e
+
+        if result_msg is None:
+            raise LLMProviderError(
+                "No ResultMessage received from Claude Code",
+                provider="claude_code",
+            )
+
+        if result_msg.is_error:
+            error_text = "; ".join(result_msg.errors or ["Unknown error"])
+            raise LLMProviderError(error_text, provider="claude_code")
+
+        usage = result_msg.usage or {}
+        tokens_in = usage.get("input_tokens", 0)
+        tokens_out = usage.get("output_tokens", 0)
+        cost = calculate_cost(request.model, tokens_in=tokens_in, tokens_out=tokens_out)
+
+        return LLMResponse(
+            content=result_msg.result or "",
+            model=request.model,
+            provider="claude_code",
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            cost_usd=cost,
+            duration_ms=result_msg.duration_ms,
+            finish_reason=(
+                "stop"
+                if result_msg.stop_reason in ("end_turn", None)
+                else result_msg.stop_reason or "stop"
+            ),
+        )
+
+    async def stream(self, request: LLMRequest) -> AsyncIterator[str]:
+        raise NotImplementedError
+        yield  # noqa: RET503
+
+    @property
+    def provider_name(self) -> str:
+        return "claude_code"
