@@ -129,8 +129,10 @@ F1-метрика BERTScore против лучшего совпадающего
 
 | Подмножество | Mean BSS | Median BSS | Fraction > 0 | 95% CI | p-value |
 |---|---|---|---|---|---|
-| All 22 folds | +0.196 | +0.159 | 22/22 (100%) | [+0.094, +0.297] | p = 2.38 × 10⁻⁷ (t-test) |
+| All 22 folds | +0.196 | +0.159 | 22/22 (100%) | [+0.094, +0.297] | p = 2.38 × 10⁻⁷ (sign test) |
 | Robust (folds 0–16, test ≥944) | +0.127 | +0.095 | 17/17 (100%) | — | — |
+
+**О статистическом тесте.** Используется биномиальный sign test: при нулевой гипотезе «информированный консенсус не лучше сырого рынка» вероятность получить 22 положительных BSS из 22 независимых фолдов равна $p = 1/2^{22} \approx 2.38 \times 10^{-7}$. Это более консервативный выбор, чем t-test на массиве BSS: sign test не предполагает нормальности распределения BSS по фолдам и устойчив к выбросам. Код: [`scripts/eval_walk_forward.py:849-852`](https://github.com/Antopkin/delphi-press/blob/main/scripts/eval_walk_forward.py#L849-L852). 95% CI по mean BSS получен через block bootstrap (n=1000 resamples, block_size=3) в [`eval_walk_forward.py:833-846`](https://github.com/Antopkin/delphi-press/blob/main/scripts/eval_walk_forward.py#L833-L846), чтобы сохранить темпоральную корреляцию между соседними фолдами.
 
 ### Интерпретация
 

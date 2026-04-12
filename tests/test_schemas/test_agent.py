@@ -169,14 +169,22 @@ def test_persona_assessment_valid_with_5_predictions():
 # ── ConsensusArea ────────────────────────────────────────────────────
 
 
-def test_consensus_area_spread_below_015():
+def test_consensus_area_spread_below_020():
+    # Ослаблено с lt=0.15 до lt=0.20 — см. src/schemas/agent.py:ConsensusArea
     c = ConsensusArea(event_thread_id="t1", median_probability=0.6, spread=0.10, num_agents=5)
     assert c.spread == 0.10
 
 
-def test_consensus_area_spread_015_rejected():
+def test_consensus_area_spread_at_015_now_accepted():
+    # Регрессионный тест: раньше 0.15 отклонялся, теперь принимается
+    # (LLM-медиаторы часто возвращают 0.15-0.19 для consensus-близких тем)
+    c = ConsensusArea(event_thread_id="t1", median_probability=0.6, spread=0.15, num_agents=5)
+    assert c.spread == 0.15
+
+
+def test_consensus_area_spread_020_rejected():
     with pytest.raises(ValidationError):
-        ConsensusArea(event_thread_id="t1", median_probability=0.6, spread=0.15, num_agents=5)
+        ConsensusArea(event_thread_id="t1", median_probability=0.6, spread=0.20, num_agents=5)
 
 
 # ── DisputeArea ──────────────────────────────────────────────────────

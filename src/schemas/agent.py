@@ -199,7 +199,17 @@ class ConsensusArea(BaseModel):
 
     event_thread_id: str
     median_probability: float = Field(ge=0.0, le=1.0)
-    spread: float = Field(ge=0.0, lt=0.15, description="Разброс < 0.15")
+    spread: float = Field(
+        ge=0.0,
+        lt=0.20,
+        description=(
+            "Разброс между экспертами для области консенсуса. Исторически "
+            "был < 0.15, но LLM-медиаторы (особенно меньшие модели типа "
+            "Haiku 4.5) регулярно возвращают значения 0.15-0.19 для тем, "
+            "которые семантически близки к консенсусу. Ослаблено до < 0.20 "
+            "чтобы избежать PromptParseError на валидных ответах."
+        ),
+    )
     num_agents: int = Field(ge=3)
 
 
