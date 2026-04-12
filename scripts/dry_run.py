@@ -342,12 +342,17 @@ async def main() -> None:
     registry = build_default_registry(router, collector_deps=collector_deps)
     orchestrator = Orchestrator(registry)
 
-    # Claude Code sequential mode: each LLM call ~2-3 min, so parallel stages
-    # with 5 agents need 5× more time than the default 600s timeout.
+    # Claude Code sequential mode: each LLM call ~2-3 min. Parallel stages
+    # with 5 agents run through semaphore(1), so agents wait in queue.
+    # Default 600s per-agent timeout is insufficient (5 × 3 min = 15 min).
     if use_claude_code:
         for stage in orchestrator.STAGES:
             stage.timeout_seconds = max(stage.timeout_seconds, 1800)
-        logger.info("Claude Code mode: stage timeouts increased to 1800s")
+
+        from src.agents.base import BaseAgent
+
+        BaseAgent.get_timeout_seconds = lambda self: 1800  # type: ignore[assignment]
+        logger.info("Claude Code mode: stage + agent timeouts increased to 1800s")
 
     logger.info("Registry: %d agents registered", len(registry))
     logger.info("Agents: %s", ", ".join(registry.list_agents()))
