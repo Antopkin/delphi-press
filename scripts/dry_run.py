@@ -31,8 +31,8 @@ from src.data_sources.outlets_catalog import OutletsCatalog
 from src.data_sources.rss import RSSFetcher
 from src.data_sources.scraper import NoopScraper, TrafilaturaScraper
 from src.data_sources.web_search import WebSearchService
-from src.llm.providers import OpenRouterClient
-from src.llm.router import DEFAULT_ASSIGNMENTS, ModelRouter
+from src.llm.providers import ClaudeCodeProvider, OpenRouterClient
+from src.llm.router import CLAUDE_CODE_ASSIGNMENTS, DEFAULT_ASSIGNMENTS, ModelRouter
 from src.schemas.llm import ModelAssignment
 from src.schemas.prediction import PredictionRequest
 
@@ -152,6 +152,17 @@ async def main() -> None:
         default="",
         help="Path to trades CSV (for inverse problem; required with --profiles)",
     )
+    parser.add_argument(
+        "--provider",
+        choices=["openrouter", "claude_code"],
+        default="openrouter",
+        help="LLM provider: openrouter (API) or claude_code (Max subscription)",
+    )
+    parser.add_argument(
+        "--db",
+        default="",
+        help="Path to persistent SQLite DB (e.g., data/delphi_press.db). Saves predictions for web UI.",
+    )
     args = parser.parse_args()
 
     # Logging
@@ -166,9 +177,10 @@ async def main() -> None:
     logging.getLogger("openai").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-    # API key
+    # API key (not needed for claude_code provider)
+    use_claude_code = args.provider == "claude_code"
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
-    if not api_key:
+    if not use_claude_code and not api_key:
         print("ERROR: OPENROUTER_API_KEY not set. Export it and retry.")
         sys.exit(1)
 
@@ -178,26 +190,38 @@ async def main() -> None:
     print(f"  DELPHI PRESS DRY RUN")
     print(f"  Outlet:      {args.outlet}")
     print(f"  Target date: {target_date}")
-    print(f"  Cheap model: {args.model}")
-    print(f"  Strong model:{args.persona_model}")
+    print(f"  Provider:    {args.provider}")
+    if not use_claude_code:
+        print(f"  Cheap model: {args.model}")
+        print(f"  Strong model:{args.persona_model}")
     print(f"  Budget:      ${args.budget:.2f}")
+    if args.db:
+        print(f"  DB:          {args.db}")
     print(f"{'=' * 60}\n")
 
-    # 1. Build two-tier model assignments
-    cheap_assignments = build_cheap_assignments(args.model, args.persona_model)
-    logger.info(
-        "Task assignments: %d cheap (%s) + %d strong (%s)",
-        sum(1 for t in cheap_assignments if t in _CHEAP_TASKS),
-        args.model,
-        sum(1 for t in cheap_assignments if t not in _CHEAP_TASKS),
-        args.persona_model,
-    )
+    # 1. Build model assignments
+    if use_claude_code:
+        assignments = CLAUDE_CODE_ASSIGNMENTS
+        logger.info("Claude Code mode: Sonnet 4.6 for collection, Opus 4.6 for analysis/personas")
+    else:
+        assignments = build_cheap_assignments(args.model, args.persona_model)
+        logger.info(
+            "Task assignments: %d cheap (%s) + %d strong (%s)",
+            sum(1 for t in assignments if t in _CHEAP_TASKS),
+            args.model,
+            sum(1 for t in assignments if t not in _CHEAP_TASKS),
+            args.persona_model,
+        )
 
     # 2. Create LLM provider
-    provider = OpenRouterClient(api_key=api_key)
+    providers: dict = {}
+    if api_key:
+        providers["openrouter"] = OpenRouterClient(api_key=api_key)
+    if use_claude_code:
+        providers["claude_code"] = ClaudeCodeProvider(max_concurrency=5)
     router = ModelRouter(
-        providers={"openrouter": provider},
-        assignments=cheap_assignments,
+        providers=providers,
+        assignments=assignments,
         budget_usd=args.budget,
     )
 
@@ -213,7 +237,7 @@ async def main() -> None:
         exa_api_key=os.environ.get("EXA_API_KEY", ""),
         jina_api_key=os.environ.get("JINA_API_KEY", ""),
     )
-    # Outlet resolution with in-memory SQLite for DB cache
+    # DB engine: persistent (--db) or in-memory
     outlet_catalog = OutletsCatalog()
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import StaticPool
@@ -221,15 +245,24 @@ async def main() -> None:
     from src.db.engine import create_session_factory
     from src.db.models import Base
 
-    _resolver_engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    async with _resolver_engine.begin() as conn:
+    if args.db:
+        os.makedirs(os.path.dirname(args.db) or ".", exist_ok=True)
+        db_url = f"sqlite+aiosqlite:///{args.db}"
+        _engine = create_async_engine(
+            db_url,
+            connect_args={"check_same_thread": False},
+        )
+    else:
+        _engine = create_async_engine(
+            "sqlite+aiosqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+
+    async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    _resolver_sf = create_session_factory(_resolver_engine)
-    outlet_resolver = OutletResolver(catalog=outlet_catalog, session_factory=_resolver_sf)
+    _session_factory = create_session_factory(_engine)
+    outlet_resolver = OutletResolver(catalog=outlet_catalog, session_factory=_session_factory)
 
     # Pre-resolve outlet (enriches via Wikidata + RSS for unknown outlets)
     resolved = await outlet_resolver.resolve(args.outlet)
@@ -311,13 +344,59 @@ async def main() -> None:
     logger.info("Registry: %d agents registered", len(registry))
     logger.info("Agents: %s", ", ".join(registry.list_agents()))
 
-    # 5. Run prediction
+    # 5. Run prediction (with optional DB persistence)
+    import uuid
+
     request = PredictionRequest(outlet=args.outlet, target_date=target_date)
-    print(f"  Starting pipeline...\n")
+    prediction_id = str(uuid.uuid4())
+    stage_callback = None
+
+    if args.db:
+        from src.db.engine import get_session
+        from src.db.repositories import PredictionRepository
+        from src.db.stage_persistence import make_stage_callback
+
+        async with get_session(_session_factory) as session:
+            repo = PredictionRepository(session)
+            await repo.create(
+                id=prediction_id,
+                outlet_name=args.outlet,
+                outlet_normalized=args.outlet.strip().lower(),
+                target_date=target_date,
+                preset="claude_code" if use_claude_code else "dry_run",
+            )
+            await session.commit()
+        stage_callback = make_stage_callback(prediction_id, _session_factory)
+        logger.info("Prediction %s created in DB", prediction_id)
+
+    print("  Starting pipeline...\n")
 
     t0 = time.monotonic()
-    response = await orchestrator.run_prediction(request, progress_callback=print_progress)
+    response = await orchestrator.run_prediction(
+        request,
+        progress_callback=print_progress,
+        stage_callback=stage_callback,
+    )
     elapsed = time.monotonic() - t0
+
+    # Finalize prediction in DB
+    if args.db:
+        from src.db.models import PredictionStatus
+
+        final_status = (
+            PredictionStatus.COMPLETED if response.status == "success" else PredictionStatus.FAILED
+        )
+        async with get_session(_session_factory) as session:
+            repo = PredictionRepository(session)
+            await repo.update_status(
+                prediction_id,
+                final_status,
+                total_duration_ms=response.duration_ms,
+                total_llm_cost_usd=response.total_cost_usd,
+                error_message=response.error,
+            )
+            await session.commit()
+        logger.info("Prediction %s finalized: %s", prediction_id, final_status.value)
 
     print(f"\n\n{'=' * 60}")
     print(f"  RESULT: {response.status.upper()}")
@@ -362,6 +441,9 @@ async def main() -> None:
     print(f"  Total LLM cost: ${response.total_cost_usd:.4f}")
     print(f"  Headlines:      {len(response.headlines)}")
     print(f"  Status:         {response.status}")
+    if args.db:
+        print(f"  Prediction ID:  {prediction_id}")
+        print(f"  Web UI:         http://localhost:8000/results/{prediction_id}")
     print(f"  {'=' * 60}\n")
 
 
