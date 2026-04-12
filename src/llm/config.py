@@ -15,7 +15,11 @@ class LLMConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="")
 
     # Провайдеры
+    llm_provider: str = "openrouter"  # "openrouter" | "claude_code"
     openrouter_api_key: str = ""
+
+    # Claude Code SDK
+    claude_code_max_concurrency: int = 5
 
     # Дефолтные модели
     default_model_cheap: str = "google/gemini-3.1-flash-lite-preview"
