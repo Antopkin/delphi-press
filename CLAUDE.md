@@ -2,9 +2,10 @@
 
 Веб-продукт для прогнозирования заголовков СМИ. Мультиагентный Дельфи-пайплайн (5 персон, 2 раунда).
 
-**Два режима работы:**
+**Три режима работы:**
 - **Web UI** — пользователь вводит свой API-ключ (OpenRouter). JWT-авторизация. Пресеты: Light / Opus.
-- **Claude Code mode** — пользователь клонирует репо, запускает `/predict`. Субагенты Claude Code = 5 персон (Opus 4.6).
+- **Claude Code mode** — пользователь открывает Claude Code в директории проекта, просит прогноз на естественном языке. `claude-agent-sdk` → Claude Code Max подписка ($0/run). Sonnet 4.6 (сбор), Opus 4.6 (анализ). Результаты в локальной БД.
+- **CLI mode** — `scripts/dry_run.py --provider claude_code --db data/delphi_press.db` для headless запуска.
 
 **Стек**: Python 3.12+, FastAPI, ARQ (Redis), SQLite/SQLAlchemy 2.0, Pydantic v2, Jinja2 + Tailwind CSS v4, Docker Compose, pyarrow.
 **Версия**: 0.9.5. **Тесты**: 1324.
