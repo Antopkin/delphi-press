@@ -215,6 +215,74 @@ class TestWithModelOverride:
         assert overridden.get_model_for_task("trajectory_analysis") == "anthropic/claude-opus-4.6"
 
 
+class TestResolveProvider:
+    """Cycle 7: _resolve_provider routes by model prefix."""
+
+    def test_anthropic_prefers_claude_code(self):
+        mock_or = AsyncMock()
+        mock_cc = AsyncMock()
+        router = ModelRouter(providers={"openrouter": mock_or, "claude_code": mock_cc})
+        provider = router._resolve_provider("anthropic/claude-opus-4.6")
+        assert provider is mock_cc
+
+    def test_anthropic_falls_back_to_openrouter(self):
+        mock_or = AsyncMock()
+        router = ModelRouter(providers={"openrouter": mock_or})
+        provider = router._resolve_provider("anthropic/claude-opus-4.6")
+        assert provider is mock_or
+
+    def test_google_always_openrouter(self):
+        mock_or = AsyncMock()
+        mock_cc = AsyncMock()
+        router = ModelRouter(providers={"openrouter": mock_or, "claude_code": mock_cc})
+        provider = router._resolve_provider("google/gemini-3.1-flash-lite-preview")
+        assert provider is mock_or
+
+
+class TestClaudeCodeAssignments:
+    """Cycle 8: CLAUDE_CODE_ASSIGNMENTS table."""
+
+    def test_gemini_remapped_to_sonnet(self):
+        from src.llm.router import CLAUDE_CODE_ASSIGNMENTS
+
+        assert (
+            CLAUDE_CODE_ASSIGNMENTS["news_scout_search"].primary_model
+            == "anthropic/claude-sonnet-4.6"
+        )
+        assert (
+            CLAUDE_CODE_ASSIGNMENTS["event_calendar"].primary_model
+            == "anthropic/claude-sonnet-4.6"
+        )
+        assert (
+            CLAUDE_CODE_ASSIGNMENTS["event_clustering"].primary_model
+            == "anthropic/claude-sonnet-4.6"
+        )
+
+    def test_opus_tasks_unchanged(self):
+        from src.llm.router import CLAUDE_CODE_ASSIGNMENTS
+
+        assert (
+            CLAUDE_CODE_ASSIGNMENTS["trajectory_analysis"].primary_model
+            == "anthropic/claude-opus-4.6"
+        )
+        assert (
+            CLAUDE_CODE_ASSIGNMENTS["delphi_r1_realist"].primary_model
+            == "anthropic/claude-opus-4.6"
+        )
+        assert CLAUDE_CODE_ASSIGNMENTS["framing"].primary_model == "anthropic/claude-opus-4.6"
+
+    def test_no_fallbacks(self):
+        from src.llm.router import CLAUDE_CODE_ASSIGNMENTS
+
+        for task, a in CLAUDE_CODE_ASSIGNMENTS.items():
+            assert a.fallback_models == [], f"{task} should have no fallbacks"
+
+    def test_same_tasks_as_default(self):
+        from src.llm.router import CLAUDE_CODE_ASSIGNMENTS
+
+        assert set(CLAUDE_CODE_ASSIGNMENTS.keys()) == set(DEFAULT_ASSIGNMENTS.keys())
+
+
 class TestDefaultAssignments:
     def test_has_core_tasks(self):
         expected = {

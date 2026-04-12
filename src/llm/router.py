@@ -223,6 +223,27 @@ DEFAULT_ASSIGNMENTS: dict[str, ModelAssignment] = {
 # === Delphi persona → model mapping ===
 # Diversity обеспечивается промптами и когнитивными смещениями, не моделями.
 
+# === Claude Code assignments: все модели через подписку Max ===
+# Gemini-задачи → Sonnet 4.6, остальные → Opus 4.6, fallback=[] (Claude Code ретрится сам).
+
+_GEMINI_TASKS = frozenset(
+    task for task, a in DEFAULT_ASSIGNMENTS.items() if a.primary_model.startswith("google/")
+)
+
+CLAUDE_CODE_ASSIGNMENTS: dict[str, ModelAssignment] = {
+    task: ModelAssignment(
+        task=a.task,
+        primary_model=(
+            "anthropic/claude-sonnet-4.6" if task in _GEMINI_TASKS else a.primary_model
+        ),
+        fallback_models=[],
+        temperature=a.temperature,
+        max_tokens=a.max_tokens,
+        json_mode=a.json_mode,
+    )
+    for task, a in DEFAULT_ASSIGNMENTS.items()
+}
+
 DELPHI_PERSONA_MODELS: dict[str, str] = {
     "realist": "anthropic/claude-opus-4.6",
     "geostrateg": "anthropic/claude-opus-4.6",
@@ -403,5 +424,11 @@ class ModelRouter:
         )
 
     def _resolve_provider(self, model: str) -> LLMProvider | None:
-        """Определить провайдера по имени модели."""
+        """Определить провайдера по имени модели.
+
+        Роутинг: anthropic/* → claude_code (если зарегистрирован), иначе openrouter.
+        Все остальные модели (google/*, openai/*) → всегда openrouter.
+        """
+        if model.startswith("anthropic/") and "claude_code" in self._providers:
+            return self._providers["claude_code"]
         return self._providers.get("openrouter")
