@@ -253,6 +253,14 @@ class Settings(LLMConfig):
                 'print(Fernet.generate_key().decode())"'
             )
             raise ValueError(msg)
+        # Validate format for user-provided keys (fail-fast at config time).
+        from cryptography.fernet import Fernet
+
+        try:
+            Fernet(v.encode())
+        except Exception:
+            msg = "FERNET_KEY must be a valid Fernet key (base64-encoded 32 bytes)."
+            raise ValueError(msg) from None
         return v
 
     @model_validator(mode="after")

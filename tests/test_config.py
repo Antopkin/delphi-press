@@ -30,7 +30,7 @@ def test_settings_new_fields_have_defaults():
 # ── New fields ──────────────────────────────────────────────────────
 
 
-def test_settings_secret_key_has_dev_default():
+def test_settings_secret_key_always_populated():
     from src.config import Settings
 
     s = Settings()
@@ -147,6 +147,26 @@ def test_settings_rejects_missing_secret_key_in_production(monkeypatch):
         Settings()
 
 
+def test_settings_accepts_explicit_keys():
+    """Explicit valid keys pass through without modification."""
+    from cryptography.fernet import Fernet
+
+    from src.config import Settings
+
+    fk = Fernet.generate_key().decode()
+    s = Settings(secret_key="a" * 48, fernet_key=fk)
+    assert s.secret_key == "a" * 48
+    assert s.fernet_key == fk
+
+
+def test_settings_rejects_invalid_fernet_key():
+    """Invalid Fernet key format must be rejected at config time."""
+    from src.config import Settings
+
+    with pytest.raises(ValidationError, match="valid Fernet key"):
+        Settings(fernet_key="not-a-valid-fernet-key-at-all!!!")
+
+
 def test_settings_strips_whitespace_from_keys():
     """Whitespace-only keys are treated as absent — auto-generate in dev."""
     from src.config import Settings
@@ -193,7 +213,7 @@ def test_settings_jwt_expire_days_default():
     assert s.jwt_expire_days == 7
 
 
-def test_settings_fernet_key_has_dev_default():
+def test_settings_fernet_key_always_populated():
     from src.config import Settings
 
     s = Settings()
