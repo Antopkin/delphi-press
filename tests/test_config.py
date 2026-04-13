@@ -147,6 +147,16 @@ def test_settings_rejects_missing_secret_key_in_production(monkeypatch):
         Settings()
 
 
+def test_settings_strips_whitespace_from_keys():
+    """Whitespace-only keys are treated as absent — auto-generate in dev."""
+    from src.config import Settings
+
+    s = Settings(secret_key="   ", fernet_key="   ")
+    assert isinstance(s.secret_key, str)
+    assert len(s.secret_key) >= 32
+    assert len(s.fernet_key) > 0
+
+
 def test_settings_rejects_missing_fernet_key_in_production(monkeypatch):
     """Production (DELPHI_PRODUCTION=1) must not auto-generate fernet_key."""
     from src.config import Settings

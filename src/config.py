@@ -196,6 +196,8 @@ class Settings(LLMConfig):
     @classmethod
     def _resolve_secret_key(cls, v: str | None) -> str:
         """Auto-generate in dev/test, require in production, block burned values."""
+        if isinstance(v, str):
+            v = v.strip() or None
         if not v:
             if os.environ.get("DELPHI_PRODUCTION"):
                 msg = (
@@ -225,6 +227,8 @@ class Settings(LLMConfig):
     @classmethod
     def _resolve_fernet_key(cls, v: str | None) -> str:
         """Auto-generate in dev/test, require in production, block burned values."""
+        if isinstance(v, str):
+            v = v.strip() or None
         if not v:
             if os.environ.get("DELPHI_PRODUCTION"):
                 msg = (
