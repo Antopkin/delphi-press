@@ -90,7 +90,7 @@ class Orchestrator:
         StageDefinition(
             name=ProgressStage.DELPHI_R2,
             agent_names=["mediator"],
-            timeout_seconds=900,
+            timeout_seconds=2400,
         ),
         StageDefinition(
             name=ProgressStage.CONSENSUS,
@@ -371,44 +371,74 @@ class Orchestrator:
         context: PipelineContext,
         timeout_seconds: int,
     ) -> list[AgentResult]:
-        """Запустить агентов параллельно с общим таймаутом."""
-        try:
-            async with asyncio.timeout(timeout_seconds):
-                results = await asyncio.gather(
-                    *(agent.run(context) for agent in agents),
-                    return_exceptions=True,
-                )
-        except TimeoutError:
-            return [
-                AgentResult(
-                    agent_name=agent.name,
-                    success=False,
-                    error=f"Stage timeout ({timeout_seconds}s)",
-                )
-                for agent in agents
-            ]
+        """Запустить агентов параллельно с общим таймаутом.
 
-        # gather с return_exceptions может вернуть Exception вместо AgentResult
+        Uses asyncio.wait() instead of asyncio.timeout()+gather() so that
+        already-completed agent results are preserved when the stage timeout
+        fires.  Only agents still running at timeout are marked as failed.
+        """
+        # Map task -> agent for result attribution
+        tasks: dict[asyncio.Task[AgentResult], BaseAgent] = {}
+        for agent in agents:
+            task = asyncio.create_task(agent.run(context), name=f"agent:{agent.name}")
+            tasks[task] = agent
+
+        done, pending = await asyncio.wait(
+            tasks.keys(),
+            timeout=timeout_seconds,
+            return_when=asyncio.ALL_COMPLETED,
+        )
+
+        # Cancel still-running tasks and suppress CancelledError
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+        # Build ordered results preserving the original agent order
+        task_by_agent: dict[str, asyncio.Task[AgentResult]] = {
+            agent.name: task for task, agent in tasks.items()
+        }
+
         resolved: list[AgentResult] = []
-        for i, result in enumerate(results):
-            if isinstance(result, AgentResult):
-                resolved.append(result)
-            elif isinstance(result, BaseException):
+        for agent in agents:
+            task = task_by_agent[agent.name]
+
+            if task in pending:
+                logger.warning(
+                    "Agent '%s' timed out after %ds (stage timeout)",
+                    agent.name,
+                    timeout_seconds,
+                )
                 resolved.append(
                     AgentResult(
-                        agent_name=agents[i].name,
+                        agent_name=agent.name,
                         success=False,
-                        error=f"Unexpected error: {result}",
+                        error=f"Stage timeout ({timeout_seconds}s)",
+                    )
+                )
+            elif task.exception() is not None:
+                exc = task.exception()
+                resolved.append(
+                    AgentResult(
+                        agent_name=agent.name,
+                        success=False,
+                        error=f"Unexpected error: {exc}",
                     )
                 )
             else:
-                resolved.append(
-                    AgentResult(
-                        agent_name=agents[i].name,
-                        success=False,
-                        error=f"Unexpected result type: {type(result)}",
+                result = task.result()
+                if isinstance(result, AgentResult):
+                    resolved.append(result)
+                else:
+                    resolved.append(
+                        AgentResult(
+                            agent_name=agent.name,
+                            success=False,
+                            error=f"Unexpected result type: {type(result)}",
+                        )
                     )
-                )
+
         return resolved
 
     async def _run_sequential(

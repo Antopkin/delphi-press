@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from unittest.mock import AsyncMock
 
@@ -155,9 +156,10 @@ def test_delphi_r1_min_successful_is_3():
     assert stage.min_successful == 3
 
 
-def test_delphi_r2_timeout_is_900():
+def test_delphi_r2_timeout_is_2400():
+    """R2 timeout 2400s: mediator ~6min + 5 sequential personas ~8min each."""
     stage = Orchestrator.STAGES[4]
-    assert stage.timeout_seconds == 900
+    assert stage.timeout_seconds == 2400
 
 
 # ── _run_parallel() ─────────────────────────────────────────────────
@@ -181,6 +183,48 @@ async def test_run_parallel_returns_all_results(populated_registry, make_context
     ]
     results = await orch._run_parallel(agents, make_context(), timeout_seconds=30)
     assert len(results) == 3
+
+
+@pytest.mark.asyncio
+async def test_run_parallel_preserves_completed_on_timeout(mock_router, make_context):
+    """When stage timeout fires, already-completed agents keep their results.
+
+    Regression test: previously asyncio.timeout() + gather() discarded ALL
+    results on timeout, reporting 0 successes even when most agents finished.
+    """
+    from src.agents.base import BaseAgent
+
+    class FastAgent(BaseAgent):
+        name = "fast"
+
+        async def execute(self, context):
+            return {"done": True}
+
+    class SlowAgent(BaseAgent):
+        name = "slow"
+
+        async def execute(self, context):
+            await asyncio.sleep(30)
+            return {"done": True}
+
+    fast1 = FastAgent(mock_router)
+    fast1.name = "fast_1"
+    fast2 = FastAgent(mock_router)
+    fast2.name = "fast_2"
+    slow = SlowAgent(mock_router)
+
+    orch = Orchestrator(AgentRegistry(mock_router))
+    results = await orch._run_parallel([fast1, fast2, slow], make_context(), timeout_seconds=1)
+
+    assert len(results) == 3
+    # Fast agents must retain their success=True results
+    assert results[0].success is True
+    assert results[0].agent_name == "fast_1"
+    assert results[1].success is True
+    assert results[1].agent_name == "fast_2"
+    # Slow agent must be marked as timed out
+    assert results[2].success is False
+    assert "timeout" in results[2].error.lower()
 
 
 # ── _run_sequential() ───────────────────────────────────────────────

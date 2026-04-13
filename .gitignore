@@ -38,3 +38,6 @@ docs-site/site/
 docs-site/docs-site/
 # Снимок конфигурации сервера (локальный)
 docs/server-migration-snapshot.md
+# Локальные черновики встреч и конференций (не публикуются)
+docs/meeting/
+docs/conference-imemo/
