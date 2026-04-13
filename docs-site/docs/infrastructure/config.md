@@ -28,7 +28,7 @@ uv run python -c "from src.config import get_settings; print(get_settings().open
 
 | Переменная | Тип | По умолчанию | Обязательная | Описание |
 |---|---|---|---|---|
-| `SECRET_KEY` | строка | `dev-insecure-key-change-in-production-32ch` | В production | Секретный ключ для подписи сессий и CSRF-токенов. Минимум 32 символа. Генерировать: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| `SECRET_KEY` | строка | `None` (auto-generated in dev) | В production | Секретный ключ для подписи JWT. Минимум 32 символа. Генерировать: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `DEBUG` | булевый | `false` | Опционально | Включить режим отладки (Swagger UI, трассировки стека). **Никогда не включать в production!** |
 | `LOG_LEVEL` | строка | `INFO` | Опционально | Уровень логирования: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `APP_NAME` | строка | `Delphi Press` | Опционально | Название приложения |
@@ -110,7 +110,7 @@ uv run python -c "from src.config import get_settings; print(get_settings().open
 
 | Переменная | Тип | По умолчанию | Обязательная | Описание |
 |---|---|---|---|---|
-| `FERNET_KEY` | строка | `3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o=` | В production | Ключ шифрования Fernet для API-ключей пользователей (base64, 32 байта). Генерировать: `python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `FERNET_KEY` | строка | `None` (auto-generated in dev) | В production | Ключ шифрования Fernet для API-ключей пользователей (base64, 32 байта). Генерировать: `python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 | `JWT_EXPIRE_DAYS` | целое | `7` | Опционально | Срок действия JWT токена (1-365 дней) |
 | `JWT_ALGORITHM` | строка | `HS256` | Опционально | Алгоритм подписи JWT (обычно не менять) |
 
@@ -223,21 +223,18 @@ async def health(request: Request):
 
 При загрузке конфигурации выполняются проверки:
 
-**Обязательные поля для production (`DEBUG=False` и `DELPHI_PRODUCTION=1`):**
+**Секретные ключи — `field_validator(mode="before")`:**
 
-- `SECRET_KEY` не должна быть dev-значением (`dev-insecure-key-change-in-production-32ch`)
-- `FERNET_KEY` не должна быть dev-значением
-- `CORS_ORIGINS` не должна быть `["*"]`
+- `SECRET_KEY` и `FERNET_KEY` не имеют дефолтов (CWE-798 fix)
+- В dev/test: автогенерация эфемерных ключей при запуске (с warning в лог)
+- В production (`DELPHI_PRODUCTION=1`): обязательны из `.env`, иначе fail-fast
+- Blocklist: старые захардкоженные значения из публичного git history отвергаются в любом окружении
+- Whitespace-only значения обрабатываются как отсутствующие
+- `FERNET_KEY` валидируется как корректный Fernet key (base64, 32 байта)
 
-```python
-@model_validator(mode="after")
-def _reject_insecure_defaults_in_production(self) -> Settings:
-    if self.debug or not os.environ.get("DELPHI_PRODUCTION"):
-        return self
-    if self.secret_key == self._INSECURE_SECRET_KEY:
-        raise ValueError("SECRET_KEY is set to the insecure dev default...")
-    # ... дальше проверки FERNET_KEY и CORS_ORIGINS
-```
+**CORS — `model_validator(mode="after")`:**
+
+- `CORS_ORIGINS` не должна быть `["*"]` в production
 
 **Валидация форматов:**
 
@@ -362,7 +359,7 @@ nginx:
 
 ```bash
 # .env для dev
-SECRET_KEY=dev-insecure-key-change-in-production-32ch
+# SECRET_KEY — auto-generated in dev if not set
 DEBUG=true
 LOG_LEVEL=DEBUG
 DATABASE_URL=sqlite+aiosqlite:///data/delphi_press.db

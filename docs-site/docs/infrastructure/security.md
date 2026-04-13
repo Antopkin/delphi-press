@@ -601,87 +601,36 @@ async def validate_url_safe_async(url: str) -> None:
 
 ## Fail-fast на секреты
 
-### Проблема
+### Проблема (CWE-798, исправлено)
 
-Hardcoded dev секреты в production могут привести к критическим уязвимостям:
+Ранее в `src/config.py` были захардкожены dev-секреты как дефолтные значения Pydantic полей. Валидатор срабатывал только при `DELPHI_PRODUCTION=1` — opt-in, недостаточно.
 
-- `SECRET_KEY = "dev-insecure-key-change-in-production-32ch"` → все токены подделываются
-- `FERNET_KEY = "3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o="` → все API-ключи расшифровываются
+### Решение: field_validator + blocklist (v0.9.9)
 
-### Решение: Pydantic validators
+Захардкоженные дефолты полностью удалены. Вместо них — трёхуровневая защита:
 
-Delphi Press использует **model validators** (Pydantic v2) для fail-fast при старте в production:
+1. **Автогенерация в dev/test** — `field_validator(mode="before")` генерирует эфемерные ключи при отсутствии значения. Warning в лог предупреждает, что ключи не переживут рестарт.
+2. **Blocklist** — старые публичные ключи из git history отвергаются в ЛЮБОМ окружении (frozenset `_BURNED_SECRETS`).
+3. **Production enforcement** — при `DELPHI_PRODUCTION=1` ключи обязательны из `.env`, автогенерация запрещена.
 
-```python
-# src/config.py
-class Settings(LLMConfig):
-    """Центральная конфигурация приложения."""
-    
-    secret_key: str = Field(
-        default="dev-insecure-key-change-in-production-32ch",
-        description="Секретный ключ для подписи сессий и CSRF-токенов.",
-        min_length=32,
-    )
-    
-    fernet_key: str = Field(
-        default="3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o=",
-        description="Fernet encryption key for user API keys (base64, 32 bytes).",
-    )
-    
-    cors_origins: list[str] = Field(
-        default=["http://localhost:8000"],
-        description="Allowed CORS origins. Set explicitly in production.",
-    )
-    
-    _INSECURE_SECRET_KEY = "dev-insecure-key-change-in-production-32ch"
-    _INSECURE_FERNET_KEY = "3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o="
-    
-    @model_validator(mode="after")
-    def _reject_insecure_defaults_in_production(self) -> Settings:
-        """Fail-fast if production runs with hardcoded dev secrets."""
-        
-        # Only enforce when DEBUG=False AND DELPHI_PRODUCTION=1
-        if self.debug or not os.environ.get("DELPHI_PRODUCTION"):
-            return self  # Allow in dev/test
-        
-        # Check SECRET_KEY
-        if self.secret_key == self._INSECURE_SECRET_KEY:
-            raise ValueError(
-                "SECRET_KEY is set to the insecure dev default. "
-                "Set a strong SECRET_KEY in .env for production (min 32 chars)."
-            )
-        
-        # Check FERNET_KEY
-        if self.fernet_key == self._INSECURE_FERNET_KEY:
-            raise ValueError(
-                "FERNET_KEY is set to the insecure dev default. "
-                "Generate a new key: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
-            )
-        
-        # Check CORS_ORIGINS
-        if self.cors_origins == ["*"]:
-            raise ValueError(
-                "CORS_ORIGINS=['*'] is not allowed in production. "
-                "Set explicit origins: CORS_ORIGINS='[\"https://yourdomain.com\"]'"
-            )
-        
-        return self
-```
+Дополнительно: whitespace stripping, валидация формата Fernet, CORS wildcard check.
 
 #### Поток
 
-**Development (DEBUG=True или DELPHI_PRODUCTION не установлен):**
+**Development (DELPHI_PRODUCTION не установлен):**
 
 ```bash
 $ python -m src.main
-# ✓ Works fine with dev defaults
+# WARNING: SECRET_KEY not set — using auto-generated ephemeral key.
+# WARNING: FERNET_KEY not set — using auto-generated ephemeral key.
+# ✓ Application starts with ephemeral keys
 ```
 
-**Production с забытыми секретами:**
+**Production без секретов:**
 
 ```bash
-$ docker run -e DELPHI_PRODUCTION=1 -e DEBUG=False <image>
-# ValueError: SECRET_KEY is set to the insecure dev default.
+$ docker run -e DELPHI_PRODUCTION=1 <image>
+# ValueError: SECRET_KEY is required in production.
 # Application REFUSES TO START
 ```
 
@@ -690,16 +639,16 @@ $ docker run -e DELPHI_PRODUCTION=1 -e DEBUG=False <image>
 ```bash
 $ docker run \
   -e DELPHI_PRODUCTION=1 \
-  -e DEBUG=False \
-  -e SECRET_KEY="$(openssl rand -base64 32)" \
-  -e FERNET_KEY="$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" \
+  -e SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')" \
+  -e FERNET_KEY="$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" \
   <image>
 # ✓ Application starts normally
 ```
 
 #### Где проверяется
 
-- `src/config.py` → `Settings._reject_insecure_defaults_in_production()` (model_validator)
+- `src/config.py` → `Settings._resolve_secret_key()` и `_resolve_fernet_key()` (field_validator)
+- `src/config.py` → `Settings._reject_insecure_cors_in_production()` (model_validator)
 - Вызывается при создании Settings: `get_settings()` → `Settings()` (Pydantic validation)
 - Запускается **перед** созданием app, worker'а, DB connection — app не запустится
 
@@ -709,12 +658,11 @@ $ docker run \
     ```yaml
     environment:
       DELPHI_PRODUCTION: "1"
-      DEBUG: "false"
       SECRET_KEY: "${SECRET_KEY}"
       FERNET_KEY: "${FERNET_KEY}"
     ```
     
-    Без флага валидация пропускается (для локальной разработки).
+    Без флага ключи автогенерируются (для локальной разработки).
 
 ---
 
