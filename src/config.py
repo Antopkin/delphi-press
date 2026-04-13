@@ -18,6 +18,14 @@ from pydantic_settings import SettingsConfigDict
 
 from src.llm.config import LLMConfig
 
+# Keys burned in public git history — reject in ALL environments.
+_BURNED_SECRETS: frozenset[str] = frozenset(
+    {
+        "dev-insecure-key-change-in-production-32ch",
+        "3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o=",
+    }
+)
+
 # ── Pipeline Presets ─────────────────────────────────────────────
 
 
@@ -192,6 +200,13 @@ class Settings(LLMConfig):
             import secrets
 
             return secrets.token_urlsafe(48)
+        if v in _BURNED_SECRETS:
+            msg = (
+                "SECRET_KEY contains a known insecure value from public git history. "
+                'Generate a new key: python3 -c "import secrets; '
+                'print(secrets.token_urlsafe(48))"'
+            )
+            raise ValueError(msg)
         return v
 
     @field_validator("fernet_key", mode="before")

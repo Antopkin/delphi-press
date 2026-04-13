@@ -130,6 +130,14 @@ def test_settings_secret_key_auto_generated_in_dev():
     assert len(s.secret_key) >= 32
 
 
+def test_settings_rejects_burned_secret_key():
+    """Old hardcoded secret_key from public git history must be rejected."""
+    from src.config import Settings
+
+    with pytest.raises(ValidationError, match="known insecure value"):
+        Settings(secret_key="dev-insecure-key-change-in-production-32ch")
+
+
 def test_settings_fernet_key_auto_generated_in_dev():
     """When FERNET_KEY is not provided, an ephemeral Fernet key is auto-generated."""
     from cryptography.fernet import Fernet
