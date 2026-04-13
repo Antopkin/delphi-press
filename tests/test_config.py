@@ -138,6 +138,15 @@ def test_settings_rejects_burned_secret_key():
         Settings(secret_key="dev-insecure-key-change-in-production-32ch")
 
 
+def test_settings_rejects_missing_secret_key_in_production(monkeypatch):
+    """Production (DELPHI_PRODUCTION=1) must not auto-generate secret_key."""
+    from src.config import Settings
+
+    monkeypatch.setenv("DELPHI_PRODUCTION", "1")
+    with pytest.raises(ValidationError, match="SECRET_KEY is required"):
+        Settings()
+
+
 def test_settings_rejects_burned_fernet_key():
     """Old hardcoded fernet_key from public git history must be rejected."""
     from src.config import Settings

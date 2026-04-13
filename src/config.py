@@ -195,8 +195,15 @@ class Settings(LLMConfig):
     @field_validator("secret_key", mode="before")
     @classmethod
     def _resolve_secret_key(cls, v: str | None) -> str:
-        """Auto-generate ephemeral key when not provided."""
+        """Auto-generate in dev/test, require in production, block burned values."""
         if not v:
+            if os.environ.get("DELPHI_PRODUCTION"):
+                msg = (
+                    "SECRET_KEY is required in production. "
+                    'Generate: python3 -c "import secrets; '
+                    'print(secrets.token_urlsafe(48))"'
+                )
+                raise ValueError(msg)
             import secrets
 
             return secrets.token_urlsafe(48)
