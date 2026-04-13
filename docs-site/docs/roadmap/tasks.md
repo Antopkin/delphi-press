@@ -43,6 +43,19 @@
 
 ---
 
+### 0. Claude Code mode: оптимизация после smoke test
+
+Smoke test пройден (9/9 стадий, 10 headlines, $6.82). Выявлены узкие места:
+
+| # | Задача | Эффект | Сложность |
+|---|--------|--------|-----------|
+| P0 | QA tasks (`quality_factcheck`, `quality_style`) → Sonnet 4.6 в `CLAUDE_CODE_ASSIGNMENTS` | QA: 30 мин → ~10 мин. 23 из 30 headlines получили neutral scores из-за scoring timeout | Низкая — config change |
+| P1 | `max_concurrency=2` вместо 1 | Общее время: 2ч → ~1ч. При 2 параллельных rate limit маловероятен | Низкая — одна строка |
+| P2 | Fix `MediaAnalyst.get_timeout_seconds()` override 300s | `media_analyst` тайм-аутится в sequential mode, стадия trajectory теряет одного аналитика | Низкая — override в dry_run.py |
+| P3 | `--scrape` по умолчанию для Claude Code mode | `outlet_historian` получает 0 articles с NoopScraper → нет стилевого анализа | Низкая — flag change |
+
+---
+
 ### 1. Retrospective Evaluation Pilot
 
 !!! info "В процессе (2026-04-11)"
