@@ -217,6 +217,13 @@ class Settings(LLMConfig):
             from cryptography.fernet import Fernet
 
             return Fernet.generate_key().decode()
+        if v in _BURNED_SECRETS:
+            msg = (
+                "FERNET_KEY contains a known insecure value from public git history. "
+                'Generate: python3 -c "from cryptography.fernet import Fernet; '
+                'print(Fernet.generate_key().decode())"'
+            )
+            raise ValueError(msg)
         return v
 
     @model_validator(mode="after")
