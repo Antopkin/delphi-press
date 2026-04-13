@@ -204,8 +204,13 @@ class Settings(LLMConfig):
                     'print(secrets.token_urlsafe(48))"'
                 )
                 raise ValueError(msg)
+            import logging
             import secrets
 
+            logging.getLogger("delphi.config").warning(
+                "SECRET_KEY not set — using auto-generated ephemeral key. "
+                "Sessions will not survive restarts.",
+            )
             return secrets.token_urlsafe(48)
         if v in _BURNED_SECRETS:
             msg = (
@@ -219,10 +224,23 @@ class Settings(LLMConfig):
     @field_validator("fernet_key", mode="before")
     @classmethod
     def _resolve_fernet_key(cls, v: str | None) -> str:
-        """Auto-generate ephemeral Fernet key when not provided."""
+        """Auto-generate in dev/test, require in production, block burned values."""
         if not v:
+            if os.environ.get("DELPHI_PRODUCTION"):
+                msg = (
+                    "FERNET_KEY is required in production. Generate: "
+                    'python3 -c "from cryptography.fernet import Fernet; '
+                    'print(Fernet.generate_key().decode())"'
+                )
+                raise ValueError(msg)
+            import logging
+
             from cryptography.fernet import Fernet
 
+            logging.getLogger("delphi.config").warning(
+                "FERNET_KEY not set — using auto-generated ephemeral key. "
+                "Encrypted API keys will not survive restarts.",
+            )
             return Fernet.generate_key().decode()
         if v in _BURNED_SECRETS:
             msg = (

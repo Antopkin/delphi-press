@@ -147,6 +147,16 @@ def test_settings_rejects_missing_secret_key_in_production(monkeypatch):
         Settings()
 
 
+def test_settings_rejects_missing_fernet_key_in_production(monkeypatch):
+    """Production (DELPHI_PRODUCTION=1) must not auto-generate fernet_key."""
+    from src.config import Settings
+
+    monkeypatch.setenv("DELPHI_PRODUCTION", "1")
+    monkeypatch.setenv("SECRET_KEY", "a" * 48)
+    with pytest.raises(ValidationError, match="FERNET_KEY is required"):
+        Settings()
+
+
 def test_settings_rejects_burned_fernet_key():
     """Old hardcoded fernet_key from public git history must be rejected."""
     from src.config import Settings
