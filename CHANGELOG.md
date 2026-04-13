@@ -4,6 +4,33 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [0.9.9] - 2026-04-14
+
+### Security
+
+- **CWE-798 fix: removed hardcoded cryptographic keys from source.** **Почему:** в `src/config.py` были захардкожены два рабочих ключа — `SECRET_KEY` (JWT HS256) и `FERNET_KEY` (шифрование API-ключей пользователей), видимые в публичном репо. Жюри классифицировало как CWE-798, severity Medium. Production на VPS уже использовал реальные ключи из `.env`, перешифровка не потребовалась. Ключи удалены через 9 TDD-циклов (Red-Green-Refactor), см. `067a1e5`…`358aceb`.
+
+- **Auto-generation в dev/test.** `field_validator(mode="before")` в `Settings` автогенерирует эфемерные ключи при отсутствии: `secrets.token_urlsafe(48)` для JWT, `Fernet.generate_key()` для шифрования. Warning в лог, что ключи не переживут рестарт.
+
+- **Production enforcement.** При `DELPHI_PRODUCTION=1` ключи обязательны из `.env` — автогенерация запрещена, ValueError с инструкцией по генерации.
+
+- **Blocklist сожжённых ключей.** `_BURNED_SECRETS` frozenset содержит старые публичные значения, отвергается в ЛЮБОМ окружении — защита от stale `.env` с копией из git history.
+
+- **Дополнительные меры.** Whitespace-only значения обрабатываются как отсутствующие, невалидный Fernet формат отвергается на уровне config (fail-fast), warnings не содержат значения ключей (не CWE-532).
+
+- **+12 тестов** в `tests/test_config.py` (1413 → 1425): auto-generation, blocklist, production enforcement, whitespace, format validation, explicit keys regression.
+
+### Fixed
+
+- **`Orchestrator._run_parallel` теперь сохраняет частичные результаты при timeout.** Ранее, если хотя бы один из параллельных агентов не успел к deadline, завершённые результаты других агентов терялись. Критично для сценариев с частичной деградацией (1 из 5 персон тайм-аутнулся → остальные 4 теперь не теряются). См. `b9c0d22`.
+
+- **Claude Code sequential mode: увеличены stage timeouts.** В `scripts/dry_run.py` stage timeouts подняты до 1800s (было 300–600s). Sequential mode (`max_concurrency=1`) добавляет задержки между вызовами, старые timeouts стадии `quality_gate` и `generation` не успевали завершиться. Per-agent override (`MediaAnalyst.get_timeout_seconds()`) остаётся TODO — частично покрывает задачу #0 P2 из roadmap. См. `bc33ff2`, `cbc1107`.
+
+### Docs
+
+- `docs-site/docs/infrastructure/security.md` и `config.md`: убраны упоминания старых захардкоженных значений, добавлено описание field_validator + blocklist + production enforcement подхода.
+- `docs-site/docs/roadmap/tasks.md`: обновлены статусы partial-done задач (#0 P2, #1, #4, #5, #7), добавлены ссылки на файлы.
+
 ## [0.9.8] - 2026-04-12
 
 ### Added
