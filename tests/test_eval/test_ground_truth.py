@@ -190,14 +190,19 @@ class TestExtractHeadlinesFromHtml:
     """Multi-strategy headline extractor."""
 
     def test_extracts_item_title_spans(self) -> None:
-        html = """
-        <html><body>
-        <div class="main-news">
-          <a href="/news/1"><span class="item__title news-feed__item_bold">Первая важная новость от РБК про экономику</span></a>
-          <a href="/news/2"><span class="item__title">Вторая новость про политику и международные отношения</span></a>
-        </div>
-        </body></html>
-        """
+        html = (
+            "<html><body>"
+            '<div class="main-news">'
+            '<a href="/news/1">'
+            '<span class="item__title news-feed__item_bold">'
+            "Первая важная новость от РБК про экономику"
+            "</span></a>"
+            '<a href="/news/2">'
+            '<span class="item__title">'
+            "Вторая новость про политику и международные отношения"
+            "</span></a>"
+            "</div></body></html>"
+        )
         result = _extract_headlines_from_html(html)
         assert any("Первая важная новость" in h for h in result)
         assert any("Вторая новость" in h for h in result)
