@@ -121,6 +121,15 @@ def test_settings_database_url_rejects_invalid():
 # ── Security fields ─────────────────────────────────────────────────
 
 
+def test_settings_secret_key_auto_generated_in_dev():
+    """When SECRET_KEY is not provided, an ephemeral key is auto-generated."""
+    from src.config import Settings
+
+    s = Settings(secret_key=None)
+    assert isinstance(s.secret_key, str)
+    assert len(s.secret_key) >= 32
+
+
 def test_settings_jwt_expire_days_default():
     from src.config import Settings
 

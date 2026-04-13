@@ -91,10 +91,10 @@ class Settings(LLMConfig):
     app_name: str = "Delphi Press"
     app_version: str = "0.9.5"
     debug: bool = False
-    secret_key: str = Field(
-        default="dev-insecure-key-change-in-production-32ch",
-        description="Секретный ключ для подписи сессий и CSRF-токенов.",
+    secret_key: str | None = Field(
+        default=None,
         min_length=32,
+        description="Секретный ключ для подписи JWT. Обязателен в production.",
     )
     log_level: str = Field(
         default="INFO",
@@ -185,6 +185,16 @@ class Settings(LLMConfig):
 
     _INSECURE_SECRET_KEY = "dev-insecure-key-change-in-production-32ch"
     _INSECURE_FERNET_KEY = "3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o="
+
+    @field_validator("secret_key", mode="before")
+    @classmethod
+    def _resolve_secret_key(cls, v: str | None) -> str:
+        """Auto-generate ephemeral key when not provided."""
+        if not v:
+            import secrets
+
+            return secrets.token_urlsafe(48)
+        return v
 
     @model_validator(mode="after")
     def _reject_insecure_defaults_in_production(self) -> Settings:
