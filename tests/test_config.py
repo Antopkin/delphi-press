@@ -130,6 +130,17 @@ def test_settings_secret_key_auto_generated_in_dev():
     assert len(s.secret_key) >= 32
 
 
+def test_settings_fernet_key_auto_generated_in_dev():
+    """When FERNET_KEY is not provided, an ephemeral Fernet key is auto-generated."""
+    from cryptography.fernet import Fernet
+
+    from src.config import Settings
+
+    s = Settings(fernet_key=None)
+    assert isinstance(s.fernet_key, str)
+    Fernet(s.fernet_key.encode())  # validates format
+
+
 def test_settings_jwt_expire_days_default():
     from src.config import Settings
 

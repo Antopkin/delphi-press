@@ -169,9 +169,10 @@ class Settings(LLMConfig):
     # === Security / Auth ===
 
     jwt_expire_days: int = Field(default=7, ge=1, le=365)
-    fernet_key: str = Field(
-        default="3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o=",
-        description="Fernet encryption key for user API keys (base64, 32 bytes).",
+    fernet_key: str | None = Field(
+        default=None,
+        description="Fernet encryption key for user API keys (base64, 32 bytes). "
+        "Обязателен в production.",
     )
 
     # === CORS ===
@@ -183,9 +184,6 @@ class Settings(LLMConfig):
 
     # === Validators ===
 
-    _INSECURE_SECRET_KEY = "dev-insecure-key-change-in-production-32ch"
-    _INSECURE_FERNET_KEY = "3FsRWU3nhSsWfUlLDxtlREMWWZvO0a8PPlZi85leT-o="
-
     @field_validator("secret_key", mode="before")
     @classmethod
     def _resolve_secret_key(cls, v: str | None) -> str:
@@ -196,29 +194,21 @@ class Settings(LLMConfig):
             return secrets.token_urlsafe(48)
         return v
 
-    @model_validator(mode="after")
-    def _reject_insecure_defaults_in_production(self) -> Settings:
-        """Fail-fast if production runs with hardcoded dev secrets.
+    @field_validator("fernet_key", mode="before")
+    @classmethod
+    def _resolve_fernet_key(cls, v: str | None) -> str:
+        """Auto-generate ephemeral Fernet key when not provided."""
+        if not v:
+            from cryptography.fernet import Fernet
 
-        Only enforced when DEBUG=False AND running in Docker (DELPHI_PRODUCTION=1).
-        This avoids breaking local dev and test environments while catching
-        misconfigured production deployments.
-        """
-        if self.debug or not os.environ.get("DELPHI_PRODUCTION"):
+            return Fernet.generate_key().decode()
+        return v
+
+    @model_validator(mode="after")
+    def _reject_insecure_cors_in_production(self) -> Settings:
+        """Block wildcard CORS in production."""
+        if not os.environ.get("DELPHI_PRODUCTION"):
             return self
-        if self.secret_key == self._INSECURE_SECRET_KEY:
-            msg = (
-                "SECRET_KEY is set to the insecure dev default. "
-                "Set a strong SECRET_KEY in .env for production (min 32 chars)."
-            )
-            raise ValueError(msg)
-        if self.fernet_key == self._INSECURE_FERNET_KEY:
-            msg = (
-                "FERNET_KEY is set to the insecure dev default. "
-                "Generate a new key: python -c "
-                "'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
-            )
-            raise ValueError(msg)
         if ["*"] == self.cors_origins:
             msg = (
                 "CORS_ORIGINS=['*'] is not allowed in production. "
