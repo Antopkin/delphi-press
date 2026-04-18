@@ -27,4 +27,5 @@ nginx/
 
 docker-compose.yml
 README.md
-CHANGELOG.md
+# CHANGELOG.md is included into docs-site/docs/changelog.md at build time
+# via mkdocs-include-markdown-plugin; must remain in Docker build context.
