@@ -1,13 +1,19 @@
 """Tests for src.data_sources.foresight -- Metaculus, Polymarket, GDELT clients."""
 
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 
 from src.data_sources.foresight import GdeltDocClient, MetaculusClient, PolymarketClient
+
+
+def _future_iso(days: int) -> str:
+    """ISO-8601 UTC datetime N days in the future (for time-sensitive fixtures)."""
+    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
 
 # ---------------------------------------------------------------------------
 # Metaculus fixtures (new /api/posts/ format)
@@ -133,7 +139,7 @@ POLYMARKET_RESPONSE = [
         "question": "Will X happen?",
         "slug": "will-x-happen",
         "description": "Resolves YES if...",
-        "endDate": "2026-04-15T00:00:00Z",
+        "endDate": _future_iso(14),
         "active": True,
         "closed": False,
         "outcomes": '["Yes", "No"]',
@@ -151,7 +157,7 @@ POLYMARKET_LOW_LIQUIDITY = [
         "question": "Tiny market?",
         "slug": "tiny-market",
         "description": "Almost no liquidity",
-        "endDate": "2026-04-10T00:00:00Z",
+        "endDate": _future_iso(20),
         "active": True,
         "closed": False,
         "outcomePrices": '["0.50", "0.50"]',
@@ -434,7 +440,6 @@ class TestMetaculusClient:
 
 
 class TestPolymarketClient:
-    @pytest.mark.skip(reason="Fixture diverged from Polymarket API; tracking in #20")
     async def test_fetch_markets_success(self) -> None:
         client = PolymarketClient()
         mock_resp = _make_response(200, POLYMARKET_RESPONSE)
@@ -454,7 +459,6 @@ class TestPolymarketClient:
         assert market["volume"] == pytest.approx(450000.0)
         assert market["categories"] == ["Politics"]
 
-    @pytest.mark.skip(reason="Fixture diverged from Polymarket API; tracking in #20")
     async def test_fetch_markets_parses_stringified_json(self) -> None:
         """outcomePrices is a JSON string, not a native array."""
         data = [
@@ -463,7 +467,7 @@ class TestPolymarketClient:
                 "question": "String test",
                 "slug": "str-test",
                 "description": "",
-                "endDate": "2026-04-15T00:00:00Z",
+                "endDate": _future_iso(14),
                 "outcomePrices": '["0.78", "0.22"]',
                 "volume": "1000.00",
                 "liquidity": "10000.00",
@@ -577,7 +581,6 @@ class TestPolymarketClientCLOB:
         assert mock_get.await_count == 1
         assert first == second
 
-    @pytest.mark.skip(reason="Fixture diverged from Polymarket API; tracking in #20")
     async def test_fetch_enriched_markets_success(self) -> None:
         client = PolymarketClient()
         gamma_resp = _make_response(200, POLYMARKET_RESPONSE)
@@ -594,7 +597,6 @@ class TestPolymarketClientCLOB:
         assert markets[0]["clob_token_id"] == "token_yes_abc"
         assert markets[0]["price_history"] == [0.52, 0.54, 0.55, 0.53, 0.56]
 
-    @pytest.mark.skip(reason="Fixture diverged from Polymarket API; tracking in #20")
     async def test_fetch_enriched_markets_partial_clob_failure(self) -> None:
         """CLOB failure for one market should not affect others."""
         two_markets = [
@@ -636,7 +638,6 @@ class TestPolymarketClientCLOB:
         m2 = next(m for m in markets if m["id"] == "m2")
         assert m2["price_history"] == []
 
-    @pytest.mark.skip(reason="Fixture diverged from Polymarket API; tracking in #20")
     async def test_fetch_markets_includes_clob_token_id(self) -> None:
         client = PolymarketClient()
         mock_resp = _make_response(200, POLYMARKET_RESPONSE)
@@ -645,7 +646,6 @@ class TestPolymarketClientCLOB:
 
         assert results[0]["clob_token_id"] == "token_yes_abc"
 
-    @pytest.mark.skip(reason="Fixture diverged from Polymarket API; tracking in #20")
     async def test_fetch_markets_missing_clob_token_ids(self) -> None:
         """Markets without clobTokenIds should get empty string."""
         data = [{**POLYMARKET_RESPONSE[0]}]
