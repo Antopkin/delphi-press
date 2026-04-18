@@ -37,7 +37,9 @@ FROM python:3.12-slim AS docs-builder
 
 WORKDIR /build
 COPY docs-site/ docs-site/
-RUN pip install --no-cache-dir mkdocs-material pymdown-extensions \
+RUN pip install --no-cache-dir \
+      mkdocs-material pymdown-extensions \
+      mkdocs-llmstxt mkdocs-include-markdown-plugin mkdocs-copy-to-llm \
     && cd docs-site && mkdocs build
 
 # ── Stage 3: Runtime ─────────────────────────────────────────────────────────
