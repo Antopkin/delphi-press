@@ -42,6 +42,13 @@ jobs:
             git pull --ff-only origin main
 
             docker compose down
+            # Drop named volumes that shadow freshly built docs/assets.
+            # `docker compose down` does NOT remove named volumes, so a
+            # stale docs_data volume persists across builds. This bit us
+            # when mkdocs-llmstxt was added: the new llms.txt never
+            # reached /docs/ because nginx served the pre-plugin volume.
+            # `|| true` keeps this idempotent on first deploy.
+            docker volume rm delphi-press_docs_data 2>/dev/null || true
             docker compose build
             docker compose up -d
 
