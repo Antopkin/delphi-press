@@ -1,6 +1,6 @@
 """Key management endpoints: list, add, delete, validate.
 
-Спека: docs/08-api-backend.md (§12).
+Спека: docs-site/docs/infrastructure/security.md.
 
 Контракт:
     GET /keys — список ключей пользователя (без значений)

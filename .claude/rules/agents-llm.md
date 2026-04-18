@@ -37,7 +37,7 @@ class LLMResponse(BaseModel):
 ## Cost tracking — обязательно
 - После КАЖДОГО LLM-вызова: `self.track_llm_usage(model=response.model, tokens_in=response.tokens_in, tokens_out=response.tokens_out, cost_usd=response.cost_usd)`.
 - LLM-вызов: `response = await self.llm.complete(task="task_id", messages=[...])`.
-- `task` — строковый идентификатор для ModelRouter (см. docs/07-llm-layer.md).
+- `task` — строковый идентификатор для ModelRouter (см. `docs-site/docs/architecture/llm.md`).
 
 ## AgentResult — frozen dataclass
 - `data: dict` — каждый агент документирует структуру в docstring execute().

@@ -1,6 +1,6 @@
 """Stage 7: FRAMING — анализ фрейминга для конкретного издания.
 
-Спека: docs/06-generators.md (§1).
+Спека: docs-site/docs/generation/stages-6-9.md (§1).
 
 Контракт:
     Вход: PipelineContext с ranked_predictions, outlet_profile.

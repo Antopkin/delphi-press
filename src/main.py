@@ -1,6 +1,6 @@
 """FastAPI application factory с lifespan management.
 
-Спека: docs/08-api-backend.md (§8).
+Спека: docs-site/docs/api/reference.md (§8).
 
 Запуск:
     uvicorn src.main:app --host 0.0.0.0 --port 8000

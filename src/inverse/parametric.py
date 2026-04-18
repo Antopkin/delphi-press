@@ -1,7 +1,7 @@
 """Parametric bettor modeling — recover Exp(λ) / Weibull(λ,k) from positions.
 
 Pipeline stage: Offline analysis (extends bettor profiling).
-Spec: tasks/research/polymarket_inverse_problem.md §2.
+Spec: docs-site/docs/methodology/inverse-phases.md §2.
 
 Contract:
     Input: per-user positions + market horizons.

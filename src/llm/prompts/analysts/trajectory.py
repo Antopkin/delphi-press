@@ -1,6 +1,6 @@
 """Промпт для анализа траектории событийной нити.
 
-Спека: docs/04-analysts.md (§2, _analyze_trajectories).
+Спека: docs-site/docs/delphi-method/analysis.md (§2, _analyze_trajectories).
 Контракт: EventThread → current_state, momentum, 3 scenarios, key_drivers, uncertainties.
 """
 

@@ -52,10 +52,11 @@ def test_settings_redis_url_default():
 
 
 def test_settings_app_version():
+    from src import __version__
     from src.config import Settings
 
     s = Settings()
-    assert s.app_version == "0.9.5"
+    assert s.app_version == __version__
 
 
 def test_settings_pipeline_tuning_fields():

@@ -1,6 +1,6 @@
 """Stage 2: EVENT_IDENTIFICATION — кластеризация сигналов в событийные нити.
 
-Спека: docs/04-analysts.md (§2).
+Спека: docs-site/docs/delphi-method/analysis.md (§2).
 
 Контракт:
     Вход: PipelineContext с signals (SignalRecord[]) + scheduled_events (ScheduledEvent[]).

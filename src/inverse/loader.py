@@ -1,7 +1,7 @@
 """Dataset loaders for Polymarket trade and market data.
 
 Pipeline stage: Offline data ingestion (pre-profiling).
-Spec: tasks/research/polymarket_inverse_problem.md §6.
+Spec: docs-site/docs/methodology/inverse-phases.md §6.
 
 Contract:
     Input: CSV/Parquet files from Kaggle datasets.

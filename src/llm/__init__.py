@@ -1,6 +1,6 @@
 """LLM-абстракция: провайдеры, роутинг, промпты, бюджет.
 
-Спека: docs/07-llm-layer.md.
+Спека: docs-site/docs/architecture/llm.md.
 Контракт: агент вызывает router.complete(task=...) → LLMResponse.
 """
 

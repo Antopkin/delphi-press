@@ -1,6 +1,6 @@
 """Article scraper — реализация ArticleScraperProto через trafilatura.
 
-Спека: docs/01-data-sources.md (§4).
+Спека: docs-site/docs/data-collection/stages-1-2.md (§4).
 Контракт: TrafilaturaScraper.scrape_articles(url, days_back=30, max_articles=100)
           → list[ScrapedArticle].
 

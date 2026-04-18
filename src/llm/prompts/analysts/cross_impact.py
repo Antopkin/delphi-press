@@ -1,6 +1,6 @@
 """Промпт для построения матрицы перекрёстных влияний.
 
-Спека: docs/04-analysts.md (§2, _build_cross_impact_matrix).
+Спека: docs-site/docs/delphi-method/analysis.md (§2, _build_cross_impact_matrix).
 Контракт: список EventThread → пары с |impact| >= 0.2.
 """
 

@@ -1,6 +1,6 @@
 """Wikidata SPARQL client for media outlet resolution.
 
-Спека: docs/03-collectors.md (outlet catalog enrichment).
+Спека: docs-site/docs/data-collection/stages-1-2.md (outlet catalog enrichment).
 Контракт: name → WikidataResult(name, website_url, language, country) | None.
 """
 

@@ -1,6 +1,6 @@
 """ARQ worker для фонового выполнения пайплайна прогнозирования.
 
-Спека: docs/08-api-backend.md (§7).
+Спека: docs-site/docs/architecture/pipeline.md.
 
 Включает cron-задачи для автоматического сбора RSS и retention cleanup.
 

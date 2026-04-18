@@ -1,7 +1,7 @@
 """Evaluation metrics for prediction quality assessment.
 
 Pipeline stage: Evaluation.
-Spec: tasks/research/retrospective_testing.md SS2-3.
+Spec: docs-site/docs/evaluation/metrics.md SS2-3.
 Contract: lists of probabilities/outcomes -> BrierResult / float scores.
 """
 

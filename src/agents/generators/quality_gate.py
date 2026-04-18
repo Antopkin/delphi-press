@@ -1,6 +1,6 @@
 """Stage 9: QUALITY GATE — финальный фильтр качества заголовков.
 
-Спека: docs/06-generators.md (§3).
+Спека: docs-site/docs/generation/stages-6-9.md (§3).
 
 Контракт:
     Вход: PipelineContext с generated_headlines, ranked_predictions,
@@ -30,7 +30,7 @@ from src.schemas.headline import (
 if TYPE_CHECKING:
     from src.schemas.pipeline import PipelineContext
 
-# Пороги (docs/06-generators.md §3.3)
+# Пороги (docs-site/docs/generation/stages-6-9.md §3.3)
 FACTUAL_MIN_SCORE = 3
 STYLE_MIN_SCORE = 3
 INTERNAL_DEDUP_THRESHOLD = 0.85
@@ -241,7 +241,7 @@ class QualityGate(BaseAgent):
         *,
         min_score: int = FACTUAL_MIN_SCORE,
     ) -> GateDecision:
-        """Gate decision based on scores (docs/06-generators.md §3.3)."""
+        """Gate decision based on scores (docs-site/docs/generation/stages-6-9.md §3.3)."""
         if score.factual_score < min_score:
             return GateDecision.REJECT
         if score.is_internal_duplicate:

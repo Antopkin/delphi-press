@@ -1,6 +1,6 @@
 """Stage 6: CONSENSUS — Judge agent for aggregation and ranking.
 
-Спека: docs/05-delphi-pipeline.md (§5).
+Спека: docs-site/docs/delphi-method/delphi-rounds.md (§5).
 
 Контракт:
     Вход: PipelineContext с round2_assessments, mediator_synthesis.
@@ -39,7 +39,7 @@ from src.schemas.timeline import (
 if TYPE_CHECKING:
     from src.schemas.pipeline import PipelineContext
 
-# Калибровочные параметры (docs/05-delphi-pipeline.md §5.1)
+# Калибровочные параметры (docs-site/docs/delphi-method/delphi-rounds.md §5.1)
 DEFAULT_EXTREMIZATION_A = 1.5
 DEFAULT_BIAS_B = 0.0
 

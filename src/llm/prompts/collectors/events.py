@@ -1,6 +1,6 @@
 """Промпты для EventCalendar — извлечение и оценка событий.
 
-Спека: docs/03-collectors.md (§3).
+Спека: docs-site/docs/data-collection/stages-1-2.md (§3).
 Контракт: поисковые результаты → ScheduledEvent[], затем оценка newsworthiness.
 """
 

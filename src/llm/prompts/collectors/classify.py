@@ -1,6 +1,6 @@
 """Промпт классификации сигналов — NewsScout.
 
-Спека: docs/03-collectors.md (§2).
+Спека: docs-site/docs/data-collection/stages-1-2.md (§2).
 Контракт: список заголовков → categories + entities для каждого.
 """
 

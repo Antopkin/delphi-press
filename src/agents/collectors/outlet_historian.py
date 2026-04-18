@@ -1,6 +1,6 @@
 """Stage 1: OutletHistorian — анализ стиля и редакционной позиции СМИ.
 
-Спека: docs/03-collectors.md (§4).
+Спека: docs-site/docs/data-collection/stages-1-2.md (§4).
 
 Контракт:
     Вход: PipelineContext с outlet.

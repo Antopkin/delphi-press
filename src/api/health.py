@@ -1,6 +1,6 @@
 """Health check endpoint.
 
-Спека: docs/08-api-backend.md (§5.4).
+Спека: docs-site/docs/api/reference.md (§5.4).
 """
 
 from __future__ import annotations

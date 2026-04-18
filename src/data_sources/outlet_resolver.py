@@ -1,6 +1,6 @@
 """Dynamic outlet resolver — enriches unknown media outlets.
 
-Спека: docs/03-collectors.md (outlet catalog enrichment).
+Спека: docs-site/docs/data-collection/stages-1-2.md (outlet catalog enrichment).
 Контракт: outlet name → OutletInfo (from catalog, DB cache, or Wikidata + RSS discovery).
 
 Resolution chain:

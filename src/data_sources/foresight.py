@@ -1,7 +1,7 @@
 """Форсайт-центры -- к��иенты Metaculus, Polymarket, GDELT.
 
 Стадия: Stage 1 (сбор данных).
-Сп��ка: docs/01-data-sources.md.
+Сп��ка: docs-site/docs/data-collection/stages-1-2.md.
 Контракт: к��ждый клиент возвращает list[dict], маппинг в Pydantic-схемы
           делает ForesightCollector (src/agents/collectors/foresight_collector.py).
 

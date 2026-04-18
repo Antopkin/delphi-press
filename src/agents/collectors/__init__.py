@@ -1,6 +1,6 @@
 """Stage 1: Data Collection -- сбор данных из внешних источников.
 
-Спека: docs/03-collectors.md.
+Спека: docs-site/docs/data-collection/stages-1-2.md.
 
 Четыре агента запускаются параллельно (min_successful=2):
 - NewsScout: 100-200 новостных сигналов (RSS + web search)

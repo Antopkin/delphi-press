@@ -1,6 +1,6 @@
 """Промпт для LLM-лейблинга кластеров сигналов.
 
-Спека: docs/04-analysts.md (§2, _label_and_score_clusters).
+Спека: docs-site/docs/delphi-method/analysis.md (§2, _label_and_score_clusters).
 Контракт: batch кластеров → title, summary, category, importance, entity_prominence.
 """
 

@@ -1,6 +1,6 @@
 """LLM-провайдерные схемы: запросы, ответы, трекинг стоимости.
 
-Спека: docs/07-llm-layer.md (§1).
+Спека: docs-site/docs/architecture/llm.md (§1).
 Контракт: LLMRequest → LLMProvider.complete() → LLMResponse;
            каждый вызов логируется как CostRecord.
 """

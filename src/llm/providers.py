@@ -1,6 +1,6 @@
 """LLM-провайдеры: OpenRouter, Claude Code SDK, retry-логика.
 
-Спека: docs/07-llm-layer.md (§2).
+Спека: docs-site/docs/architecture/llm.md (§2).
 Контракт: LLMProvider.complete(LLMRequest) → LLMResponse.
 """
 

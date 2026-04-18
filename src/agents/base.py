@@ -1,6 +1,6 @@
 """Базовый агент — абстрактный класс для всех агентов пайплайна.
 
-Спека: docs/02-agents-core.md (§3).
+Спека: docs-site/docs/architecture/pipeline.md (§3).
 
 Контракт:
     Вход: PipelineContext (разделяемое состояние пайплайна).

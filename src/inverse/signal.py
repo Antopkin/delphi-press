@@ -1,7 +1,7 @@
 """Online signal extraction — compute informed consensus for active markets.
 
 Pipeline stage: Signal enrichment (called during Stage 1 ForesightCollector).
-Spec: tasks/research/polymarket_inverse_problem.md §4A.
+Spec: docs-site/docs/methodology/inverse-phases.md §4A.
 
 Contract:
     Input: trades on a market + pre-built BettorProfile dict + raw market price.

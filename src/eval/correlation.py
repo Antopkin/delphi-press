@@ -1,7 +1,7 @@
 """News-market correlation analysis.
 
 Pipeline stage: Evaluation (post-prediction).
-Spec: tasks/research/polymarket_inverse_problem.md §5 step 4.
+Spec: docs-site/docs/methodology/inverse-phases.md §5 step 4.
 Contract: resolved markets + news signals -> CorrelationResult.
 """
 

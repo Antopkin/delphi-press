@@ -2,7 +2,7 @@
 
 Стадии пайплайна: 6 (Judge → RankedPrediction), 7 (Framing → FramingBrief),
                   8 (Generation → GeneratedHeadline), 9 (QualityGate → FinalPrediction).
-Спеки: docs/05-delphi-pipeline.md (§5.5), docs/06-generators.md (§1.4, §2.5, §3.5).
+Спеки: docs-site/docs/delphi-method/delphi-rounds.md (§5.5), docs-site/docs/generation/stages-6-9.md (§1.4, §2.5, §3.5).
 Контракт: RankedPrediction[] → FramingBrief[] → GeneratedHeadline[] → FinalPrediction[].
 """
 

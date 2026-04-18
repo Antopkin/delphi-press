@@ -1,4 +1,4 @@
 """REST API layer — FastAPI endpoints.
 
-Спека: docs/08-api-backend.md (§5).
+Спека: docs-site/docs/api/reference.md (§5).
 """

@@ -1,6 +1,6 @@
 """ORM-модели базы данных.
 
-Спека: docs/08-api-backend.md (§2).
+Спека: docs-site/docs/infrastructure/database.md.
 
 Таблицы: predictions, headlines, pipeline_steps, outlets, users, user_api_keys,
 feed_sources, raw_articles.

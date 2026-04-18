@@ -1,6 +1,6 @@
 """Web router — HTML page routes.
 
-Спека: docs/09-frontend.md.
+Спека: docs-site/docs/frontend/web-ui.md.
 
 Контракт:
     GET /             — Landing page with form + recent predictions

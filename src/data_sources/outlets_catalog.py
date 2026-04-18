@@ -1,6 +1,6 @@
 """Каталог СМИ — реализация OutletCatalogProto.
 
-Спека: docs/01-data-sources.md (§5).
+Спека: docs-site/docs/data-collection/stages-1-2.md (§5).
 Контракт: OutletsCatalog.get_outlet(name) → OutletInfo | None,
           OutletsCatalog.get_rss_feeds(name) → list[str].
 """

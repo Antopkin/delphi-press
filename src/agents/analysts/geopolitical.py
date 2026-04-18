@@ -1,6 +1,6 @@
 """Stage 3: TRAJECTORY — геополитический анализ событийных нитей.
 
-Спека: docs/04-analysts.md (§3).
+Спека: docs-site/docs/delphi-method/analysis.md (§3).
 
 Контракт:
     Вход: PipelineContext с event_threads (EventThread[]) + trajectories.

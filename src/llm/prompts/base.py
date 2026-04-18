@@ -1,6 +1,6 @@
 """BasePrompt: Jinja2-шаблонизация промптов с structured output.
 
-Спека: docs/07-llm-layer.md (§4).
+Спека: docs-site/docs/architecture/llm.md (§4).
 Контракт: prompt.to_messages(**vars) → list[LLMMessage];
            prompt.parse_response(content) → BaseModel | None.
 """

@@ -1,6 +1,6 @@
 """Market Signal Service — live informed consensus for Polymarket markets.
 
-Спека: docs/11-roadmap.md (Market Signal Dashboard).
+Спека: docs-site/docs/roadmap/tasks.md (Market Signal Dashboard).
 
 Контракт:
     Input: pre-loaded BettorProfile dict + ProfileSummary (from store.py).

@@ -1,6 +1,6 @@
 """Реестр агентов — DI-контейнер для инстанциирования и поиска агентов.
 
-Спека: docs/02-agents-core.md (§6).
+Спека: docs-site/docs/architecture/pipeline.md (§6).
 
 Контракт:
     AgentRegistry хранит инстансы BaseAgent, доступные по имени.

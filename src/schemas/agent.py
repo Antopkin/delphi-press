@@ -1,7 +1,7 @@
 """Агентная инфраструктура и Delphi-схемы.
 
 Стадия пайплайна: все (AgentResult/StageResult), 4-5 (Delphi).
-Спеки: docs/02-agents-core.md (§1-2), docs/05-delphi-pipeline.md (§2.6, §4.3).
+Спеки: docs-site/docs/architecture/pipeline.md (§1-2), docs-site/docs/delphi-method/delphi-rounds.md (§2.6, §4.3).
 Контракт: AgentResult ← BaseAgent.run(); PersonaAssessment ← ExpertPersona.assess();
            MediatorSynthesis ← Mediator.synthesize().
 """

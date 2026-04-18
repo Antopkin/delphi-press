@@ -1,6 +1,6 @@
 """API-схемы запроса и ответа прогнозирования.
 
-Спека: docs/02-agents-core.md (§7).
+Спека: docs-site/docs/architecture/pipeline.md (§7).
 Контракт: PredictionRequest → Orchestrator → PredictionResponse.
 """
 

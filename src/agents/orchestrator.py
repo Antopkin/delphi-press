@@ -1,6 +1,6 @@
 """Оркестратор — координатор 9-стадийного пайплайна прогнозирования.
 
-Спека: docs/02-agents-core.md (§5).
+Спека: docs-site/docs/architecture/pipeline.md (§5).
 
 Контракт:
     Вход: PredictionRequest (outlet + target_date).

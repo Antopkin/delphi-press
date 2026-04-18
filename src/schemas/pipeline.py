@@ -1,7 +1,7 @@
 """Контекст пайплайна — разделяемое мутабельное состояние.
 
 Стадия пайплайна: все (передаётся через все 9 стадий).
-Спека: docs/02-agents-core.md (§2).
+Спека: docs-site/docs/architecture/pipeline.md (§2).
 Контракт: Orchestrator создаёт PipelineContext → агенты читают/пишут слоты →
           Orchestrator формирует PredictionResponse.
 """

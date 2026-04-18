@@ -1,7 +1,7 @@
 """Clone validation — predict positions from parametric λ, measure accuracy.
 
 Pipeline stage: Offline validation (validates parametric model).
-Spec: tasks/research/polymarket_inverse_problem.md §2 (transitivity argument).
+Spec: docs-site/docs/methodology/inverse-phases.md §2 (transitivity argument).
 
 Contract:
     Input: ParametricResult (from parametric.py) + test trades + horizons.

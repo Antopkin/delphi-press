@@ -1,7 +1,7 @@
 """Strategy clustering — discover natural bettor archetypes via HDBSCAN.
 
 Pipeline stage: Offline analysis (extends bettor profiling).
-Spec: tasks/research/polymarket_inverse_problem.md §3.
+Spec: docs-site/docs/methodology/inverse-phases.md §3.
 
 Contract:
     Input: list[BettorProfile] (from profiler.py).

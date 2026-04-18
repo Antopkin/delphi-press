@@ -1,6 +1,6 @@
 """Слой сбора данных — конкретные реализации протоколов из collectors.
 
-Спека: docs/01-data-sources.md.
+Спека: docs-site/docs/data-collection/stages-1-2.md.
 Потребители: NewsScout, EventCalendar, OutletHistorian (src/agents/collectors/).
 """
 

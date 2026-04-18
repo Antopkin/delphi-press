@@ -1,7 +1,7 @@
 """Pydantic v2 schemas for the Polymarket Inverse Problem module.
 
 Pipeline stage: Signal enrichment (between Stage 1 collection and Stage 6 consensus).
-Spec: tasks/research/polymarket_inverse_problem.md.
+Spec: docs-site/docs/methodology/inverse-phases.md.
 Contract: historical trades → BettorProfile → InformedSignal.
 """
 

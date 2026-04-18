@@ -1,7 +1,7 @@
 """Distribution metrics for prediction market price histories.
 
 Stage 1 data enrichment — pure math, zero I/O.
-Spec: tasks/research/distribution_metrics_methods.md
+Spec: docs-site/docs/methodology/superforecasters.md
 
 Contract:
     Input: price history (list[float] in [0,1]), volume, bid/ask.

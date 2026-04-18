@@ -1,6 +1,6 @@
 """Stage 4-5: DELPHI personas — expert persona configuration and agents.
 
-Спека: docs/05-delphi-pipeline.md (§2).
+Спека: docs-site/docs/delphi-method/delphi-rounds.md (§2).
 
 Контракт:
     Вход: PipelineContext с trajectories, cross_impact_matrix.
@@ -53,7 +53,7 @@ class ExpertPersona:
 
 
 # =====================================================================
-# System prompts (extracted from docs/prompts/*.md)
+# System prompts — см. docs-site/docs/appendix/prompts.md для канонических текстов.
 # =====================================================================
 
 _REALIST_SYSTEM_PROMPT = """\

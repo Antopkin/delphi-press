@@ -710,7 +710,7 @@ Polymarket enrichment (4 фазы) + production deploy на VPS.
 **Claude Code инфраструктура**
 - `.claude/settings.json` — проектные permissions (uv, pytest, ruff, git, docker)
 - `.claude/rules/` — 4 файла правил (async, pydantic, agents-llm, testing)
-- `.claude/skills/implement-module/` — скилл автономной реализации модулей
+- `.claude/skills/predict/` — natural-language trigger для прогнозирования через Max-подписку
 - `GLOSSARY.md` — доменный глоссарий (40+ терминов)
 
 **Docker-конфигурация**

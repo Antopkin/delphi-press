@@ -1,6 +1,6 @@
 """Промпт для FramingAnalyzer (Stage 7).
 
-Спека: docs/06-generators.md (§1).
+Спека: docs-site/docs/generation/stages-6-9.md (§1).
 Контракт: FramingPrompt → FramingBrief.
 """
 

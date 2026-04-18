@@ -1,7 +1,7 @@
 """SSE-события прогресса для мониторинга пайплайна.
 
 Стадия пайплайна: все (прогресс-бар UI).
-Спека: docs/02-agents-core.md (§4).
+Спека: docs-site/docs/architecture/pipeline.md (§4).
 Контракт: SSEProgressEvent → SSE endpoint → клиент (EventSource).
 """
 

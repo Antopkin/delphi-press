@@ -1,6 +1,6 @@
 """Outlets autocomplete endpoint.
 
-Спека: docs/08-api-backend.md (§5.3).
+Спека: docs-site/docs/api/reference.md (§5.3).
 
 Searches both the static in-memory catalog (20 outlets) and the database
 (dynamically resolved outlets). Results are merged and deduplicated.

@@ -1,7 +1,7 @@
 """Offline bettor profiling — build accuracy profiles from historical trades.
 
 Pipeline stage: Offline pre-computation (runs once, not in real-time pipeline).
-Spec: tasks/research/polymarket_inverse_problem.md §2–3.
+Spec: docs-site/docs/methodology/inverse-phases.md §2–3.
 
 Contract:
     Input: list[TradeRecord] + dict[str, bool] (market resolutions).

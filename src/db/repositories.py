@@ -1,6 +1,6 @@
 """Репозитории — инкапсуляция всей логики работы с БД.
 
-Спека: docs/08-api-backend.md (§4).
+Спека: docs-site/docs/infrastructure/database.md.
 
 Контракт:
     PredictionRepository: CRUD для прогнозов, headlines, pipeline steps.

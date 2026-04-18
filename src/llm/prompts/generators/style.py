@@ -1,6 +1,6 @@
 """Промпт для StyleReplicator (Stage 8).
 
-Спека: docs/06-generators.md (§2).
+Спека: docs-site/docs/generation/stages-6-9.md (§2).
 Контракт: StylePrompt → GeneratedHeadlineSet.
 """
 

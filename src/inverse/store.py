@@ -1,7 +1,7 @@
 """Profile persistence — save/load bettor profiles as Parquet or JSON.
 
 Pipeline stage: Offline (build) + Online (load at pipeline startup).
-Spec: tasks/research/polymarket_inverse_problem.md §5.
+Spec: docs-site/docs/methodology/inverse-phases.md §5.
 
 Contract:
     Save: list[BettorProfile] + ProfileSummary → parquet/json file.

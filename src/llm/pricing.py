@@ -1,6 +1,6 @@
 """Таблицы цен LLM-провайдеров и расчёт стоимости.
 
-Спека: docs/07-llm-layer.md (§5).
+Спека: docs-site/docs/architecture/llm.md (§5).
 Контракт: calculate_cost(model, tokens_in, tokens_out) → float (USD).
 """
 

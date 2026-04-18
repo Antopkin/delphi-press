@@ -1,6 +1,6 @@
 """Промпт для медиатора Дельфи (Stage 5).
 
-Спека: docs/05-delphi-pipeline.md (§4), docs/prompts/mediator.md.
+Спека: docs-site/docs/delphi-method/delphi-rounds.md (§4).
 Контракт: round1_assessments → MediatorSynthesis.
 """
 

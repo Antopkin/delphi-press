@@ -1,6 +1,6 @@
 """Async RSS fetcher — реализация RSSFetcherProto.
 
-Спека: docs/01-data-sources.md (§2).
+Спека: docs-site/docs/data-collection/stages-1-2.md (§2).
 Контракт: RSSFetcher.fetch_feeds(urls, days_back=7) → list[RSSItem].
 
 Стек: httpx (async HTTP) + fastfeedparser (fast parse) + feedparser (fallback).

@@ -1,6 +1,6 @@
 """Конфигурация LLM-слоя через Pydantic Settings.
 
-Спека: docs/07-llm-layer.md (§7).
+Спека: docs-site/docs/architecture/llm.md (§7).
 Контракт: LLMConfig() → настройки из env-переменных с дефолтами.
 """
 

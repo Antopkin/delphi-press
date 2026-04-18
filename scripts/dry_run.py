@@ -1,13 +1,20 @@
 #!/usr/bin/env python
-"""Dry-run: полный 9-стадийный пайплайн с дешёвой моделью.
+"""Dry-run: полный 9-стадийный пайплайн без Redis/DB/Docker.
 
-Запуск без Redis/DB/Docker — напрямую вызывает Orchestrator.run_prediction().
-Все модели переключаются на дешёвую (по умолчанию gemini-flash-lite).
+Напрямую вызывает Orchestrator.run_prediction(). Два режима:
+
+  OpenRouter (по умолчанию): все модели → дешёвая (gemini-flash-lite), требует
+  OPENROUTER_API_KEY. Используется для smoke-тестов и бенчмарков.
+
+  Claude Code SDK: --provider claude_code --db data/delphi_press.db. $0/run через
+  Max подписку. Sonnet 4.6 (сбор) + Opus 4.6 (анализ/персоны). Подробнее:
+  docs-site/docs/architecture/claude-code-mode.md.
 
 Использование:
     export OPENROUTER_API_KEY=sk-or-...
     uv run python scripts/dry_run.py
     uv run python scripts/dry_run.py --outlet "РИА Новости" --model google/gemini-2.5-flash
+    uv run python scripts/dry_run.py --provider claude_code --outlet "ТАСС" --db data/delphi_press.db
 """
 
 from __future__ import annotations

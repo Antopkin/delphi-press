@@ -1,6 +1,6 @@
 """Промпт для геополитического анализа событийной нити.
 
-Спека: docs/04-analysts.md (§3).
+Спека: docs-site/docs/delphi-method/analysis.md (§3).
 Контракт: EventThread + trajectory → GeopoliticalAssessment.
 """
 

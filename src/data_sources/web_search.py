@@ -1,6 +1,6 @@
 """Web search — реализация WebSearchProto.
 
-Спека: docs/01-data-sources.md (§3).
+Спека: docs-site/docs/data-collection/stages-1-2.md (§3).
 Контракт: WebSearchService.search(query, num_results=10) → list[SearchResult].
 
 Провайдеры: Exa (primary) + Jina (fallback). Оба — через httpx.

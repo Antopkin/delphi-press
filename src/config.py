@@ -1,6 +1,6 @@
 """Глобальная конфигурация приложения.
 
-Спека: docs/08-api-backend.md (§1).
+Спека: docs-site/docs/infrastructure/config.md.
 
 Объединяет LLMConfig и настройки всех модулей: DB, Redis, ARQ, server, pipeline.
 Все переменные окружения с дефолтами для dev-режима.
@@ -16,6 +16,7 @@ from pathlib import Path
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import SettingsConfigDict
 
+from src import __version__
 from src.llm.config import LLMConfig
 
 # Keys burned in public git history — reject in ALL environments.
@@ -97,7 +98,7 @@ class Settings(LLMConfig):
     # === Application ===
 
     app_name: str = "Delphi Press"
-    app_version: str = "0.9.5"
+    app_version: str = __version__
     debug: bool = False
     secret_key: str | None = Field(
         default=None,

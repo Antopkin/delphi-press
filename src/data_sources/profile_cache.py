@@ -1,6 +1,6 @@
 """Redis-based profile cache — реализация ProfileCacheProto.
 
-Спека: docs/01-data-sources.md.
+Спека: docs-site/docs/data-collection/stages-1-2.md.
 Контракт: get(outlet, ttl_days=7) → OutletProfile | None, put(outlet, profile).
 """
 

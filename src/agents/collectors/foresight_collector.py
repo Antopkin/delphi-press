@@ -1,7 +1,7 @@
 """ForesightCollector -- Stage 1 agent for collecting foresight data.
 
 Стадия: Stage 1 (сбор данных).
-Спека: docs/03-collectors.md.
+Спека: docs-site/docs/data-collection/stages-1-2.md.
 
 Контракт:
     Вход: PipelineContext с outlet_name, target_date.

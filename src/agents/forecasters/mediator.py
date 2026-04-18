@@ -1,6 +1,6 @@
 """Stage 5: MEDIATOR — синтез расхождений межд�� экспертами Дельфи.
 
-Спека: docs/05-delphi-pipeline.md (§4).
+Спека: docs-site/docs/delphi-method/delphi-rounds.md (§4).
 
 Контракт:
     Вход: PipelineContext с round1_assessments, trajectories.

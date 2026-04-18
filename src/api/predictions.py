@@ -1,6 +1,6 @@
 """Predictions CRUD + SSE endpoints.
 
-Спека: docs/08-api-backend.md (§§5.2, 6).
+Спека: docs-site/docs/api/reference.md (§§5.2, 6).
 
 Контракт:
     POST /predictions — создать прогноз, поставить в очередь ARQ

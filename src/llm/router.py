@@ -1,6 +1,6 @@
 """ModelRouter: роутинг моделей, fallback, бюджетный контроль.
 
-Спека: docs/07-llm-layer.md (§3).
+Спека: docs-site/docs/architecture/llm.md (§3).
 Контракт: router.complete(task=..., messages=...) → LLMResponse.
 """
 
@@ -224,12 +224,15 @@ DEFAULT_ASSIGNMENTS: dict[str, ModelAssignment] = {
 # Diversity обеспечивается промптами и когнитивными смещениями, не моделями.
 
 # === Claude Code assignments: все модели через подписку Max ===
-# Gemini-задачи → Sonnet 4.6, остальные → Opus 4.6, fallback=[] (Claude Code ретрится сам).
-
 _GEMINI_TASKS = frozenset(
     task for task, a in DEFAULT_ASSIGNMENTS.items() if a.primary_model.startswith("google/")
 )
 
+# Landmark (referenced from CLAUDE.md): задачи для ClaudeCodeProvider.
+# Правило: задачи, назначенные на Gemini в DEFAULT_ASSIGNMENTS (новости, сбор) →
+# Sonnet 4.6 (дешёвая сторона Max-подписки); все остальные (анализ, персоны,
+# генерация, judge) → Opus 4.6. Fallback-цепочка пустая — SDK сам делает retry.
+# Спека: docs-site/docs/architecture/claude-code-mode.md.
 CLAUDE_CODE_ASSIGNMENTS: dict[str, ModelAssignment] = {
     task: ModelAssignment(
         task=a.task,

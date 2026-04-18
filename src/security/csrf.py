@@ -1,5 +1,8 @@
 """CSRF protection middleware — Double Submit Cookie pattern.
 
+Спека: docs-site/docs/infrastructure/security.md.
+Контракт: Starlette middleware; валидирует csrf_token для unsafe methods.
+
 Sets a csrf_token cookie on every response. POST/PUT/DELETE requests
 with Content-Type form data must include a matching csrf_token field.
 JSON API requests (Content-Type: application/json) are exempt — they

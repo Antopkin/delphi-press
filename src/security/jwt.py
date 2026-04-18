@@ -1,6 +1,6 @@
 """JWT token creation and verification.
 
-Спека: docs/08-api-backend.md (§12).
+Спека: docs-site/docs/infrastructure/security.md.
 
 Контракт:
     create_access_token(user_id, secret_key, expire_days) → JWT string

@@ -1,6 +1,6 @@
 """Промпт для экспертных персон Дельфи (Stages 4-5).
 
-Спека: docs/05-delphi-pipeline.md (§2), docs/prompts/realist.md и др.
+Спека: docs-site/docs/delphi-method/delphi-rounds.md (§2) + docs-site/docs/appendix/prompts.md.
 Контракт: PersonaPrompt(system_prompt) → PersonaAssessment.
 """
 

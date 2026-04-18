@@ -32,7 +32,7 @@ uv run python -c "from src.config import get_settings; print(get_settings().open
 | `DEBUG` | булевый | `false` | Опционально | Включить режим отладки (Swagger UI, трассировки стека). **Никогда не включать в production!** |
 | `LOG_LEVEL` | строка | `INFO` | Опционально | Уровень логирования: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `APP_NAME` | строка | `Delphi Press` | Опционально | Название приложения |
-| `APP_VERSION` | строка | `0.9.5` | Опционально | Версия приложения |
+| `APP_VERSION` | строка | `из src/__init__.py` | Опционально | Версия приложения (по умолчанию читается из `src.__version__`) |
 
 ### Данные и хранилище
 
@@ -441,7 +441,7 @@ OPENROUTER_API_KEY=sk-or-... uv run python scripts/dry_run.py \
 ## Ссылки
 
 - **Исходный код**: `/src/config.py` (AppConfig и PRESETS), `/src/llm/config.py` (LLMConfig)
-- **Спека**: `docs/08-api-backend.md` (§1: конфигурация)
+- **Спека**: `docs-site/docs/api/reference.md` (§1: конфигурация)
 - **Инициализация**: `/src/main.py` (lifespan, middlewares)
 - **Docker**: `/docker-compose.yml`, `/Dockerfile`
 - **Примеры**: `/.env.example`, `scripts/dry_run.py`

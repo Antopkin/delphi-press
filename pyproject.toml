@@ -1,6 +1,6 @@
 [project]
 name = "delphi-press"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Media headline forecasting with multi-agent Delphi pipeline"
 requires-python = ">=3.12"
 dependencies = [
@@ -50,6 +50,9 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "src/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
 
@@ -69,6 +72,9 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
+    "mkdocs-copy-to-llm>=0.2.10",
+    "mkdocs-include-markdown-plugin>=7.2.2",
+    "mkdocs-llmstxt>=0.5.0",
     "mkdocs-material",
     "pymdown-extensions",
 ]

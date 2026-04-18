@@ -1,7 +1,7 @@
 """Pydantic v2 schemas for the evaluation module.
 
 Pipeline stage: Evaluation (post-prediction).
-Spec: tasks/research/retrospective_testing.md.
+Spec: docs-site/docs/evaluation/metrics.md.
 Contract: PredictionResponse + ground truth → EvalResult.
 """
 

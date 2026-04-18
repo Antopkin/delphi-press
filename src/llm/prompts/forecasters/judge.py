@@ -1,6 +1,6 @@
 """Промпт для судьи Дельфи (Stage 6).
 
-Спека: docs/05-delphi-pipeline.md (§5), docs/prompts/judge.md.
+Спека: docs-site/docs/delphi-method/delphi-rounds.md (§5).
 Контракт: round2_assessments + MediatorSynthesis → list[RankedPrediction].
 """
 

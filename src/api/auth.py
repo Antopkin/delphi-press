@@ -1,6 +1,6 @@
 """Auth endpoints: register, login, me.
 
-Спека: docs/08-api-backend.md (§12).
+Спека: docs-site/docs/infrastructure/security.md.
 
 Контракт:
     POST /auth/register → 201 AuthResponse

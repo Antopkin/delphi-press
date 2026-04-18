@@ -1,6 +1,6 @@
 """Главный роутер API v1.
 
-Спека: docs/08-api-backend.md (§5.1).
+Спека: docs-site/docs/api/reference.md (§5.1).
 """
 
 from fastapi import APIRouter

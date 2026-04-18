@@ -1,7 +1,7 @@
 """Evaluation module for retrospective prediction testing.
 
 Pipeline stage: Evaluation (post-prediction).
-Spec: tasks/research/retrospective_testing.md
+Spec: docs-site/docs/evaluation/metrics.md
 Contract: PredictionResponse -> EvalResult (via ground truth comparison).
 """
 

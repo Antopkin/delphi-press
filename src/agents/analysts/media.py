@@ -1,6 +1,6 @@
 """Stage 3: TRAJECTORY — медийный анализ событийных нитей.
 
-Спека: docs/04-analysts.md (§5).
+Спека: docs-site/docs/delphi-method/analysis.md (§5).
 
 Контракт:
     Вход: PipelineContext с event_threads + outlet_profile.

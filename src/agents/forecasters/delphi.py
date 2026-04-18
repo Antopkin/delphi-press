@@ -1,6 +1,6 @@
 """Stage 4-6: DELPHI utilities — dataclasses and exceptions.
 
-Спека: docs/05-delphi-pipeline.md (§3).
+Спека: docs-site/docs/delphi-method/delphi-rounds.md (§3).
 
 Контракт:
     DelphiRoundResult хранит результаты одного раунда Дельфи.

@@ -5,7 +5,7 @@ Fetches resolved Polymarket markets, detects sharp price movements,
 collects news signals via GDELT in the preceding window, and computes
 Spearman rank correlation + optional Granger causality.
 
-Outputs a markdown report to tasks/research/news_market_correlation.md.
+Outputs a markdown report to data/reports/news_market_correlation.md (configurable via --output).
 
 Usage:
     uv run python scripts/eval_news_correlation.py
@@ -84,7 +84,7 @@ async def main() -> None:
     parser.add_argument("--window", type=int, default=24, help="News lookback window (hours)")
     parser.add_argument(
         "--output",
-        default="tasks/research/news_market_correlation.md",
+        default="data/reports/news_market_correlation.md",
         help="Output markdown path",
     )
     parser.add_argument("--verbose", action="store_true", help="Debug logging")

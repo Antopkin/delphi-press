@@ -1,6 +1,6 @@
 """Промпты для QualityGate (Stage 9).
 
-Спека: docs/06-generators.md (§3).
+Спека: docs-site/docs/generation/stages-6-9.md (§3).
 Контракт: FactualCheckPrompt → CheckResult, StyleCheckPrompt → CheckResult.
 """
 

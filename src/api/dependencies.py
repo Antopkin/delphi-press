@@ -1,6 +1,6 @@
 """FastAPI auth dependencies.
 
-Спека: docs/08-api-backend.md (§12).
+Спека: docs-site/docs/infrastructure/security.md.
 
 Контракт:
     get_current_user — опциональная авторизация (None если без токена)

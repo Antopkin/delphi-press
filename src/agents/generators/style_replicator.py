@@ -1,6 +1,6 @@
 """Stage 8: GENERATION — генерация заголовков в стиле издания.
 
-Спека: docs/06-generators.md (§2).
+Спека: docs-site/docs/generation/stages-6-9.md (§2).
 
 Контракт:
     Вход: PipelineContext с ranked_predictions, framing_briefs, outlet_profile.

@@ -1,7 +1,7 @@
 """Ground truth fetcher using Wayback Machine CDX API.
 
 Pipeline stage: Evaluation (data collection).
-Spec: tasks/research/retrospective_testing.md SS Datasets.
+Spec: docs-site/docs/evaluation/metrics.md SS Datasets.
 
 Two entry points:
     fetch_headlines_from_wayback(rss_url, target_date)

@@ -1,6 +1,6 @@
 """Stage 3: TRAJECTORY — экономический анализ событийных нитей.
 
-Спека: docs/04-analysts.md (§4).
+Спека: docs-site/docs/delphi-method/analysis.md (§4).
 
 Контракт:
     Вход: PipelineContext с event_threads (EventThread[]) + trajectories.

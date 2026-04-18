@@ -1,6 +1,6 @@
 """Forecasters module — Delphi pipeline agents (Stages 4-6).
 
-Спека: docs/05-delphi-pipeline.md
+Спека: docs-site/docs/delphi-method/delphi-rounds.md
 """
 
 from src.agents.forecasters.delphi import DelphiQuorumError, DelphiRoundResult

@@ -1,6 +1,6 @@
 """Async Database Engine — фабрика движка и сессий.
 
-Спека: docs/08-api-backend.md (§3).
+Спека: docs-site/docs/infrastructure/database.md.
 
 Контракт:
     create_engine(settings) → AsyncEngine

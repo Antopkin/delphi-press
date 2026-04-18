@@ -1,6 +1,6 @@
 """Трекер бюджета LLM-вызовов.
 
-Спека: docs/07-llm-layer.md (§3.6).
+Спека: docs-site/docs/architecture/llm.md (§3.6).
 Контракт: record(CostRecord) → накопление; check_budget(est) → raise если нет бюджета.
 """
 

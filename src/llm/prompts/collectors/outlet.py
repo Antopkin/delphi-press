@@ -1,6 +1,6 @@
 """Промпты для OutletHistorian — анализ стиля и позиции издания.
 
-Спека: docs/03-collectors.md (§4).
+Спека: docs-site/docs/data-collection/stages-1-2.md (§4).
 Контракт: статьи издания → HeadlineStyle, WritingStyle, EditorialPosition.
 """
 

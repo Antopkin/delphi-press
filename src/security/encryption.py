@@ -1,6 +1,6 @@
 """Fernet encryption for user API keys.
 
-Спека: docs/08-api-backend.md (§12).
+Спека: docs-site/docs/infrastructure/security.md.
 
 Контракт:
     KeyVault.encrypt(plaintext) → ciphertext string

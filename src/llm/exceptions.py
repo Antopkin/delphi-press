@@ -1,6 +1,6 @@
 """LLM-исключения: ошибки провайдеров, rate limit, бюджет.
 
-Спека: docs/07-llm-layer.md (§2.4).
+Спека: docs-site/docs/architecture/llm.md (§2.4).
 """
 
 from __future__ import annotations

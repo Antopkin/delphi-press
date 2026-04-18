@@ -1,6 +1,6 @@
 """Промпт для медийного анализа событийных нитей.
 
-Спека: docs/04-analysts.md (§5).
+Спека: docs-site/docs/delphi-method/analysis.md (§5).
 Контракт: EventThread[] + OutletProfile → MediaAssessment[].
 Особенность: все нити анализируются вместе (контекст конкуренции).
 """

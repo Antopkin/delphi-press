@@ -1,6 +1,6 @@
 """Агентная инфраструктура Delphi Press.
 
-Спека: docs/02-agents-core.md.
+Спека: docs-site/docs/architecture/pipeline.md.
 """
 
 from src.agents.base import BaseAgent

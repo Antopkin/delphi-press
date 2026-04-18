@@ -1,7 +1,7 @@
 """Промежуточные артефакты event-level timeline.
 
 Стадия пайплайна: 6a (Judge aggregate_timeline).
-Спека: docs/05-delphi-pipeline.md, docs/11-roadmap.md (E.1).
+Спека: docs-site/docs/delphi-method/delphi-rounds.md, docs-site/docs/roadmap/tasks.md (E.1).
 Контракт: PersonaAssessment[] → Judge._aggregate_timeline() → PredictedTimeline
           → Judge._select_headlines() → RankedPrediction[].
 """

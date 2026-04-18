@@ -1,6 +1,6 @@
 """Stage 1: EventCalendar — поиск запланированных событий на target_date.
 
-Спека: docs/03-collectors.md (§3).
+Спека: docs-site/docs/data-collection/stages-1-2.md (§3).
 
 Контракт:
     Вход: PipelineContext с target_date + outlet.
