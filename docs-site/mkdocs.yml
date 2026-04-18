@@ -39,6 +39,51 @@ theme:
   icon:
     repo: fontawesome/brands/github
 
+strict: true
+
+plugins:
+  - search
+  - include-markdown
+  - copy-to-llm
+  - llmstxt:
+      full_output: llms-full.txt
+      sections:
+        Start here:
+          - index.md
+          - for-agents.md
+        Architecture:
+          - architecture/*.md
+        Data collection:
+          - data-collection/*.md
+        Delphi method:
+          - delphi-method/*.md
+        Methodology:
+          - methodology/*.md
+        Polymarket:
+          - polymarket/*.md
+        Generation:
+          - generation/*.md
+        Evaluation:
+          - evaluation/*.md
+        Dead ends:
+          - dead-ends/*.md
+        Frontend:
+          - frontend/*.md
+        API:
+          - api/*.md
+        Infrastructure:
+          - infrastructure/*.md
+        Roadmap:
+          - roadmap/*.md
+        ADR:
+          - adr/*.md
+        Conventions:
+          - conventions/*.md
+        Appendix:
+          - appendix/*.md
+          - bibliography.md
+          - changelog.md
+
 extra_css:
   - https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css
   - stylesheets/extra.css
@@ -78,10 +123,12 @@ extra:
 
 nav:
   - Главная: index.md
+  - For agents: for-agents.md
   - Архитектура:
     - Обзор системы: architecture/overview.md
     - "Pipeline: 9 стадий": architecture/pipeline.md
     - LLM-инфраструктура: architecture/llm.md
+    - Claude Code mode: architecture/claude-code-mode.md
   - Сбор данных:
     - Стадии 1-2: data-collection/stages-1-2.md
     - Внешние API: data-collection/api-integrations.md
@@ -114,8 +161,20 @@ nav:
     - Конфигурация: infrastructure/config.md
     - Reverse proxy: infrastructure/reverse-proxy.md
     - Скрипты: infrastructure/scripts.md
+  - ADR:
+    - adr/index.md
+    - "0001 — Dual-provider": adr/0001-claude-code-vs-openrouter.md
+    - "0002 — Metaculus deprecation": adr/0002-metaculus-deprecation.md
+    - "0003 — conditionId join": adr/0003-conditionid-join-fix.md
+    - "0004 — DuckDB 2GB limit": adr/0004-duckdb-2gb-limit.md
+    - "0005 — Fernet/JWT keys": adr/0005-fernet-key-handling.md
+  - Conventions:
+    - Code style: conventions/code-style.md
+    - Contributing docs: conventions/contributing-docs.md
   - Приложения:
+    - Глоссарий: appendix/glossary.md
     - Data Flow: appendix/data-flow.md
     - Промпты агентов: appendix/prompts.md
     - Известные ограничения: appendix/gotchas.md
     - Библиография: bibliography.md
+    - Changelog: changelog.md

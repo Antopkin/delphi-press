@@ -1,6 +1,8 @@
 # Data Flow: 9 Pipeline Stages
 
-Polная архитектура pipeline: 9 стадий, 28 LLM-задач, agents, timeouts, parallel execution.
+Компактная таблица стадий pipeline — для быстрого reference. Полная архитектура с data-flow диаграммами, task IDs и известными gotchas: [architecture/pipeline.md](../architecture/pipeline.md).
+
+Полная архитектура pipeline: 9 стадий, 28 LLM-задач, agents, timeouts, parallel execution.
 
 ## Pipeline Stages Table
 

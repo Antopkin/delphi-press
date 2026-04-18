@@ -1,5 +1,7 @@
 # Known Architectural Limitations
 
+Краткий список архитектурных ограничений для быстрого reference. Подробные narrative-разборы конкретных инцидентов с выводами: [dead-ends/case-studies.md](../dead-ends/case-studies.md).
+
 Известные ограничения архитектуры системы Delphi Press (11 gotchas).
 
 ## 1. Dict vs Pydantic Context Slots
