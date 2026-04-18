@@ -36,6 +36,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM python:3.12-slim AS docs-builder
 
 WORKDIR /build
+# CHANGELOG.md is included into docs-site/docs/changelog.md via include-markdown
+# plugin with relative path ../../CHANGELOG.md, so it must sit alongside docs-site/
+COPY CHANGELOG.md ./CHANGELOG.md
 COPY docs-site/ docs-site/
 RUN pip install --no-cache-dir \
       mkdocs-material pymdown-extensions \
