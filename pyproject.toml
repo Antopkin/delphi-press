@@ -27,7 +27,7 @@ dependencies = [
     "PyJWT>=2.9",
     "bcrypt>=4.2",
     "email-validator>=2.0",
-    "python-multipart>=0.0.22",
+    "python-multipart>=0.0.26",
     "pyarrow>=15.0",
     "claude-agent-sdk>=0.1.58",
 ]
@@ -41,7 +41,7 @@ eval = [
     "duckdb>=1.0",
 ]
 dev = [
-    "pytest>=8.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=0.23",
     "ruff>=0.4",
 ]
