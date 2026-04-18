@@ -3,7 +3,8 @@
 Стадии пайплайна: 1 (Collection → SignalRecord, ScheduledEvent, OutletProfile),
                   2 (Event Identification → EventThread),
                   3 (Trajectory → EventTrajectory, CrossImpactMatrix, *Assessment).
-Спеки: docs-site/docs/data-collection/stages-1-2.md (§1), docs-site/docs/delphi-method/analysis.md (§1).
+Спеки: docs-site/docs/data-collection/stages-1-2.md (§1),
+       docs-site/docs/delphi-method/analysis.md (§1).
 Контракт: SignalRecord[] + ScheduledEvent[] + OutletProfile → EventThread[] →
           EventTrajectory[] + CrossImpactMatrix + *Assessment[].
 """
