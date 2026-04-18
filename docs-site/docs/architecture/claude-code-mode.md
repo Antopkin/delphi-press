@@ -1,3 +1,8 @@
+---
+title: "Claude Code mode"
+description: "Claude Code mode — альтернативный provider для исполнения пайплайна через подписку Claude Code Max вместо OpenRouter API. Даёт $0/run для разработчика, но требует локальной установки Claude Code CLI."
+---
+
 # Claude Code mode
 
 Claude Code mode — альтернативный provider для исполнения пайплайна через подписку **Claude Code Max** вместо OpenRouter API. Даёт **$0/run** для разработчика, но требует локальной установки Claude Code CLI.

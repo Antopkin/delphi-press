@@ -1,3 +1,8 @@
+---
+title: "Data Flow: 9 Pipeline Stages"
+description: "Компактная таблица стадий pipeline — для быстрого reference. Полная архитектура с data-flow диаграммами, task IDs и известными gotchas: architecture/pipeline.md."
+---
+
 # Data Flow: 9 Pipeline Stages
 
 Компактная таблица стадий pipeline — для быстрого reference. Полная архитектура с data-flow диаграммами, task IDs и известными gotchas: [architecture/pipeline.md](../architecture/pipeline.md).

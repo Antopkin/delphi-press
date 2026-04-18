@@ -1,3 +1,8 @@
+---
+title: "Web UI Documentation"
+description: "Веб-интерфейс Delphi Press — это однопаршиновое приложение на Jinja2 + Tailwind CSS v4 + Vanilla JS (ES2022). Все маршруты переходят в отдельные HTML-страницы (no SPA), каждая с собственным..."
+---
+
 # Web UI Documentation
 
 > **Реализация**: `src/web/router.py`, `src/web/templates/*.html`, `src/web/static/js/*.js`  

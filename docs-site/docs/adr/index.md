@@ -1,3 +1,8 @@
+---
+title: "Architecture Decision Records"
+description: "Records принятых архитектурных решений. Формат: короткий context → decision → consequences → alternatives. Нумерация сквозная."
+---
+
 # Architecture Decision Records
 
 Records принятых архитектурных решений. Формат: короткий context → decision → consequences → alternatives. Нумерация сквозная.

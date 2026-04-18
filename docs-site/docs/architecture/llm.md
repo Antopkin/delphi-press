@@ -1,3 +1,8 @@
+---
+title: "LLM-инфраструктура"
+description: "Delphi Press использует OpenRouter.ai — унифицированный OpenAI-совместимый API для доступа к 200+ LLM-моделям (Claude, GPT-4, Gemini, Llama, DeepSeek и др.) через единый эндпоинт."
+---
+
 # LLM-инфраструктура
 
 ## Интеграция с OpenRouter

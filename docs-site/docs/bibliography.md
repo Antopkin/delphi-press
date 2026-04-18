@@ -1,3 +1,8 @@
+---
+title: "Bibliography"
+description: "Источники, цитируемые в методологии Delphi Press (19 entries)."
+---
+
 # Bibliography
 
 Источники, цитируемые в методологии Delphi Press (19 entries).

@@ -1,3 +1,8 @@
+---
+title: "Known Architectural Limitations"
+description: "Краткий список архитектурных ограничений для быстрого reference. Подробные narrative-разборы конкретных инцидентов с выводами: dead-ends/case-studies.md."
+---
+
 # Known Architectural Limitations
 
 Краткий список архитектурных ограничений для быстрого reference. Подробные narrative-разборы конкретных инцидентов с выводами: [dead-ends/case-studies.md](../dead-ends/case-studies.md).

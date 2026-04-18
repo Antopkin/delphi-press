@@ -1,3 +1,8 @@
+---
+title: "Imitation Learning в Delphi Press"
+description: "Consensus-механизм, используемый для синтеза позиций трейдеров Polymarket, имеет глубокую структурную аналогию с Behaviour Cloning (BC) из литературы по Imitation Learning. Этот документ объясняет..."
+---
+
 # Imitation Learning в Delphi Press
 
 Consensus-механизм, используемый для синтеза позиций трейдеров Polymarket, имеет глубокую структурную аналогию с **Behaviour Cloning** (BC) из литературы по Imitation Learning. Этот документ объясняет аналогию, уточняет её пределы и демонстрирует, как инструменты IL могут улучшить систему.

@@ -1,3 +1,8 @@
+---
+title: "ADR-0001: Dual-provider (OpenRouter + Claude Code SDK)"
+description: "Status: Accepted · Date: 2026-04-08 · Deciders: @Antopkin"
+---
+
 # ADR-0001: Dual-provider (OpenRouter + Claude Code SDK)
 
 **Status:** Accepted · **Date:** 2026-04-08 · **Deciders:** @Antopkin

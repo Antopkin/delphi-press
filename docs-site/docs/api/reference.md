@@ -1,3 +1,8 @@
+---
+title: "REST API Reference"
+description: "Полное описание всех REST API-эндпоинтов Delphi Press. API использует JSON, требует аутентификации через JWT и доступен по адресу https://delphi.antopkin.ru/api/v1."
+---
+
 # REST API Reference
 
 Полное описание всех REST API-эндпоинтов Delphi Press. API использует JSON, требует аутентификации через JWT и доступен по адресу `https://delphi.antopkin.ru/api/v1`.

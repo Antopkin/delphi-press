@@ -1,3 +1,8 @@
+---
+title: "Дорожная карта"
+description: "Kanban: Done → In Progress → Next → Backlog. Текущая версия: v0.9.9 (2026-04-14). Тесты: 1 425."
+---
+
 # Дорожная карта
 
 !!! info "Формат"

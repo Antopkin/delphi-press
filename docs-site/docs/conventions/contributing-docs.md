@@ -1,3 +1,8 @@
+---
+title: "Contributing to documentation"
+description: "Как писать и обновлять документацию Delphi Press."
+---
+
 # Contributing to documentation
 
 Как писать и обновлять документацию Delphi Press.

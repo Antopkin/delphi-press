@@ -1,3 +1,8 @@
+---
+title: "ADR-0002: Metaculus data source deprecation (403)"
+description: "Status: Accepted · Date: 2026-03-29 · Deciders: @Antopkin"
+---
+
 # ADR-0002: Metaculus data source deprecation (403)
 
 **Status:** Accepted · **Date:** 2026-03-29 · **Deciders:** @Antopkin

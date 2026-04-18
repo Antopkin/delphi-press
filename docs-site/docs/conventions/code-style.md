@@ -1,3 +1,8 @@
+---
+title: "Code style & conventions"
+description: "Стиль кода Delphi Press. Claude Code и внешние контрибьюторы должны следовать."
+---
+
 # Code style & conventions
 
 Стиль кода Delphi Press. Claude Code и внешние контрибьюторы должны следовать.

@@ -1,3 +1,8 @@
+---
+title: "ADR-0003: Polymarket conditionId как join key"
+description: "Status: Accepted · Date: 2026-04-03 · Deciders: @Antopkin"
+---
+
 # ADR-0003: Polymarket conditionId как join key
 
 **Status:** Accepted · **Date:** 2026-04-03 · **Deciders:** @Antopkin

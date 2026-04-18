@@ -1,3 +1,8 @@
+---
+title: "ADR-0004: DuckDB memory limit = 2 GB"
+description: "Status: Accepted · Date: 2026-04-07 · Deciders: @Antopkin"
+---
+
 # ADR-0004: DuckDB memory limit = 2 GB
 
 **Status:** Accepted · **Date:** 2026-04-07 · **Deciders:** @Antopkin

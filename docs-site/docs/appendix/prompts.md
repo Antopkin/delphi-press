@@ -1,3 +1,8 @@
+---
+title: "Agent Prompts Reference"
+description: "Полные тексты системных промптов всех агентов Дельфи-пайплайна. Промпты хранятся в директории src/llm/prompts/ и передаются LLM-моделям через OpenRouter API (Web UI) или Claude Code SDK (Claude..."
+---
+
 # Agent Prompts Reference
 
 Полные тексты системных промптов всех агентов Дельфи-пайплайна. Промпты хранятся в директории `src/llm/prompts/` и передаются LLM-моделям через OpenRouter API (Web UI) или Claude Code SDK (Claude Code mode). С v0.9.4 все персоны и Mediator используют `anthropic/claude-opus-4.6`; Judge (стадия 6) выполняется детерминированно без LLM-вызова.

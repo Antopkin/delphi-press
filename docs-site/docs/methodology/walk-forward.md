@@ -1,3 +1,8 @@
+---
+title: "Walk-Forward Validation Protocol"
+description: "При разработке моделей прогнозирования на временных рядах возникает критическая проблема: look-ahead bias (утечка информации из будущего). Если построить профили точности трейдеров на *всех*..."
+---
+
 # Walk-Forward Validation Protocol
 
 ## Зачем нужна walk-forward валидация

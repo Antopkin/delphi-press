@@ -1,3 +1,8 @@
+---
+title: "ADR-0005: Fernet/JWT key handling (CWE-798 fix)"
+description: "Status: Accepted · Date: 2026-04-13 · Deciders: @Antopkin"
+---
+
 # ADR-0005: Fernet/JWT key handling (CWE-798 fix)
 
 **Status:** Accepted · **Date:** 2026-04-13 · **Deciders:** @Antopkin
