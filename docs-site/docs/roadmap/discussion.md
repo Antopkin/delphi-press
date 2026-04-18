@@ -666,7 +666,7 @@ Tetlock's Good Judgment Project (4 года, $20M IARPA)[^7]:
 
 ---
 
-## 10. Глоссарий (дополнение к GLOSSARY.md)
+## 10. Глоссарий (дополнение к [appendix/glossary.md](../appendix/glossary.md))
 
 - **Архетип** — повторяющийся паттерн поведения трейдера, детектируемый из торговых данных и соответствующий литературной типологии
 - **Behavioral entropy** — Shannon entropy распределения actions трейдера; low = rules, high = deliberation

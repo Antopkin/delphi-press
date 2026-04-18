@@ -21,7 +21,7 @@
 
 **Модули:** `src/data_sources/outlet_resolver.py`, `wikidata_client.py`, `feed_discovery.py`, `profile_cache.py`, `outlets_catalog.py`
 
-**Спека:** `docs/03-collectors.md` (§7: OutletResolver)
+**Спека:** `docs-site/docs/data-collection/stages-1-2.md` (§7: OutletResolver)
 
 **Контракт:** Название издания → `OutletInfo` (веб-сайт, RSS-ленты, язык, страна)
 

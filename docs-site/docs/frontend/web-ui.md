@@ -1,7 +1,7 @@
 # Web UI Documentation
 
 > **Реализация**: `src/web/router.py`, `src/web/templates/*.html`, `src/web/static/js/*.js`  
-> **Спека**: `docs/09-frontend.md`
+> **Спека**: `docs-site/docs/frontend/web-ui.md`
 
 Веб-интерфейс Delphi Press — это однопаршиновое приложение на Jinja2 + Tailwind CSS v4 + Vanilla JS (ES2022). Все маршруты переходят в отдельные HTML-страницы (no SPA), каждая с собственным набором скриптов.
 
@@ -970,8 +970,8 @@ pytest tests/test_web/ -v
 
 ## Дополнительное чтение
 
-- **Frontend spec:** `docs/09-frontend.md` — полная дизайн-система (OKLCH, spacing, motion)
-- **Backend routes:** `docs/08-api-backend.md` — REST API контракт
-- **Architecture:** `docs/architecture.md` — общая архитектура пайплайна
+- **Frontend spec:** `docs-site/docs/frontend/web-ui.md` — полная дизайн-система (OKLCH, spacing, motion)
+- **Backend routes:** `docs-site/docs/api/reference.md` — REST API контракт
+- **Architecture:** `docs-site/docs/architecture/overview.md` — общая архитектура пайплайна
 - **Inverse module:** `docs/*/polymarket_inverse_problem.md` — Polymarket analysis, bettor profiling, informed consensus
 - **Market service:** `src/web/market_service.py` — сервис для загрузки и кэширования рыночных сигналов

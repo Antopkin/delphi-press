@@ -499,4 +499,4 @@ step = await pipeline_step_repo.save_pipeline_step(
 
 Инициализация engine: **`src/db/engine.py`**
 
-Обзор архитектуры: **`docs/08-api-backend.md`** (§2-4)
+Обзор архитектуры: **`docs-site/docs/api/reference.md`** (§2-4)

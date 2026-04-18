@@ -358,8 +358,8 @@ $$p_{\text{calibrated}} = \sigma(a \cdot \text{logit}(p_{\text{raw}}) + b)$$
 
 | Параметр | Значение | Источник |
 |----------|---------|----------|
-| $a$ (extremization) | 1.5 | docs/05-delphi-pipeline.md §5.1 |
-| $b$ (bias) | 0.0 | docs/05-delphi-pipeline.md §5.1 |
+| $a$ (extremization) | 1.5 | docs-site/docs/delphi-method/delphi-rounds.md §5.1 |
+| $b$ (bias) | 0.0 | docs-site/docs/delphi-method/delphi-rounds.md §5.1 |
 
 ### Эффект экстремизации
 

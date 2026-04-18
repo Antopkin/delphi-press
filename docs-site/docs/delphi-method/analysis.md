@@ -272,4 +272,4 @@ $$\text{composite} = 0.25 \times \text{impact} + 0.20 \times \text{timeliness} +
 - **Все схемы**: `src/schemas/events.py`
 - **Маршрутизация LLM-модели**: `src/llm/router.py` (строки 77–97)
 
-Для спецификаций и промптов см. `docs/04-analysts.md` (§3–5: спецификации аналитиков, §2: анализ траектории).
+Для спецификаций и промптов см. `docs-site/docs/delphi-method/analysis.md` (§3–5: спецификации аналитиков, §2: анализ траектории).

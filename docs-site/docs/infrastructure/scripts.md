@@ -1032,4 +1032,4 @@ rm -f /home/deploy/data/inverse/hf_cache/_maker_bucketed.parquet
 rm -f /home/deploy/data/inverse/hf_cache/_taker_bucketed.parquet
 ```
 
-Дополнительную информацию см. в `docs/architecture.md` и спецификациях модулей в `docs/0X-*.md`.
+Дополнительную информацию см. в `docs-site/docs/architecture/overview.md` и спецификациях модулей в `соответствующие разделы docs-site/docs/`.

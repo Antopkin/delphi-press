@@ -333,7 +333,7 @@
 
 Для разработчиков:
 
-- Читай `docs/methodology-inverse-problem.md` (§9) для полного описания Phase 2
+- Читай `docs-site/docs/methodology/inverse-phases.md` (§9) для полного описания Phase 2
 - Читай `tasks/research/polymarket_inverse_problem.md` для research context
 - Для live enrichment: `tasks/research/polymarket_clob_api.md`, `tasks/inverse_phase6_next.md`
 
