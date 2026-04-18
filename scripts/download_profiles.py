@@ -8,7 +8,7 @@ Downloads bettor_profiles.parquet (~62 MB) and bettor_profiles_summary.json
 into data/inverse/. Verifies SHA-256 checksum. No-op if data already exists
 and is verified.
 
-Spec: tasks/research/polymarket_inverse_problem.md
+Spec: docs-site/docs/methodology/inverse-phases.md
 """
 
 from __future__ import annotations
