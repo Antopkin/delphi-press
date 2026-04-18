@@ -168,6 +168,10 @@ nav:
     - "0003 — conditionId join": adr/0003-conditionid-join-fix.md
     - "0004 — DuckDB 2GB limit": adr/0004-duckdb-2gb-limit.md
     - "0005 — Fernet/JWT keys": adr/0005-fernet-key-handling.md
+    - "0006 — SQLite + monolith": adr/0006-sqlite-modular-monolith.md
+    - "0007 — Deterministic Judge": adr/0007-deterministic-judge.md
+    - "0008 — Bare informed consensus": adr/0008-ablation-optimal-informed-consensus.md
+    - "0009 — docs-site as SSOT": adr/0009-docs-site-ssot.md
   - Conventions:
     - Code style: conventions/code-style.md
     - Contributing docs: conventions/contributing-docs.md
