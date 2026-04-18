@@ -4,7 +4,7 @@
 
 **Три режима:**
 - **Web UI** — OpenRouter, пользователь вводит свой ключ, JWT. Web UI работает на VPS.
-- **Claude Code mode** — predict skill, Max подписка, $0/прогноз. Полное описание: @docs-site/docs/architecture/claude-code-mode.md.
+- **Claude Code mode** — predict skill, Max подписка, $0/прогноз. Подробно: `docs-site/docs/architecture/claude-code-mode.md`.
 - **CLI** — `scripts/dry_run.py --provider claude_code`, headless-вариант Claude Code mode.
 
 ## Landmarks (файлы, о которых Claude должен знать)
@@ -21,12 +21,13 @@
 ## Documentation — docs-site = SSOT
 
 - **Start here (agent entry):** @docs-site/docs/for-agents.md
-- Architecture: @docs-site/docs/architecture/pipeline.md · @docs-site/docs/architecture/llm.md · @docs-site/docs/architecture/claude-code-mode.md
-- Methodology: @docs-site/docs/methodology/
-- Glossary: @docs-site/docs/appendix/glossary.md
-- ADRs (decision records): @docs-site/docs/adr/index.md
-- Commands: @docs-site/docs/infrastructure/scripts.md
-- Code style: @docs-site/docs/conventions/code-style.md
+- Architecture: @docs-site/docs/architecture/pipeline.md · @docs-site/docs/architecture/llm.md
+- Claude Code mode: `docs-site/docs/architecture/claude-code-mode.md` — читай при работе с `ClaudeCodeProvider` или predict skill
+- Methodology: `docs-site/docs/methodology/` — читай по запросу темы (superforecasters, walk-forward, inverse)
+- Glossary: `docs-site/docs/appendix/glossary.md` — читай, если встречаешь незнакомый доменный термин (медиация, нить, фрейминг)
+- ADRs: `docs-site/docs/adr/index.md` — читай, когда задача требует архитектурного контекста (почему dual-provider, почему DuckDB 2GB)
+- Commands: `docs-site/docs/infrastructure/scripts.md` — детальный справочник CLI-скриптов, читай перед запуском eval/deploy/dry_run
+- Code style: `docs-site/docs/conventions/code-style.md` — полная спека, читай при вопросах по конвенциям (TL;DR ниже уже достаточно для 90% случаев)
 - Full nav: @docs-site/mkdocs.yml
 
 Публичная выкладка: [delphi.antopkin.ru/docs/](https://delphi.antopkin.ru/docs/). Build: `cd docs-site && uv run mkdocs build --strict`.
@@ -47,7 +48,7 @@ cd docs-site && uv run mkdocs build --strict           # собрать доки
 docker compose up -d                                    # production
 ```
 
-Детальный справочник всех скриптов: @docs-site/docs/infrastructure/scripts.md.
+Детальный справочник всех скриптов: `docs-site/docs/infrastructure/scripts.md`.
 
 ## Правила кода (TL;DR)
 
@@ -57,8 +58,8 @@ docker compose up -d                                    # production
 - **Module-level docstring обязателен**: роль + `Спека: docs-site/...` + `Контракт:`
 - **Absolute imports** от `src.`
 
-Полная спецификация: @docs-site/docs/conventions/code-style.md.
-Path-scoped правила: `.claude/rules/*.md` (`agents-llm.md`, `async-patterns.md`, `pydantic-schemas.md`, `testing.md`, `frontend-design.md`).
+Полная спецификация: `docs-site/docs/conventions/code-style.md`.
+Path-scoped правила: `.claude/rules/*.md` (`async-patterns.md`, `pydantic-schemas.md`, `testing.md`, `frontend-design.md`). Правила для агентов/LLM — в `src/agents/CLAUDE.md` и `src/llm/CLAUDE.md` (auto-load в соответствующих директориях).
 
 ## Синхронизация документации
 
@@ -66,10 +67,10 @@ Path-scoped правила: `.claude/rules/*.md` (`agents-llm.md`, `async-patter
 
 - Новая Pydantic-схема → обновить `src/schemas/` docstring + если контракт меняется — страницу в `docs-site/docs/architecture/` или `api/`
 - Новый агент / LLM-задача → @docs-site/docs/architecture/pipeline.md + @docs-site/docs/architecture/llm.md
-- Архитектурное решение → новый ADR в @docs-site/docs/adr/
-- Bug fix с выводом → @docs-site/docs/dead-ends/case-studies.md
+- Архитектурное решение → новый ADR в `docs-site/docs/adr/`
+- Bug fix с выводом → `docs-site/docs/dead-ends/case-studies.md`
 
-Полный routing map: @docs-site/docs/conventions/contributing-docs.md.
+Полный routing map: `docs-site/docs/conventions/contributing-docs.md`.
 
 ## Frontend design (Impeccable)
 
